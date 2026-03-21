@@ -1,6 +1,69 @@
-.proj-dashboard {
-  padding-bottom: 40px;
+/* ── Layout v2 ──────────────────────────────────────────── */
+
+.proj-dashboard-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
 }
+
+.proj-dashboard-top {
+  flex-shrink: 0;
+  padding: 20px 28px 0;
+}
+
+.proj-dashboard-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 28px 40px;
+}
+
+.proj-dashboard-content--kanban {
+  overflow: hidden;
+  padding: 0;
+}
+
+/* ── View tabs ──────────────────────────────────────────── */
+
+.view-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid;
+  margin-top: 16px;
+  overflow-x: auto;
+}
+
+.view-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  transition: color 120ms, border-color 120ms;
+  white-space: nowrap;
+  margin-bottom: -1px;
+}
+
+/* ── Estado vazio ───────────────────────────────────────── */
+
+.proj-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+
 
 /* ── Header ─────────────────────────────────────────────── */
 .proj-header {
