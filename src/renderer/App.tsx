@@ -48,6 +48,14 @@ export default function App() {
     activeProject, selectProject, loadPages, pages,
   } = useAppStore()
 
+  // Manter activePage sincronizado quando o store recarrega as páginas
+  useEffect(() => {
+    if (activePage) {
+      const updated = pages.find(p => p.id === activePage.id)
+      if (updated) setActivePage(updated)
+    }
+  }, [pages])
+
   useEffect(() => {
     const saved = localStorage.getItem('ogma_theme')
     if (saved === 'dark') { setDark(true); document.documentElement.classList.add('dark') }

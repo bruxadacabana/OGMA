@@ -1,8 +1,10 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Project, Page, PROJECT_TYPE_LABELS, PROJECT_TYPE_ICONS } from '../../types'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { useAppStore } from '../../store/useAppStore'
 import { ViewRenderer } from './ViewRenderer'
+import { NewViewModal } from '../../components/Views/NewViewModal'
+import { ManagePropertiesModal } from '../../components/Properties/ManagePropertiesModal'
 import './ProjectDashboardView.css'
 
 interface Props {
@@ -81,7 +83,9 @@ function ProjectHeader({ project, dark, onEdit }: {
 export const ProjectDashboardView: React.FC<Props> = ({
   project, dark, onPageOpen, onEdit, onNewPage,
 }) => {
-  const { pages, projectProperties, projectViews, activeViewId, setActiveView } = useAppStore()
+  const { pages, projectProperties, projectViews, activeViewId, setActiveView, loadViews, loadProperties } = useAppStore()
+  const [showNewView,  setShowNewView]  = useState(false)
+  const [showManageProps, setShowManageProps] = useState(false)
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
@@ -98,31 +102,46 @@ export const ProjectDashboardView: React.FC<Props> = ({
       <div className="proj-dashboard-top">
         <ProjectHeader project={project} dark={dark} onEdit={onEdit} />
 
-        {projectViews.length > 0 && (
-          <div className="view-tabs" style={{ borderColor: border }}>
-            {projectViews.map(v => (
-              <button
-                key={v.id}
-                className={`view-tab${activeViewId === v.id ? ' view-tab--active' : ''}`}
-                onClick={() => setActiveView(v.id)}
-                style={{
-                  color: activeViewId === v.id ? color : ink2,
-                  borderBottomColor: activeViewId === v.id ? color : 'transparent',
-                }}
-              >
-                <span style={{ fontSize: 12 }}>{VIEW_TYPE_ICONS[v.view_type] ?? '◦'}</span>
-                {v.name}
-              </button>
-            ))}
+        <div className="view-tabs" style={{ borderColor: border }}>
+          {projectViews.map(v => (
             <button
-              className="btn btn-ghost btn-sm"
-              style={{ color: ink2, marginLeft: 'auto', fontSize: 10 }}
-              onClick={onNewPage}
+              key={v.id}
+              className={`view-tab${activeViewId === v.id ? ' view-tab--active' : ''}`}
+              onClick={() => setActiveView(v.id)}
+              style={{
+                color: activeViewId === v.id ? color : ink2,
+                borderBottomColor: activeViewId === v.id ? color : 'transparent',
+              }}
             >
-              + Página
+              <span style={{ fontSize: 12 }}>{VIEW_TYPE_ICONS[v.view_type] ?? '◦'}</span>
+              {v.name}
             </button>
-          </div>
-        )}
+          ))}
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ color: ink2, fontSize: 10, padding: '2px 6px' }}
+            onClick={() => setShowNewView(true)}
+            title="Nova vista"
+          >
+            + Vista
+          </button>
+          <div style={{ flex: 1 }} />
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ color: ink2, fontSize: 10, padding: '2px 6px' }}
+            onClick={() => setShowManageProps(true)}
+            title="Gerenciar propriedades"
+          >
+            ⚙ Props
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ color: ink2, fontSize: 10, padding: '2px 6px' }}
+            onClick={onNewPage}
+          >
+            + Página
+          </button>
+        </div>
       </div>
 
       {/* Conteúdo */}
@@ -146,13 +165,32 @@ export const ProjectDashboardView: React.FC<Props> = ({
             }}>
               Nenhuma vista configurada
             </span>
-            <button className="btn btn-sm" onClick={onNewPage}
+            <button className="btn btn-sm" onClick={() => setShowNewView(true)}
               style={{ borderColor: color, color }}>
-              + Primeira página
+              + Criar vista
             </button>
           </div>
         )}
       </div>
+
+      {showNewView && (
+        <NewViewModal
+          project={project}
+          properties={projectProperties}
+          dark={dark}
+          onClose={() => setShowNewView(false)}
+          onCreated={(viewId) => { setActiveView(viewId) }}
+        />
+      )}
+
+      {showManageProps && (
+        <ManagePropertiesModal
+          project={project}
+          dark={dark}
+          onClose={() => setShowManageProps(false)}
+          onChanged={() => loadProperties(project.id)}
+        />
+      )}
     </div>
   )
 }
