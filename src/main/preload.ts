@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('db', {
     delete:       (id: number)         => api('pages:delete',       { id }),
     reorder:      (items: any[])       => api('pages:reorder',      items),
     setPropValue: (d: any)             => api('pages:setPropValue', d),
+    listRecent:   (limit?: number)     => api('pages:listRecent',   { limit: limit ?? 8 }),
+    listUpcoming: (days?: number)      => api('pages:listUpcoming', { days:  days  ?? 14 }),
   },
   properties: {
     create:         (d: any)                                    => api('properties:create',         d),

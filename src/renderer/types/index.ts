@@ -80,7 +80,7 @@ export interface PagePropValue {
 
 // ── Views de Projeto ──────────────────────────────────────────────────────────
 
-export type ViewType = 'table' | 'kanban' | 'list' | 'calendar' | 'gallery'
+export type ViewType = 'table' | 'kanban' | 'list' | 'calendar' | 'gallery' | 'timeline'
 
 export interface ProjectView {
   id:                   number

@@ -348,6 +348,42 @@ export function registerIpcHandlers(): void {
     return { ok: true }
   })
 
+  api('pages:listRecent', ({ limit }) => {
+    const n = limit ?? 8
+    return dbAll(`
+      SELECT p.id, p.title, p.icon, p.project_id, p.updated_at, p.created_at,
+             pr.name AS project_name, pr.color AS project_color, pr.icon AS project_icon
+      FROM pages p
+      JOIN projects pr ON pr.id = p.project_id
+      WHERE p.is_deleted = 0
+      ORDER BY p.updated_at DESC
+      LIMIT ?
+    `, n)
+  })
+
+  api('pages:listUpcoming', ({ days }) => {
+    const d       = days ?? 14
+    const endDate = new Date()
+    endDate.setDate(endDate.getDate() + d)
+    const endStr  = endDate.toISOString().slice(0, 10)
+    return dbAll(`
+      SELECT p.id, p.title, p.icon, p.project_id,
+             ppv.value_date, pp.name AS prop_name,
+             pr.name AS project_name, pr.color AS project_color
+      FROM pages p
+      JOIN page_prop_values ppv ON ppv.page_id = p.id
+      JOIN project_properties pp ON pp.id = ppv.property_id
+      JOIN projects pr ON pr.id = p.project_id
+      WHERE p.is_deleted = 0
+        AND pp.prop_type = 'date'
+        AND ppv.value_date IS NOT NULL
+        AND ppv.value_date >= date('now')
+        AND ppv.value_date <= ?
+      ORDER BY ppv.value_date ASC
+      LIMIT 8
+    `, endStr)
+  })
+
   api('pages:setPropValue', (data) => {
     dbRun(`
       INSERT INTO page_prop_values

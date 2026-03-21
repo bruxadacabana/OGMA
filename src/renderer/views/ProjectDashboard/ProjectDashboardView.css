@@ -18,7 +18,8 @@
   padding: 0 28px 40px;
 }
 
-.proj-dashboard-content--kanban {
+.proj-dashboard-content--kanban,
+.proj-dashboard-content--noscroll {
   overflow: hidden;
   padding: 0;
 }

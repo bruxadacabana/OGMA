@@ -21,6 +21,7 @@ const VIEW_TYPE_ICONS: Record<string, string> = {
   list:     '≡',
   calendar: '☽',
   gallery:  '⊞',
+  timeline: '⟶',
 }
 
 // ── Header ────────────────────────────────────────────────────────────────────
@@ -92,11 +93,13 @@ export const ProjectDashboardView: React.FC<Props> = ({
   const border = dark ? '#3A3020' : '#C4B9A8'
   const color  = project.color ?? '#8B7355'
 
-  const activeView = projectViews.find(v => v.id === activeViewId) ?? projectViews[0] ?? null
-  const isKanban   = activeView?.view_type === 'kanban'
+  const activeView  = projectViews.find(v => v.id === activeViewId) ?? projectViews[0] ?? null
+  const noScroll    = activeView?.view_type === 'kanban'
+                   || activeView?.view_type === 'calendar'
+                   || activeView?.view_type === 'timeline'
 
   return (
-    <div className={`proj-dashboard-root${isKanban ? ' proj-dashboard-root--kanban' : ''}`}>
+    <div className={`proj-dashboard-root${noScroll ? ' proj-dashboard-root--kanban' : ''}`}>
 
       {/* Header + tabs — sempre visíveis */}
       <div className="proj-dashboard-top">
@@ -145,7 +148,7 @@ export const ProjectDashboardView: React.FC<Props> = ({
       </div>
 
       {/* Conteúdo */}
-      <div className={`proj-dashboard-content${isKanban ? ' proj-dashboard-content--kanban' : ''}`}>
+      <div className={`proj-dashboard-content${noScroll ? ' proj-dashboard-content--noscroll' : ''}`}>
         {activeView ? (
           <ViewRenderer
             view={activeView}

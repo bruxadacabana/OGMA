@@ -13,13 +13,14 @@ interface Props {
   onCreated:  (viewId: number) => void
 }
 
-type ViewType = 'table' | 'kanban' | 'list' | 'calendar' | 'gallery'
+type ViewType = 'table' | 'kanban' | 'list' | 'calendar' | 'gallery' | 'timeline'
 
 const VIEW_OPTIONS: { type: ViewType; label: string; icon: string }[] = [
   { type: 'table',    label: 'Tabela',     icon: '☰' },
   { type: 'kanban',   label: 'Kanban',     icon: '☷' },
   { type: 'list',     label: 'Lista',      icon: '≡' },
   { type: 'calendar', label: 'Calendário', icon: '☽' },
+  { type: 'timeline', label: 'Linha Tempo',icon: '⟶' },
   { type: 'gallery',  label: 'Galeria',    icon: '⊞' },
 ]
 
@@ -27,17 +28,20 @@ export const NewViewModal: React.FC<Props> = ({
   project, properties, dark, onClose, onCreated,
 }) => {
   const { loadViews } = useAppStore()
-  const [name,       setName]       = useState('')
-  const [viewType,   setViewType]   = useState<ViewType>('table')
-  const [groupById,  setGroupById]  = useState<number | ''>('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error,      setError]      = useState('')
+  const [name,        setName]        = useState('')
+  const [viewType,    setViewType]    = useState<ViewType>('table')
+  const [groupById,   setGroupById]   = useState<number | ''>('')
+  const [datePropId,  setDatePropId]  = useState<number | ''>('')
+  const [submitting,  setSubmitting]  = useState(false)
+  const [error,       setError]       = useState('')
 
   const color  = project.color ?? '#8B7355'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const border = dark ? '#3A3020' : '#C4B9A8'
 
   const selectProps = properties.filter(p => p.prop_type === 'select')
+  const dateProps   = properties.filter(p => p.prop_type === 'date')
+  const needsDate   = viewType === 'calendar' || viewType === 'timeline'
 
   const handleSubmit = async () => {
     const n = name.trim()
@@ -50,6 +54,7 @@ export const NewViewModal: React.FC<Props> = ({
         name:                 n,
         view_type:            viewType,
         group_by_property_id: viewType === 'kanban' && groupById ? Number(groupById) : null,
+        date_property_id:     needsDate && datePropId ? Number(datePropId) : null,
       })
       if (res?.ok && res.data) {
         await loadViews(project.id)
@@ -79,7 +84,7 @@ export const NewViewModal: React.FC<Props> = ({
         />
       </div>
 
-      <div className="form-group" style={{ marginBottom: viewType === 'kanban' && selectProps.length > 0 ? 14 : 0 }}>
+      <div className="form-group" style={{ marginBottom: (viewType === 'kanban' && selectProps.length > 0) || (needsDate && dateProps.length > 0) ? 14 : 0 }}>
         <label className="form-label" style={{ color: ink2 }}>Tipo</label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {VIEW_OPTIONS.map(opt => (
@@ -111,6 +116,22 @@ export const NewViewModal: React.FC<Props> = ({
           >
             <option value="">— Nenhuma —</option>
             {selectProps.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {needsDate && dateProps.length > 0 && (
+        <div className="form-group">
+          <label className="form-label" style={{ color: ink2 }}>Propriedade de data</label>
+          <select
+            className="input"
+            value={datePropId}
+            onChange={e => setDatePropId(e.target.value as any)}
+          >
+            <option value="">— Nenhuma —</option>
+            {dateProps.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>

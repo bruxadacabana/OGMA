@@ -1,6 +1,8 @@
 import React from 'react'
 import { Page, Project, ProjectView, ProjectProperty } from '../../types'
 import { KanbanView } from '../KanbanView/KanbanView'
+import { CalendarView } from '../CalendarView/CalendarView'
+import { TimelineView } from '../TimelineView/TimelineView'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 
 export interface ViewRendererProps {
@@ -15,12 +17,13 @@ export interface ViewRendererProps {
 
 export const ViewRenderer: React.FC<ViewRendererProps> = (props) => {
   switch (props.view.view_type) {
-    case 'kanban':   return <KanbanView {...props} />
-    case 'table':    return <TableView  {...props} />
-    case 'list':     return <ListView   {...props} />
-    case 'calendar': return <PlaceholderView label="Calendário" icon="☽" dark={props.dark} />
-    case 'gallery':  return <PlaceholderView label="Galeria"    icon="⊞" dark={props.dark} />
-    default:         return <ListView   {...props} />
+    case 'kanban':   return <KanbanView   {...props} />
+    case 'table':    return <TableView    {...props} />
+    case 'list':     return <ListView     {...props} />
+    case 'calendar': return <CalendarView {...props} />
+    case 'timeline': return <TimelineView {...props} />
+    case 'gallery':  return <GalleryView  {...props} />
+    default:         return <ListView     {...props} />
   }
 }
 
@@ -195,6 +198,151 @@ const ListView: React.FC<ViewRendererProps> = ({
             <span style={{ color: ink2, fontSize: 12, flexShrink: 0 }}>›</span>
           </button>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ── GalleryView ───────────────────────────────────────────────────────────────
+
+const GalleryView: React.FC<ViewRendererProps> = ({
+  project, pages, properties, dark, onPageOpen, onNewPage,
+}) => {
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+  const color  = project.color ?? '#8B7355'
+
+  const previewProps = properties.filter(p =>
+    ['select', 'date', 'number', 'checkbox'].includes(p.prop_type)
+  ).slice(0, 3)
+
+  if (pages.length === 0) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        gap: 12, padding: '48px 20px', color: ink2,
+      }}>
+        <span style={{ fontSize: 32, opacity: 0.4 }}>⊞</span>
+        <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 16, color: ink }}>
+          Nenhuma página ainda
+        </span>
+        <button className="btn btn-sm" onClick={onNewPage} style={{ borderColor: color, color }}>
+          + Criar primeira página
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '20px 28px 40px' }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+        gap: 14,
+      }}>
+        {pages.map((page, i) => (
+          <button
+            key={page.id}
+            onClick={() => onPageOpen(page)}
+            style={{
+              background: cardBg, border: `1px solid ${border}`,
+              borderRadius: 3, cursor: 'pointer', textAlign: 'left',
+              padding: 0, overflow: 'hidden',
+              transition: 'border-color 120ms, transform 120ms',
+              animationDelay: `${i * 0.03}s`,
+              display: 'flex', flexDirection: 'column',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = color
+              e.currentTarget.style.transform = 'translateY(-1px)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = border
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}
+          >
+            {/* Cover strip */}
+            <div style={{
+              height: page.cover_color ? 48 : 8,
+              background: page.cover_color ?? color,
+              opacity: page.cover_color ? 1 : 0.35,
+              flexShrink: 0,
+            }} />
+
+            {/* Card body */}
+            <div style={{ padding: '10px 12px 12px', flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+                <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>
+                  {page.icon ?? '📄'}
+                </span>
+                <span style={{
+                  fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                  fontSize: 13, color: ink, lineHeight: 1.3,
+                  overflow: 'hidden', display: '-webkit-box',
+                  WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                }}>
+                  {page.title}
+                </span>
+              </div>
+
+              {/* Props */}
+              {previewProps.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {previewProps.map(p => {
+                    const pv = page.prop_values?.find(v => v.property_id === p.id)
+                    if (!pv) return null
+                    const val = p.prop_type === 'date'     ? formatDate(pv.value_date)
+                              : p.prop_type === 'checkbox' ? (pv.value_bool ? '☑' : null)
+                              : p.prop_type === 'number'   ? (pv.value_num  != null ? String(pv.value_num) : null)
+                              : pv.value_text
+                    if (!val) return null
+                    return (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 8,
+                          letterSpacing: '0.06em', color: ink2, textTransform: 'uppercase',
+                          flexShrink: 0, minWidth: 40,
+                        }}>
+                          {p.name}
+                        </span>
+                        <span style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 9, color: ink,
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {val}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </button>
+        ))}
+
+        {/* Add card */}
+        <button
+          onClick={onNewPage}
+          style={{
+            background: 'transparent', border: `1px dashed ${border}`,
+            borderRadius: 3, cursor: 'pointer', minHeight: 100,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: ink2, fontFamily: 'var(--font-mono)', fontSize: 11,
+            transition: 'border-color 120ms, color 120ms',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = color
+            e.currentTarget.style.color = color
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = border
+            e.currentTarget.style.color = ink2
+          }}
+        >
+          + Nova página
+        </button>
       </div>
     </div>
   )
