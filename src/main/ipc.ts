@@ -322,14 +322,16 @@ export function registerIpcHandlers(): void {
   })
 
   api('pages:update', (data) => {
-    dbRun(`
-      UPDATE pages SET title=?, icon=?, cover=?, cover_color=?, body_json=?,
-        sort_order=?, updated_at=datetime('now')
-      WHERE id=?`,
-      data.title, data.icon ?? null, data.cover ?? null,
-      data.cover_color ?? null, data.body_json ?? null,
-      data.sort_order ?? 0, data.id
-    )
+    const cols: string[] = ["updated_at = datetime('now')"]
+    const params: any[]  = []
+    if (data.title       !== undefined) { cols.push('title = ?');       params.push(data.title) }
+    if (data.icon        !== undefined) { cols.push('icon = ?');        params.push(data.icon ?? null) }
+    if (data.cover       !== undefined) { cols.push('cover = ?');       params.push(data.cover ?? null) }
+    if (data.cover_color !== undefined) { cols.push('cover_color = ?'); params.push(data.cover_color ?? null) }
+    if (data.body_json   !== undefined) { cols.push('body_json = ?');   params.push(data.body_json ?? null) }
+    if (data.sort_order  !== undefined) { cols.push('sort_order = ?');  params.push(data.sort_order) }
+    params.push(data.id)
+    dbRun(`UPDATE pages SET ${cols.join(', ')} WHERE id = ?`, ...params)
     return dbGet('SELECT * FROM pages WHERE id = ?', data.id)
   })
 

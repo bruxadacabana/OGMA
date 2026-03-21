@@ -16,89 +16,11 @@ interface Props {
 
 const TYPES: ProjectType[] = ['academic', 'creative', 'research', 'software', 'health', 'custom']
 
-// ── Wizard para projeto Personalizado ────────────────────────────────────────
-
-interface CustomField { name: string; type: 'text' | 'number' | 'date' | 'checkbox' }
-
-function CustomWizard({
-  dark,
-  onBack,
-  onSubmit,
-  baseData,
-}: {
-  dark: boolean
-  onBack: () => void
-  onSubmit: (extraFields: CustomField[]) => void
-  baseData: { name: string; icon: string; color: string }
-}) {
-  const [fields, setFields] = useState<CustomField[]>([])
-  const ink   = dark ? '#E8DFC8' : '#2C2416'
-  const ink2  = dark ? '#8A7A62' : '#9C8E7A'
-  const border = dark ? '#3A3020' : '#C4B9A8'
-
-  const addField = () => {
-    setFields(f => [...f, { name: '', type: 'text' }])
-  }
-
-  const updateField = (i: number, patch: Partial<CustomField>) => {
-    setFields(f => f.map((ff, idx) => idx === i ? { ...ff, ...patch } : ff))
-  }
-
-  const removeField = (i: number) => {
-    setFields(f => f.filter((_, idx) => idx !== i))
-  }
-
-  return (
-    <div>
-      <p style={{ fontSize: 12, color: ink2, marginBottom: 16, fontStyle: 'italic' }}>
-        Adicione campos extras opcionais para este projeto. Você pode pular este passo.
-      </p>
-
-      {fields.map((f, i) => (
-        <div key={i} className="custom-field-row" style={{ borderColor: border }}>
-          <input
-            className="input"
-            style={{ flex: 1 }}
-            placeholder="Nome do campo"
-            value={f.name}
-            onChange={e => updateField(i, { name: e.target.value })}
-          />
-          <select
-            className="input"
-            style={{ width: 120 }}
-            value={f.type}
-            onChange={e => updateField(i, { type: e.target.value as any })}
-          >
-            <option value="text">Texto</option>
-            <option value="number">Número</option>
-            <option value="date">Data</option>
-            <option value="checkbox">Checkbox</option>
-          </select>
-          <button className="btn btn-ghost btn-icon" onClick={() => removeField(i)}
-            style={{ color: '#8B3A2A' }}>✕</button>
-        </div>
-      ))}
-
-      <button className="btn btn-ghost btn-sm" onClick={addField}
-        style={{ marginTop: 8, color: ink2 }}>
-        + Adicionar campo
-      </button>
-
-      <div className="modal-footer" style={{ borderColor: border, marginTop: 20, padding: '12px 0 0' }}>
-        <button className="btn" onClick={onBack}>← Voltar</button>
-        <button className="btn btn-primary" onClick={() => onSubmit(fields)}>
-          Criar projeto →
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // ── Modal principal ───────────────────────────────────────────────────────────
 
 export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
   const { dark, createProject, loadProjects } = useAppStore()
-  const [step, setStep]           = useState<'type' | 'details' | 'custom'>('type')
+  const [step, setStep]           = useState<'type' | 'details'>('type')
   const [selectedType, setType]   = useState<ProjectType | null>(null)
   const [name, setName]           = useState('')
   const [description, setDesc]    = useState('')
@@ -114,14 +36,13 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const border = dark ? '#3A3020' : '#C4B9A8'
   const cardBg = dark ? '#211D16' : '#EDE7D9'
-  const accent = dark ? '#D4A820' : '#b8860b'
 
   // ── Step 1: Tipo ──────────────────────────────────────────────────────────
 
   const renderTypeStep = () => (
     <div>
       <p style={{ fontSize: 12, color: ink2, marginBottom: 16, fontStyle: 'italic' }}>
-        Escolha o tipo do projeto. Ele define os recursos disponíveis e os templates sugeridos.
+        Escolha o tipo do projeto. Ele define as propriedades e vistas padrão criadas automaticamente.
       </p>
       <div className="type-grid">
         {TYPES.map(t => (
@@ -129,7 +50,7 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
             key={t}
             className={`type-card${selectedType === t ? ' selected' : ''}`}
             style={{
-              background: selectedType === t ? color + '22' : cardBg,
+              background:  selectedType === t ? color + '22' : cardBg,
               borderColor: selectedType === t ? color : border,
               color: ink,
             }}
@@ -163,12 +84,11 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
 
   // ── Step 2: Detalhes ──────────────────────────────────────────────────────
 
-  const handleSubmit = async (extraFields?: any[]) => {
+  const handleSubmit = async () => {
     if (!name.trim()) { setError('O nome do projeto é obrigatório.'); return }
     setSubmit(true)
     setError('')
 
-    // Pegar workspace do store ou fallback para id=1
     const { workspace } = useAppStore.getState()
     const wsId = workspace?.id ?? 1
 
@@ -176,16 +96,13 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
       workspace_id: wsId,
       name:         name.trim(),
       description:  description.trim() || undefined,
-      icon:         icon,
-      color:        color,
+      icon,
+      color,
       project_type: selectedType!,
       subcategory:  subcategory || undefined,
       status:       'active',
       date_start:   dateStart || undefined,
       date_end:     dateEnd   || undefined,
-      extra_fields: extraFields && extraFields.length > 0
-        ? Object.fromEntries(extraFields.map(f => [f.name, { type: f.type, value: null }]))
-        : undefined,
       sort_order:   0,
     }
 
@@ -302,24 +219,14 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
 
         <div className="modal-footer" style={{ borderColor: border, marginTop: 20, padding: '12px 0 0' }}>
           <button className="btn" onClick={() => setStep('type')}>← Voltar</button>
-          {selectedType === 'custom' ? (
-            <button
-              className="btn btn-primary"
-              disabled={!name.trim() || submitting}
-              onClick={() => setStep('custom')}
-            >
-              Próximo →
-            </button>
-          ) : (
-            <button
-              className="btn btn-primary"
-              disabled={!name.trim() || submitting}
-              onClick={() => handleSubmit()}
-              style={{ background: color, borderColor: color }}
-            >
-              {submitting ? 'Criando...' : 'Criar projeto'}
-            </button>
-          )}
+          <button
+            className="btn btn-primary"
+            disabled={!name.trim() || submitting}
+            onClick={handleSubmit}
+            style={{ background: color, borderColor: color }}
+          >
+            {submitting ? 'Criando...' : 'Criar projeto'}
+          </button>
         </div>
       </div>
     )
@@ -330,7 +237,6 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
   const titles = {
     type:    'Novo Projeto — Escolha o Tipo',
     details: `Novo Projeto — ${selectedType ? PROJECT_TYPE_LABELS[selectedType] : ''}`,
-    custom:  'Novo Projeto — Campos Personalizados',
   }
 
   return (
@@ -343,14 +249,6 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
     >
       {step === 'type'    && renderTypeStep()}
       {step === 'details' && renderDetailsStep()}
-      {step === 'custom'  && (
-        <CustomWizard
-          dark={dark}
-          onBack={() => setStep('details')}
-          onSubmit={handleSubmit}
-          baseData={{ name, icon, color }}
-        />
-      )}
     </Modal>
   )
 }
