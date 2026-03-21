@@ -8,6 +8,8 @@ import { NewProjectModal } from './components/Projects/NewProjectModal'
 import { EditProjectModal } from './components/Projects/EditProjectModal'
 import { NewPageModal } from './components/Pages/NewPageModal'
 import { CosmosLayer } from './components/Cosmos/CosmosLayer'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { ToastContainer } from './components/UI/Toast'
 import { useAppStore } from './store/useAppStore'
 import { Project, Page, PROJECT_TYPE_ICONS } from './types'
 
@@ -114,7 +116,8 @@ export default function App() {
     : view
 
   return (
-    <>
+    <ErrorBoundary dark={dark}>
+      <ToastContainer />
       {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} dark={dark} />}
 
       <Sidebar
@@ -248,7 +251,7 @@ export default function App() {
           }}
         />
       )}
-    </>
+    </ErrorBoundary>
   )
 }
 

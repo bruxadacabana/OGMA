@@ -45,6 +45,10 @@ function createWindow(): void {
   })
 }
 
+// Suprime aviso "GetVSyncParametersIfAvailable() failed" no Linux
+// quando o driver de GPU não suporta VSync parameters (inofensivo)
+app.commandLine.appendSwitch('disable-gpu-vsync')
+
 app.whenReady().then(() => {
   setupGlobalErrorHandlers()
   ensureDirs()

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { Page, Project, ProjectProperty, PagePropValue, PropOption } from '../../types'
+import { fromIpc } from '../../types/errors'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { EditorFrame } from '../../components/Editor/EditorFrame'
 import { useAppStore } from '../../store/useAppStore'
@@ -386,41 +387,62 @@ export const PageView: React.FC<Props> = ({ page, project, dark, onBack }) => {
   const border = dark ? '#3A3020' : '#C4B9A8'
   const cardBg = dark ? '#211D16' : '#EDE7D9'
 
+  const { pushToast } = useAppStore()
+
   const handleSave = useCallback(async (bodyJson: string) => {
     setSaving(true)
-    try {
-      await db().pages.update({ id: page.id, body_json: bodyJson })
-      setLastSaved(new Date())
-      log.debug('page saved', { id: page.id })
-    } catch (e: any) {
-      log.error('page save failed', { error: e.message })
-    } finally {
-      setSaving(false)
-    }
-  }, [page.id])
+    const result = await fromIpc<Page>(
+      () => db().pages.update({ id: page.id, body_json: bodyJson }),
+      'page:save',
+    )
+    result.match(
+      () => { setLastSaved(new Date()); log.debug('page saved', { id: page.id }) },
+      e  => { log.error('page save failed', { error: e.message }); pushToast({ kind: 'error', title: 'Erro ao guardar página', detail: e.message }) },
+    )
+    setSaving(false)
+  }, [page.id, pushToast])
 
   const saveTitle = useCallback(async () => {
     setEditingTitle(false)
     const t = titleVal.trim() || 'Sem título'
     setTitleVal(t)
-    await db().pages.update({ id: page.id, title: t })
+    const result = await fromIpc<Page>(
+      () => db().pages.update({ id: page.id, title: t }),
+      'page:saveTitle',
+    )
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao guardar título', detail: result.error.message })
+    }
     loadPages(project.id)
-  }, [titleVal, page.id, project.id, loadPages])
+  }, [titleVal, page.id, project.id, loadPages, pushToast])
 
   const saveIcon = useCallback(async () => {
     setEditingIcon(false)
     const i = iconVal.trim() || '📄'
     setIconVal(i)
-    await db().pages.update({ id: page.id, icon: i })
+    const result = await fromIpc<Page>(
+      () => db().pages.update({ id: page.id, icon: i }),
+      'page:saveIcon',
+    )
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao guardar ícone', detail: result.error.message })
+    }
     loadPages(project.id)
-  }, [iconVal, page.id, project.id, loadPages])
+  }, [iconVal, page.id, project.id, loadPages, pushToast])
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm(`Excluir "${page.title}"? Esta ação pode ser desfeita restaurando do lixo.`)) return
-    await db().pages.delete(page.id)
+    const result = await fromIpc<unknown>(
+      () => db().pages.delete(page.id),
+      'page:delete',
+    )
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao excluir página', detail: result.error.message })
+      return
+    }
     loadPages(project.id)
     onBack()
-  }, [page.id, page.title, project.id, loadPages, onBack])
+  }, [page.id, page.title, project.id, loadPages, onBack, pushToast])
 
   const formattedDate = (() => {
     try { return new Date(page.created_at).toLocaleDateString('pt-BR') } catch { return '' }

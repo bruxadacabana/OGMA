@@ -5,13 +5,33 @@ import { createLogger, RENDERER_LOG_CHANNEL } from './logger'
 const log   = createLogger('ipc')
 const dbLog = createLogger('db')
 
+// ── Classificação de erros ─────────────────────────────────────────────────────
+
+type ErrorCode = 'DB_CONSTRAINT' | 'DB_WRITE' | 'DB_READ' | 'NOT_FOUND' | 'VALIDATION' | 'UNKNOWN'
+
+function classifyError(err: Error): ErrorCode {
+  const msg = (err.message ?? '').toLowerCase()
+  if (msg.includes('unique') || msg.includes('constraint') || msg.includes('foreign key')) {
+    return 'DB_CONSTRAINT'
+  }
+  if (msg.includes('no such') || msg.includes('not found')) return 'NOT_FOUND'
+  if (msg.includes('readonly') || msg.includes('locked') || msg.includes('disk full')) {
+    return 'DB_WRITE'
+  }
+  if (msg.includes('failed to fetch') || msg.includes('no rows')) return 'DB_READ'
+  return 'UNKNOWN'
+}
+
+// ── Wrapper IPC ────────────────────────────────────────────────────────────────
+
 const api = (channel: string, handler: (data: any) => any) => {
   ipcMain.handle(channel, (_event, data) => {
     try {
       return { ok: true, data: handler(data) }
     } catch (err: any) {
-      log.error(`handler:${channel}`, { error: err.message, data })
-      return { ok: false, error: err.message }
+      const errorCode = classifyError(err)
+      log.error(`handler:${channel}`, { error: err.message, errorCode, data })
+      return { ok: false, error: err.message, errorCode }
     }
   })
 }

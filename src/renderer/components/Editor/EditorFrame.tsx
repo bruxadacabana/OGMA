@@ -9,6 +9,74 @@ import './EditorFrame.css'
 
 const log = createLogger('EditorFrame')
 
+// ── ColumnsBlock ───────────────────────────────────────────────────────────────
+// Block customizado: dois painéis lado a lado com contenteditable independente.
+
+class ColumnsBlock {
+  private _wrapper: HTMLDivElement | null = null
+  private data: { left: string; right: string }
+  private readonly readOnly: boolean
+
+  static get toolbox() {
+    return { title: 'Colunas', icon: '⊞' }
+  }
+  static get isReadOnlySupported() { return true }
+  static get sanitize() {
+    return { left: { b: true, i: true, u: true, br: true }, right: { b: true, i: true, u: true, br: true } }
+  }
+
+  constructor({ data, readOnly }: any) {
+    this.data     = { left: data?.left ?? '', right: data?.right ?? '' }
+    this.readOnly = readOnly ?? false
+  }
+
+  render() {
+    const wrapper = document.createElement('div')
+    wrapper.className = 'columns-block'
+
+    const makeCol = (content: string, side: 'left' | 'right') => {
+      const col = document.createElement('div')
+      col.className = 'columns-block__col'
+      col.dataset.col = side
+      col.dataset.placeholder = side === 'left' ? 'Coluna esquerda…' : 'Coluna direita…'
+      col.contentEditable = String(!this.readOnly)
+      col.innerHTML = content
+
+      if (!this.readOnly) {
+        col.addEventListener('keydown', (e: KeyboardEvent) => {
+          // Impede que o Editor.js intercepte teclas dentro das colunas
+          e.stopPropagation()
+
+          // Tab → muda de coluna
+          if (e.key === 'Tab') {
+            e.preventDefault()
+            const otherSide = side === 'left' ? 'right' : 'left'
+            const other = wrapper.querySelector<HTMLElement>(`[data-col="${otherSide}"]`)
+            other?.focus()
+          }
+        })
+
+        // Impede que paste acione o handler global do Editor.js
+        col.addEventListener('paste', (e) => e.stopPropagation())
+      }
+      return col
+    }
+
+    wrapper.appendChild(makeCol(this.data.left, 'left'))
+    wrapper.appendChild(makeCol(this.data.right, 'right'))
+    this._wrapper = wrapper
+    return wrapper
+  }
+
+  save() {
+    if (!this._wrapper) return this.data
+    return {
+      left:  this._wrapper.querySelector<HTMLElement>('[data-col="left"]')?.innerHTML  ?? '',
+      right: this._wrapper.querySelector<HTMLElement>('[data-col="right"]')?.innerHTML ?? '',
+    }
+  }
+}
+
 interface Props {
   content:   string | null
   dark:      boolean
@@ -92,15 +160,16 @@ export const EditorFrame: React.FC<Props> = ({
       }
 
       const tools: any = {
-        header:     { class: Header,     config: { levels: [1, 2, 3], defaultLevel: 2 } },
-        list:       { class: List,       inlineToolbar: true },
-        checklist:  { class: Checklist,  inlineToolbar: true },
-        quote:      { class: Quote,      inlineToolbar: true, config: { quotePlaceholder: 'Escreva uma citação...', captionPlaceholder: 'Autor' } },
+        header:     { class: Header,       config: { levels: [1, 2, 3], defaultLevel: 2 } },
+        list:       { class: List,         inlineToolbar: true },
+        checklist:  { class: Checklist,    inlineToolbar: true },
+        quote:      { class: Quote,        inlineToolbar: true, config: { quotePlaceholder: 'Escreva uma citação...', captionPlaceholder: 'Autor' } },
         code:       { class: Code },
-        table:      { class: Table,      inlineToolbar: true, config: { rows: 2, cols: 3, withHeadings: true } },
+        table:      { class: Table,        inlineToolbar: true, config: { rows: 2, cols: 3, withHeadings: true } },
         inlineCode: { class: InlineCode },
         delimiter:  { class: Delimiter },
         marker:     { class: Marker },
+        columns:    { class: ColumnsBlock },
       }
 
       if (ToggleBlock) {
@@ -128,7 +197,14 @@ export const EditorFrame: React.FC<Props> = ({
           }, 1500)
         },
 
-        onReady: () => {
+        onReady: async () => {
+          // Activar drag-and-drop para reordenar blocos
+          try {
+            const { default: DragDrop } = await import('editorjs-drag-drop')
+            new DragDrop(editorRef.current, '2px dashed #C4B9A8')
+          } catch (e) {
+            log.warn('drag-drop plugin não disponível', {})
+          }
           setLoading(false)
           onReadyRef.current?.()
           log.debug('editor pronto')

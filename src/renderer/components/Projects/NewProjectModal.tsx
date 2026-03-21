@@ -106,15 +106,15 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
       sort_order:   0,
     }
 
-    const project = await createProject(input as any)
+    const result = await createProject(input as any)
     await loadProjects()
     setSubmit(false)
 
-    if (project) {
-      onCreated?.(project.id)
+    if (result.isOk()) {
+      onCreated?.(result.value.id)
       onClose()
     } else {
-      setError('Erro ao criar projeto. Tente novamente.')
+      setError(result.error.message)
     }
   }
 

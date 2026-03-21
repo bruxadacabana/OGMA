@@ -203,6 +203,23 @@
   background: var(--paper-dark, #EDE7D9);
 }
 
+/* Drag handle: cursor indica que o bloco é arrastável */
+.editor-holder .ce-toolbar__settings-btn[draggable="true"] {
+  cursor: grab;
+}
+.editor-holder .ce-toolbar__settings-btn[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* Garantir que os popups do editor ficam acima da topbar (z-index: 10) */
+.editor-holder .ce-settings,
+.editor-holder .ce-toolbox,
+.editor-holder .ce-inline-toolbar,
+.editor-holder .ce-conversion-toolbar,
+.editor-holder .ce-popover {
+  z-index: 50;
+}
+
 .editor-holder .ce-toolbox {
   background: var(--paper-dark, #EDE7D9);
   border: 1px solid var(--rule, #C4B9A8);
@@ -253,6 +270,40 @@
 .editor-holder .ce-conversion-tool { color: var(--ink-light, #5C4E3A); }
 .editor-holder .ce-conversion-tool:hover { background: var(--paper, #F5F0E8); }
 
+/* ── Colunas ──────────────────────────────────────────────────────────────── */
+.editor-holder .columns-block {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 4px 0;
+}
+
+.editor-holder .columns-block__col {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule, #C4B9A8);
+  border-radius: 2px;
+  outline: none;
+  font-family: 'IM Fell English', Georgia, serif;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink, #2C2416);
+  transition: border-color 120ms;
+  word-break: break-word;
+}
+
+.editor-holder .columns-block__col:focus {
+  border-color: var(--accent, #b8860b);
+}
+
+/* Placeholder via CSS quando vazio */
+.editor-holder .columns-block__col:empty::before {
+  content: attr(data-placeholder);
+  color: var(--ink-faint, #9C8E7A);
+  font-style: italic;
+  pointer-events: none;
+}
+
 /* ── Seleção ──────────────────────────────────────────────────────────────── */
 .editor-holder ::selection { background: rgba(184,134,11,0.2); }
 
@@ -297,4 +348,10 @@
 .editor-dark .ce-toolbar__settings-btn { color: #8A7A62; }
 .editor-dark .ce-toolbar__plus:hover,
 .editor-dark .ce-toolbar__settings-btn:hover { background: #211D16; color: #E8DFC8; }
+.editor-dark .columns-block__col {
+  border-color: #3A3020;
+  color: #E8DFC8;
+}
+.editor-dark .columns-block__col:focus { border-color: #D4A820; }
+
 .editor-dark ::selection { background: rgba(212,168,32,0.2); }

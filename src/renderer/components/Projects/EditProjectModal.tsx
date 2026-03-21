@@ -31,18 +31,21 @@ export const EditProjectModal: React.FC<Props> = ({ project, onClose, onDeleted 
   const handleSave = async () => {
     if (!name.trim()) { setError('Nome é obrigatório.'); return }
     setSubmit(true)
-    await updateProject({
+    setError('')
+    const result = await updateProject({
       ...project,
       name: name.trim(),
       description: description.trim() || null,
       icon, color, subcategory: subcategory || null, status,
     })
     setSubmit(false)
+    if (result.isErr()) { setError(result.error.message); return }
     onClose()
   }
 
   const handleDelete = async () => {
-    await deleteProject(project.id)
+    const result = await deleteProject(project.id)
+    if (result.isErr()) { setError(result.error.message); return }
     onDeleted?.()
     onClose()
   }

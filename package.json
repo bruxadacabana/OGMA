@@ -17,20 +17,22 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "electron-store": "^8.1.0",
-    "better-sqlite3-multiple-ciphers": "^11.9.1",
+    "@editorjs/checklist": "^1.6.0",
+    "@editorjs/code": "^2.9.3",
+    "@editorjs/delimiter": "^1.4.2",
     "@editorjs/editorjs": "^2.31.5",
     "@editorjs/header": "^2.8.7",
-    "@editorjs/list": "^1.10.0",
-    "@editorjs/checklist": "^1.6.0",
-    "@editorjs/quote": "^2.7.3",
-    "@editorjs/code": "^2.9.3",
-    "@editorjs/table": "^2.4.3",
     "@editorjs/image": "^2.10.1",
     "@editorjs/inline-code": "^1.5.1",
-    "@editorjs/delimiter": "^1.4.2",
+    "@editorjs/list": "^1.10.0",
     "@editorjs/marker": "^1.4.0",
-    "editorjs-toggle-block": "^0.3.16"
+    "@editorjs/quote": "^2.7.3",
+    "@editorjs/table": "^2.4.3",
+    "better-sqlite3-multiple-ciphers": "^11.9.1",
+    "editorjs-drag-drop": "^1.1.16",
+    "editorjs-toggle-block": "^0.3.16",
+    "electron-store": "^8.1.0",
+    "neverthrow": "^8.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -67,12 +69,24 @@
     ],
     "asar": true,
     "linux": {
-      "target": ["AppImage", "deb"],
-      "arch": ["x64"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "arch": [
+        "x64"
+      ],
       "category": "Office"
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     }
   }
 }

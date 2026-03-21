@@ -175,8 +175,11 @@ export const PROJECT_COLORS = [
 
 // ── API Response ──────────────────────────────────────────────────────────────
 
-export interface ApiResponse<T = any> {
-  ok:     boolean
-  data?:  T
-  error?: string
+export type { ErrorCode, AppError } from './errors'
+
+export interface ApiResponse<T = unknown> {
+  ok:         boolean
+  data?:      T
+  error?:     string
+  errorCode?: import('./errors').ErrorCode
 }
