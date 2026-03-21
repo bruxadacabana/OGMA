@@ -1,0 +1,44 @@
+# ── Dependências ─────────────────────────────────────────────────────────────
+node_modules/
+src/editor_src/node_modules/
+
+# ── Build ─────────────────────────────────────────────────────────────────────
+dist/
+dist-electron/
+out/
+src/editor/web/editor.bundle.js
+
+# ── Dados do app (banco, logs, uploads) ──────────────────────────────────────
+data/ogma.db
+data/ogma.db-shm
+data/ogma.db-wal
+data/logs/
+data/uploads/
+
+# ── Ambiente ──────────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Cache e temp ──────────────────────────────────────────────────────────────
+.cache/
+.vite/
+*.log
+npm-debug.log*
+
+# ── SO ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editor ────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── TypeScript ────────────────────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ── npm config local ──────────────────────────────────────────────────────────
+.npmrc

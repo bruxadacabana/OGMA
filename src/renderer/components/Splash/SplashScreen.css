@@ -1,0 +1,107 @@
+.splash-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  background: rgba(26, 22, 16, 0.85);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.55s ease;
+}
+
+.splash-overlay.splash-show { opacity: 1; }
+.splash-overlay.splash-out  { opacity: 0; pointer-events: none; }
+
+.splash-card {
+  position: relative;
+  width: 520px;
+  height: 340px;
+  border: 1px solid;
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: 8px 8px 0 rgba(44,36,22,0.3);
+}
+
+.splash-margin {
+  position: absolute;
+  left: 44px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.splash-logo {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: -30px;
+  font-family: 'IM Fell English', Georgia, serif;
+  font-size: 68px;
+  font-style: italic;
+  letter-spacing: 0.06em;
+  z-index: 2;
+  pointer-events: none;
+  text-shadow: 2px 2px 0 rgba(44,36,22,0.1);
+}
+
+.splash-sub {
+  position: absolute;
+  bottom: 120px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: 'Special Elite', 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  z-index: 2;
+}
+
+.splash-divider {
+  position: absolute;
+  left: 160px;
+  right: 160px;
+  bottom: 107px;
+  height: 1px;
+  z-index: 2;
+}
+
+.splash-status {
+  position: absolute;
+  bottom: 75px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: 'Special Elite', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  z-index: 2;
+}
+
+.splash-dots {
+  position: absolute;
+  bottom: 48px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: 'Special Elite', monospace;
+  font-size: 18px;
+  letter-spacing: 0.5em;
+  z-index: 2;
+  animation: blink 1.2s infinite;
+}
+
+.splash-version {
+  position: absolute;
+  bottom: 10px;
+  right: 14px;
+  font-family: 'Special Elite', monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  z-index: 2;
+}

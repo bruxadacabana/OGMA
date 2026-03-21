@@ -1,0 +1,174 @@
+.proj-dashboard {
+  padding-bottom: 40px;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.proj-header {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: 2px;
+  margin-bottom: 24px;
+  min-height: 120px;
+  animation: paperFall 0.22s ease-out;
+}
+
+.proj-header-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+}
+
+.proj-header-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 20px 20px 24px;
+}
+
+.proj-header-icon {
+  width: 52px;
+  height: 52px;
+  border: 1px solid;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.proj-header-name {
+  font-family: 'IM Fell English', Georgia, serif;
+  font-size: 26px;
+  font-style: italic;
+  font-weight: normal;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+
+.proj-header-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.proj-header-desc {
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.5;
+  margin-top: 4px;
+  max-width: 500px;
+}
+
+/* ── Seções ─────────────────────────────────────────────── */
+.proj-section-label {
+  font-family: 'Special Elite', monospace;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  margin-top: 4px;
+}
+
+.proj-section-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+/* ── Cards ──────────────────────────────────────────────── */
+.proj-card {
+  animation: paperFall 0.22s ease-out both;
+  min-height: 90px;
+}
+
+.proj-card-wide {
+  grid-column: 1 / -1;
+}
+
+.proj-card-title {
+  font-family: 'Special Elite', monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.proj-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  text-align: center;
+}
+
+/* ── Progresso ──────────────────────────────────────────── */
+.proj-progress-bar {
+  height: 6px;
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+
+.proj-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+/* ── Datas ──────────────────────────────────────────────── */
+.proj-dates {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* ── Lista de páginas ───────────────────────────────────── */
+.pages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.page-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid;
+  border-radius: 2px;
+  cursor: pointer;
+  background: transparent;
+  transition: background 120ms;
+  animation: paperFall 0.2s ease-out both;
+  width: 100%;
+}
+
+.page-row:hover {
+  background: rgba(44,36,22,0.05);
+}
+
+html.dark .page-row:hover {
+  background: rgba(232,223,200,0.05);
+}
+.kanban-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.kanban-col-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border: 1px solid;
+  border-radius: 2px;
+  text-align: center;
+}
