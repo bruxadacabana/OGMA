@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { dbGet, dbAll, dbRun } from './database'
+import { dbGet, dbAll, dbRun, getDb } from './database'
 import { createLogger, RENDERER_LOG_CHANNEL } from './logger'
 
 const log   = createLogger('ipc')
@@ -137,6 +137,182 @@ export function registerIpcHandlers(): void {
     }
 
     return { url: `file://${fpath}` }
+  })
+
+  // ── Kanban ───────────────────────────────────────────────────────────────
+
+  api('kanban:getBoard', ({ page_id }) => {
+    let cols = dbAll(
+      'SELECT * FROM kanban_columns WHERE page_id=? ORDER BY sort_order, id',
+      page_id
+    )
+
+    // Criar colunas padrão se a página ainda não tiver nenhuma
+    if (cols.length === 0) {
+      const defaults: [string, string | null, number][] = [
+        ['A Fazer',      null,       0],
+        ['Em Progresso', '#b8860b',  1],
+        ['Concluído',    '#4A6741',  2],
+      ]
+      for (const [name, color, order] of defaults) {
+        dbRun(
+          'INSERT INTO kanban_columns (page_id, name, color, sort_order) VALUES (?,?,?,?)',
+          page_id, name, color, order
+        )
+      }
+      cols = dbAll(
+        'SELECT * FROM kanban_columns WHERE page_id=? ORDER BY sort_order, id',
+        page_id
+      )
+    }
+
+    return cols.map((col: any) => ({
+      ...col,
+      cards: dbAll(
+        'SELECT * FROM kanban_cards WHERE column_id=? ORDER BY sort_order, id',
+        col.id
+      ).map((card: any) => ({
+        ...card,
+        checklists: dbAll(
+          'SELECT * FROM kanban_checklists WHERE card_id=? ORDER BY sort_order, id',
+          card.id
+        ),
+        tags: dbAll(
+          'SELECT t.* FROM tags t JOIN card_tags ct ON ct.tag_id=t.id WHERE ct.card_id=?',
+          card.id
+        ),
+      })),
+    }))
+  })
+
+  api('kanban:createColumn', ({ page_id, name, color }) => {
+    const max = dbGet(
+      'SELECT COALESCE(MAX(sort_order),-1) AS m FROM kanban_columns WHERE page_id=?',
+      page_id
+    )?.m ?? -1
+    const r = dbRun(
+      'INSERT INTO kanban_columns (page_id, name, color, sort_order) VALUES (?,?,?,?)',
+      page_id, name, color ?? null, max + 1
+    )
+    return dbGet('SELECT * FROM kanban_columns WHERE id=?', r.lastInsertRowid)
+  })
+
+  api('kanban:updateColumn', ({ id, name, color }) => {
+    dbRun('UPDATE kanban_columns SET name=?, color=? WHERE id=?', name, color ?? null, id)
+    return dbGet('SELECT * FROM kanban_columns WHERE id=?', id)
+  })
+
+  api('kanban:deleteColumn', ({ id }) => {
+    dbRun('DELETE FROM kanban_columns WHERE id=?', id)
+    return { ok: true }
+  })
+
+  api('kanban:createCard', ({ column_id, title, description, priority, due_date }) => {
+    const max = dbGet(
+      'SELECT COALESCE(MAX(sort_order),-1) AS m FROM kanban_cards WHERE column_id=?',
+      column_id
+    )?.m ?? -1
+    const r = dbRun(
+      `INSERT INTO kanban_cards
+         (column_id, title, description, priority, due_date, sort_order)
+       VALUES (?,?,?,?,?,?)`,
+      column_id, title,
+      description ?? null, priority ?? 'media',
+      due_date ?? null, max + 1
+    )
+    return dbGet('SELECT * FROM kanban_cards WHERE id=?', r.lastInsertRowid)
+  })
+
+  api('kanban:updateCard', ({ id, title, description, priority, due_date, is_done }) => {
+    dbRun(
+      `UPDATE kanban_cards
+       SET title=?, description=?, priority=?, due_date=?, is_done=?,
+           updated_at=datetime('now')
+       WHERE id=?`,
+      title, description ?? null, priority, due_date ?? null, is_done ?? 0, id
+    )
+    return dbGet('SELECT * FROM kanban_cards WHERE id=?', id)
+  })
+
+  api('kanban:moveCard', ({ card_id, column_id, before_card_id }) => {
+    const db = getDb()
+
+    // Cartas da coluna destino (exceto a carta sendo movida), em ordem
+    const cards: any[] = db.prepare(
+      'SELECT id FROM kanban_cards WHERE column_id=? AND id!=? ORDER BY sort_order, id'
+    ).all(column_id, card_id)
+
+    // Calcular ponto de inserção
+    let insertIdx = cards.length
+    if (before_card_id != null) {
+      const idx = cards.findIndex((c: any) => c.id === before_card_id)
+      if (idx >= 0) insertIdx = idx
+    }
+    cards.splice(insertIdx, 0, { id: card_id })
+
+    const setCol   = db.prepare("UPDATE kanban_cards SET column_id=?, updated_at=datetime('now') WHERE id=?")
+    const setOrder = db.prepare('UPDATE kanban_cards SET sort_order=? WHERE id=?')
+
+    db.transaction(() => {
+      setCol.run(column_id, card_id)
+      cards.forEach((c: any, i: number) => setOrder.run(i, c.id))
+    })()
+
+    return { ok: true }
+  })
+
+  api('kanban:deleteCard', ({ id }) => {
+    dbRun('DELETE FROM kanban_cards WHERE id=?', id)
+    return { ok: true }
+  })
+
+  api('kanban:createChecklist', ({ card_id, text }) => {
+    const max = dbGet(
+      'SELECT COALESCE(MAX(sort_order),-1) AS m FROM kanban_checklists WHERE card_id=?',
+      card_id
+    )?.m ?? -1
+    const r = dbRun(
+      'INSERT INTO kanban_checklists (card_id, text, sort_order) VALUES (?,?,?)',
+      card_id, text, max + 1
+    )
+    return dbGet('SELECT * FROM kanban_checklists WHERE id=?', r.lastInsertRowid)
+  })
+
+  api('kanban:updateChecklist', ({ id, text, is_checked }) => {
+    dbRun(
+      'UPDATE kanban_checklists SET text=?, is_checked=? WHERE id=?',
+      text, is_checked, id
+    )
+    return dbGet('SELECT * FROM kanban_checklists WHERE id=?', id)
+  })
+
+  api('kanban:deleteChecklist', ({ id }) => {
+    dbRun('DELETE FROM kanban_checklists WHERE id=?', id)
+    return { ok: true }
+  })
+
+  api('kanban:setCardTags', ({ card_id, tag_names }) => {
+    const db = getDb()
+    const ws = db.prepare('SELECT id FROM workspaces LIMIT 1').get() as any
+    if (!ws) return { ok: true }
+
+    const upsertTag = db.prepare('INSERT OR IGNORE INTO tags (workspace_id, name) VALUES (?,?)')
+    const getTag    = db.prepare('SELECT id FROM tags WHERE workspace_id=? AND name=?')
+    const clearTags = db.prepare('DELETE FROM card_tags WHERE card_id=?')
+    const addTag    = db.prepare('INSERT OR IGNORE INTO card_tags (card_id, tag_id) VALUES (?,?)')
+
+    db.transaction(() => {
+      clearTags.run(card_id)
+      for (const raw of (tag_names as string[])) {
+        const name = raw.trim()
+        if (!name) continue
+        upsertTag.run(ws.id, name)
+        const tag = getTag.get(ws.id, name) as any
+        if (tag) addTag.run(card_id, tag.id)
+      }
+    })()
+
+    return { ok: true }
   })
 
   // ── Configurações ────────────────────────────────────────────────────────

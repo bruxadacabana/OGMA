@@ -117,6 +117,67 @@ export interface Workspace {
   accent_color: string
 }
 
+// ── Kanban ────────────────────────────────────────────────────────────────────
+
+export interface KanbanChecklist {
+  id:         number
+  card_id:    number
+  text:       string
+  is_checked: number
+  sort_order: number
+}
+
+export interface KanbanTag {
+  id:    number
+  name:  string
+  color: string | null
+}
+
+export interface KanbanCard {
+  id:          number
+  column_id:   number
+  title:       string
+  description: string | null
+  priority:    'baixa' | 'media' | 'alta' | 'urgente'
+  due_date:    string | null
+  sort_order:  number
+  is_done:     number
+  created_at:  string
+  updated_at:  string
+  checklists:  KanbanChecklist[]
+  tags:        KanbanTag[]
+}
+
+export interface KanbanColumn {
+  id:         number
+  page_id:    number
+  name:       string
+  color:      string | null
+  sort_order: number
+  cards:      KanbanCard[]
+}
+
+export const PRIORITY_LABELS: Record<string, string> = {
+  baixa:   'Baixa',
+  media:   'Média',
+  alta:    'Alta',
+  urgente: 'Urgente',
+}
+
+export const PRIORITY_COLORS_LIGHT: Record<string, string> = {
+  baixa:   '#4A6741',
+  media:   '#7A5C2E',
+  alta:    '#b8860b',
+  urgente: '#8B3A2A',
+}
+
+export const PRIORITY_COLORS_DARK: Record<string, string> = {
+  baixa:   '#6A9060',
+  media:   '#A07840',
+  alta:    '#D4A820',
+  urgente: '#C45A40',
+}
+
 // ── API Response ──────────────────────────────────────────────────────────────
 
 export interface ApiResponse<T = any> {

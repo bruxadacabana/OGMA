@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { Page, Project } from '../../types'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { EditorFrame } from '../../components/Editor/EditorFrame'
+import { KanbanView } from '../KanbanView/KanbanView'
 import { useAppStore } from '../../store/useAppStore'
 import { createLogger } from '../../utils/logger'
 import './PageView.css'
@@ -115,15 +116,15 @@ export const PageView: React.FC<Props> = ({ page, project, dark, onBack }) => {
           onSave={handleSave} saving={saving} lastSaved={lastSaved} />
       )}
 
-      {(page.page_type === 'database' || page.page_type === 'kanban' || page.page_type === 'calendar') && (
+      {page.page_type === 'kanban' && (
+        <KanbanView page={page} project={project} dark={dark} />
+      )}
+
+      {(page.page_type === 'database' || page.page_type === 'calendar') && (
         <PlaceholderContent
-          icon={page.page_type === 'database' ? '🗂️' : page.page_type === 'kanban' ? '📋' : '📅'}
+          icon={page.page_type === 'database' ? '🗂️' : '📅'}
           title={PAGE_TYPE_LABELS[page.page_type]}
-          desc={
-            page.page_type === 'database' ? 'Implementado na Fase 5.' :
-            page.page_type === 'kanban'   ? 'Implementado na Fase 4.' :
-                                            'Implementado na Fase 6.'
-          }
+          desc={page.page_type === 'database' ? 'Implementado na Fase 5.' : 'Implementado na Fase 8.'}
           dark={dark}
         />
       )}
