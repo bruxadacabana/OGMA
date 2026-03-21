@@ -1,53 +1,63 @@
 import { create } from 'zustand'
-import { Project, Page, Workspace } from '../types'
+import { Project, Page, Workspace, ProjectProperty, ProjectView } from '../types'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('store')
 
 interface AppState {
   // ── Dados ─────────────────────────────────────────────────────────────────
-  workspace:       Workspace | null
-  projects:        Project[]
-  activeProjectId: number | null
-  activeProject:   Project | null
-  pages:           Page[]
+  workspace:          Workspace | null
+  projects:           Project[]
+  activeProjectId:    number | null
+  activeProject:      Project | null
+  pages:              Page[]
+  projectProperties:  ProjectProperty[]
+  projectViews:       ProjectView[]
+  activeViewId:       number | null
 
   // ── UI ────────────────────────────────────────────────────────────────────
-  dark:            boolean
-  accentColor:     string
-  loading:         boolean
+  dark:        boolean
+  accentColor: string
+  loading:     boolean
 
   // ── Actions ───────────────────────────────────────────────────────────────
-  setDark:         (dark: boolean) => void
-  setAccentColor:  (color: string) => void
-  setLoading:      (v: boolean) => void
+  setDark:        (dark: boolean) => void
+  setAccentColor: (color: string) => void
+  setLoading:     (v: boolean) => void
+  setActiveView:  (id: number | null) => void
 
-  loadWorkspace:   () => Promise<void>
-  loadProjects:    () => Promise<void>
-  selectProject:   (id: number | null) => void
-  loadPages:       (projectId: number) => Promise<void>
+  loadWorkspace:  () => Promise<void>
+  loadProjects:   () => Promise<void>
+  selectProject:  (id: number | null) => void
+  loadPages:      (projectId: number) => Promise<void>
+  loadProperties: (projectId: number) => Promise<void>
+  loadViews:      (projectId: number) => Promise<void>
 
-  createProject:   (input: Omit<Project, 'id' | 'created_at' | 'updated_at'>) => Promise<Project | null>
-  updateProject:   (data: Partial<Project> & { id: number }) => Promise<void>
-  deleteProject:   (id: number) => Promise<void>
-  updatePage:      (data: Partial<any> & { id: number }) => Promise<void>
+  createProject: (input: Omit<Project, 'id' | 'created_at' | 'updated_at'>) => Promise<Project | null>
+  updateProject: (data: Partial<Project> & { id: number }) => Promise<void>
+  deleteProject: (id: number) => Promise<void>
+  updatePage:    (data: Partial<Page> & { id: number }) => Promise<void>
 }
 
 const db = () => (window as any).db
 
 export const useAppStore = create<AppState>((set, get) => ({
-  workspace:       null,
-  projects:        [],
-  activeProjectId: null,
-  activeProject:   null,
-  pages:           [],
-  dark:            false,
-  accentColor:     '#b8860b',
-  loading:         false,
+  workspace:         null,
+  projects:          [],
+  activeProjectId:   null,
+  activeProject:     null,
+  pages:             [],
+  projectProperties: [],
+  projectViews:      [],
+  activeViewId:      null,
+  dark:              false,
+  accentColor:       '#b8860b',
+  loading:           false,
 
-  setDark: (dark) => set({ dark }),
+  setDark:        (dark)  => set({ dark }),
   setAccentColor: (color) => set({ accentColor: color }),
-  setLoading: (v) => set({ loading: v }),
+  setLoading:     (v)     => set({ loading: v }),
+  setActiveView:  (id)    => set({ activeViewId: id }),
 
   loadWorkspace: async () => {
     try {
@@ -69,8 +79,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   selectProject: (id) => {
     const project = id ? get().projects.find(p => p.id === id) ?? null : null
-    set({ activeProjectId: id, activeProject: project, pages: [] })
-    if (id) get().loadPages(id)
+    set({
+      activeProjectId:   id,
+      activeProject:     project,
+      pages:             [],
+      projectProperties: [],
+      projectViews:      [],
+      activeViewId:      null,
+    })
+    if (id) {
+      get().loadPages(id)
+      get().loadProperties(id)
+      get().loadViews(id)
+    }
   },
 
   loadPages: async (projectId) => {
@@ -79,6 +100,28 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (res?.ok) set({ pages: res.data ?? [] })
     } catch (e: any) {
       log.error('loadPages', { error: e.message })
+    }
+  },
+
+  loadProperties: async (projectId) => {
+    try {
+      const res = await db().projects.getProperties(projectId)
+      if (res?.ok) set({ projectProperties: res.data ?? [] })
+    } catch (e: any) {
+      log.error('loadProperties', { error: e.message })
+    }
+  },
+
+  loadViews: async (projectId) => {
+    try {
+      const res = await db().projects.getViews(projectId)
+      if (res?.ok) {
+        const views: ProjectView[] = res.data ?? []
+        const defaultView = views.find(v => v.is_default) ?? views[0] ?? null
+        set({ projectViews: views, activeViewId: defaultView?.id ?? null })
+      }
+    } catch (e: any) {
+      log.error('loadViews', { error: e.message })
     }
   },
 
@@ -102,7 +145,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await db().projects.update(data)
       if (res?.ok && res.data) {
         set(s => ({
-          projects: s.projects.map(p => p.id === data.id ? res.data : p),
+          projects:      s.projects.map(p => p.id === data.id ? res.data : p),
           activeProject: s.activeProjectId === data.id ? res.data : s.activeProject,
         }))
       }
@@ -126,7 +169,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       await db().projects.delete(id)
       set(s => ({
-        projects: s.projects.filter(p => p.id !== id),
+        projects:        s.projects.filter(p => p.id !== id),
         activeProjectId: s.activeProjectId === id ? null : s.activeProjectId,
         activeProject:   s.activeProjectId === id ? null : s.activeProject,
       }))

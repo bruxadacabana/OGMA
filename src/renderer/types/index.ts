@@ -1,4 +1,4 @@
-// ── Projeto ──────────────────────────────────────────────────────────────────
+// ── Projeto ───────────────────────────────────────────────────────────────────
 
 export type ProjectType =
   | 'academic' | 'creative' | 'research'
@@ -18,25 +18,110 @@ export interface Project {
   status:       ProjectStatus
   date_start:   string | null
   date_end:     string | null
-  extra_fields: string | null  // JSON
   sort_order:   number
   created_at:   string
   updated_at:   string
 }
 
 export interface ProjectCreateInput {
-  workspace_id: number
+  workspace_id:  number
+  name:          string
+  description?:  string
+  icon?:         string
+  color?:        string
+  project_type:  ProjectType
+  subcategory?:  string
+  status?:       ProjectStatus
+  date_start?:   string
+  date_end?:     string
+  sort_order?:   number
+}
+
+// ── Propriedades de Projeto ───────────────────────────────────────────────────
+
+export type PropType =
+  | 'text' | 'number' | 'select' | 'multi_select'
+  | 'date' | 'checkbox' | 'url' | 'color'
+
+export interface ProjectProperty {
+  id:          number
+  project_id:  number
+  name:        string
+  prop_key:    string
+  prop_type:   PropType
+  is_required: number
+  is_built_in: number
+  sort_order:  number
+  created_at:  string
+}
+
+export interface PropOption {
+  id:          number
+  property_id: number
+  label:       string
+  color:       string | null
+  sort_order:  number
+}
+
+export interface PagePropValue {
+  id:          number
+  page_id:     number
+  property_id: number
+  prop_key:    string
+  prop_type:   PropType
+  prop_name:   string
+  value_text:  string | null
+  value_num:   number | null
+  value_bool:  number | null
+  value_date:  string | null
+  value_date2: string | null
+  value_json:  string | null
+}
+
+// ── Views de Projeto ──────────────────────────────────────────────────────────
+
+export type ViewType = 'table' | 'kanban' | 'list' | 'calendar' | 'gallery'
+
+export interface ProjectView {
+  id:                   number
+  project_id:           number
+  name:                 string
+  view_type:            ViewType
+  group_by_property_id: number | null
+  date_property_id:     number | null
+  visible_props_json:   string | null
+  filter_json:          string | null
+  sort_json:            string | null
+  include_subpages:     number
+  is_default:           number
+  sort_order:           number
+}
+
+// ── Página ────────────────────────────────────────────────────────────────────
+
+export interface Page {
+  id:          number
+  project_id:  number | null
+  parent_id:   number | null
+  title:       string
+  icon:        string | null
+  cover:       string | null
+  cover_color: string | null
+  body_json:   string | null
+  sort_order:  number
+  is_deleted:  number
+  created_at:  string
+  updated_at:  string
+  prop_values?: PagePropValue[]
+}
+
+// ── Workspace ─────────────────────────────────────────────────────────────────
+
+export interface Workspace {
+  id:           number
   name:         string
-  description?: string
-  icon?:        string
-  color?:       string
-  project_type: ProjectType
-  subcategory?: string
-  status?:      ProjectStatus
-  date_start?:  string
-  date_end?:    string
-  extra_fields?: Record<string, any>
-  sort_order?:  number
+  icon:         string
+  accent_color: string
 }
 
 // ── Subcategorias por tipo ────────────────────────────────────────────────────
@@ -77,7 +162,6 @@ export const PROJECT_TYPE_DESCRIPTIONS: Record<ProjectType, string> = {
   custom:   'Estrutura totalmente personalizada para qualquer propósito.',
 }
 
-// Paleta de cores sugeridas para projetos
 export const PROJECT_COLORS = [
   '#8B7355', // sépia
   '#8B3A2A', // vermelho desbotado
@@ -89,99 +173,10 @@ export const PROJECT_COLORS = [
   '#8A6B2C', // dourado
 ]
 
-// ── Página ────────────────────────────────────────────────────────────────────
-
-export type PageType = 'document' | 'database' | 'kanban' | 'calendar' | 'discipline'
-
-export interface Page {
-  id:           number
-  project_id:   number | null
-  parent_id:    number | null
-  title:        string
-  icon:         string | null
-  cover:        string | null
-  page_type:    PageType
-  content_json: string | null
-  sort_order:   number
-  is_deleted:   number
-  created_at:   string
-  updated_at:   string
-}
-
-// ── Workspace ─────────────────────────────────────────────────────────────────
-
-export interface Workspace {
-  id:           number
-  name:         string
-  icon:         string
-  accent_color: string
-}
-
-// ── Kanban ────────────────────────────────────────────────────────────────────
-
-export interface KanbanChecklist {
-  id:         number
-  card_id:    number
-  text:       string
-  is_checked: number
-  sort_order: number
-}
-
-export interface KanbanTag {
-  id:    number
-  name:  string
-  color: string | null
-}
-
-export interface KanbanCard {
-  id:          number
-  column_id:   number
-  title:       string
-  description: string | null
-  priority:    'baixa' | 'media' | 'alta' | 'urgente'
-  due_date:    string | null
-  sort_order:  number
-  is_done:     number
-  created_at:  string
-  updated_at:  string
-  checklists:  KanbanChecklist[]
-  tags:        KanbanTag[]
-}
-
-export interface KanbanColumn {
-  id:         number
-  page_id:    number
-  name:       string
-  color:      string | null
-  sort_order: number
-  cards:      KanbanCard[]
-}
-
-export const PRIORITY_LABELS: Record<string, string> = {
-  baixa:   'Baixa',
-  media:   'Média',
-  alta:    'Alta',
-  urgente: 'Urgente',
-}
-
-export const PRIORITY_COLORS_LIGHT: Record<string, string> = {
-  baixa:   '#4A6741',
-  media:   '#7A5C2E',
-  alta:    '#b8860b',
-  urgente: '#8B3A2A',
-}
-
-export const PRIORITY_COLORS_DARK: Record<string, string> = {
-  baixa:   '#6A9060',
-  media:   '#A07840',
-  alta:    '#D4A820',
-  urgente: '#C45A40',
-}
-
 // ── API Response ──────────────────────────────────────────────────────────────
 
 export interface ApiResponse<T = any> {
-  ok:    boolean
-  data?: T
+  ok:     boolean
+  data?:  T
   error?: string
 }

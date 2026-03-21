@@ -16,6 +16,167 @@ const api = (channel: string, handler: (data: any) => any) => {
   })
 }
 
+// ── Seed interno: propriedades e views padrão por tipo de projeto ──────────────
+
+function seedProjectProperties(projectId: number, projectType: string): Map<string, number> {
+  const db = getDb()
+
+  const insertProp = db.prepare(`
+    INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order)
+    VALUES (?, ?, ?, ?, 1, ?)
+  `)
+  const insertOption = db.prepare(`
+    INSERT INTO prop_options (property_id, label, color, sort_order)
+    VALUES (?, ?, ?, ?)
+  `)
+
+  const propIds = new Map<string, number>()
+  let order = 0
+
+  const addProp = (name: string, key: string, type: string, options?: [string, string | null][]) => {
+    const r     = insertProp.run(projectId, name, key, type, order++)
+    const propId = Number(r.lastInsertRowid)
+    propIds.set(key, propId)
+    if (options) {
+      options.forEach(([label, color], i) => insertOption.run(propId, label, color ?? null, i))
+    }
+  }
+
+  const schemas: Record<string, () => void> = {
+    academic: () => {
+      addProp('Status', 'status', 'select', [
+        ['Pendente', '#8B7355'], ['Cursando', '#b8860b'],
+        ['Concluída', '#4A6741'], ['Trancada', '#8B3A2A'],
+      ])
+      addProp('Semestre',      'semestre',     'select')
+      addProp('Área',          'area',         'multi_select')
+      addProp('Carga Horária', 'carga_horaria','number')
+      addProp('Créditos',      'creditos',     'number')
+      addProp('Professor',     'professor',    'text')
+      addProp('Data Início',   'data_inicio',  'date')
+      addProp('Data Fim',      'data_fim',     'date')
+      addProp('Código',        'codigo',       'text')
+      addProp('Cor',           'cor',          'color')
+    },
+    software: () => {
+      addProp('Status', 'status', 'select', [
+        ['Backlog', '#8B7355'], ['A Fazer', '#7A5C2E'],
+        ['Em Andamento', '#b8860b'], ['Em Revisão', '#2C5F8A'],
+        ['Concluído', '#4A6741'],
+      ])
+      addProp('Prioridade', 'prioridade', 'select', [
+        ['Baixa', '#4A6741'], ['Média', '#7A5C2E'],
+        ['Alta', '#b8860b'], ['Urgente', '#8B3A2A'],
+      ])
+      addProp('Tags',        'tags',        'multi_select')
+      addProp('Sprint',      'sprint',      'select')
+      addProp('Data Limite', 'data_limite', 'date')
+      addProp('Estimativa',  'estimativa',  'number')
+    },
+    health: () => {
+      addProp('Status', 'status', 'select', [
+        ['Não Iniciado', '#8B7355'], ['Em Andamento', '#b8860b'],
+        ['Concluído', '#4A6741'], ['Abandonado', '#8B3A2A'],
+      ])
+      addProp('Frequência', 'frequencia', 'select', [
+        ['Diário', null], ['Semanal', null], ['Mensal', null], ['Pontual', null],
+      ])
+      addProp('Data Início', 'data_inicio', 'date')
+      addProp('Meta',        'meta',        'text')
+      addProp('Progresso',   'progresso',   'number')
+      addProp('Tags',        'tags',        'multi_select')
+    },
+    creative: () => {
+      addProp('Status', 'status', 'select', [
+        ['Ideia', '#8B7355'], ['Em Progresso', '#b8860b'],
+        ['Pausado', '#7A5C2E'], ['Concluído', '#4A6741'], ['Publicado', '#2C5F8A'],
+      ])
+      addProp('Tags',        'tags',        'multi_select')
+      addProp('Data Limite', 'data_limite', 'date')
+      addProp('Prioridade', 'prioridade', 'select', [
+        ['Baixa', '#4A6741'], ['Média', '#7A5C2E'], ['Alta', '#b8860b'],
+      ])
+    },
+    research: () => {
+      addProp('Status', 'status', 'select', [
+        ['A Pesquisar', '#8B7355'], ['Em Andamento', '#b8860b'],
+        ['Rascunho', '#7A5C2E'], ['Revisão', '#2C5F8A'], ['Concluído', '#4A6741'],
+      ])
+      addProp('Fonte', 'fonte', 'text')
+      addProp('Data',  'data',  'date')
+      addProp('Tags',  'tags',  'multi_select')
+      addProp('Área',  'area',  'multi_select')
+    },
+    custom: () => {
+      addProp('Status', 'status', 'select', [
+        ['A Fazer', '#8B7355'], ['Em Andamento', '#b8860b'], ['Concluído', '#4A6741'],
+      ])
+      addProp('Tags', 'tags', 'multi_select')
+      addProp('Data', 'data', 'date')
+    },
+  }
+
+  ;(schemas[projectType] ?? schemas.custom)()
+  return propIds
+}
+
+function seedProjectViews(
+  projectId: number,
+  projectType: string,
+  propIds: Map<string, number>
+): void {
+  const db = getDb()
+
+  const insertView = db.prepare(`
+    INSERT INTO project_views
+      (project_id, name, view_type, group_by_property_id, date_property_id, is_default, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `)
+
+  type ViewDef = [string, string, string | null, string | null]
+
+  const viewConfigs: Record<string, ViewDef[]> = {
+    academic: [
+      ['Tabela',     'table',    null,     null       ],
+      ['Kanban',     'kanban',   'status', null       ],
+      ['Calendário', 'calendar', null,     'data_fim' ],
+    ],
+    software: [
+      ['Kanban',     'kanban',   'status', null          ],
+      ['Tabela',     'table',    null,     null          ],
+      ['Calendário', 'calendar', null,     'data_limite' ],
+    ],
+    health: [
+      ['Lista',      'list',     null,     null          ],
+      ['Calendário', 'calendar', null,     'data_inicio' ],
+      ['Tabela',     'table',    null,     null          ],
+    ],
+    creative: [
+      ['Kanban', 'kanban', 'status', null],
+      ['Tabela', 'table',  null,     null],
+    ],
+    research: [
+      ['Tabela', 'table', null, null],
+      ['Lista',  'list',  null, null],
+    ],
+    custom: [
+      ['Tabela', 'table',  null,     null],
+      ['Kanban', 'kanban', 'status', null],
+    ],
+  }
+
+  const configs: ViewDef[] = viewConfigs[projectType] ?? viewConfigs.custom
+
+  configs.forEach(([name, type, groupByKey, dateKey], i) => {
+    const groupByPropId = groupByKey ? (propIds.get(groupByKey) ?? null) : null
+    const datePropId    = dateKey    ? (propIds.get(dateKey)    ?? null) : null
+    const isDefault     = i === 0 ? 1 : 0
+    insertView.run(projectId, name, type, groupByPropId, datePropId, isDefault, i)
+  })
+}
+
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
 export function registerIpcHandlers(): void {
 
   // ── Log do renderer ──────────────────────────────────────────────────────
@@ -44,20 +205,30 @@ export function registerIpcHandlers(): void {
   )
 
   api('projects:create', (data) => {
-    const r = dbRun(`
-      INSERT INTO projects
-        (workspace_id, name, description, icon, color, project_type,
-         subcategory, status, date_start, date_end, extra_fields, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      data.workspace_id, data.name, data.description ?? null,
-      data.icon ?? null, data.color ?? null, data.project_type ?? 'custom',
-      data.subcategory ?? null, data.status ?? 'active',
-      data.date_start ?? null, data.date_end ?? null,
-      data.extra_fields ? JSON.stringify(data.extra_fields) : null,
-      data.sort_order ?? 0
-    )
-    const project = dbGet('SELECT * FROM projects WHERE id = ?', r.lastInsertRowid)
-    dbLog.info('projects:create', { id: project?.id, name: data.name })
+    const db = getDb()
+
+    const project = db.transaction(() => {
+      const r = db.prepare(`
+        INSERT INTO projects
+          (workspace_id, name, description, icon, color, project_type,
+           subcategory, status, date_start, date_end, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        data.workspace_id, data.name, data.description ?? null,
+        data.icon ?? null, data.color ?? null, data.project_type ?? 'custom',
+        data.subcategory ?? null, data.status ?? 'active',
+        data.date_start ?? null, data.date_end ?? null,
+        data.sort_order ?? 0
+      )
+
+      const projectId = Number(r.lastInsertRowid)
+      const propIds   = seedProjectProperties(projectId, data.project_type ?? 'custom')
+      seedProjectViews(projectId, data.project_type ?? 'custom', propIds)
+
+      return db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId)
+    })()
+
+    dbLog.info('projects:create', { id: (project as any)?.id, name: data.name })
     return project
   })
 
@@ -65,12 +236,11 @@ export function registerIpcHandlers(): void {
     dbRun(`
       UPDATE projects SET name=?, description=?, icon=?, color=?,
         project_type=?, subcategory=?, status=?, date_start=?, date_end=?,
-        extra_fields=?, sort_order=?, updated_at=datetime('now')
+        sort_order=?, updated_at=datetime('now')
       WHERE id=?`,
       data.name, data.description ?? null, data.icon ?? null,
       data.color ?? null, data.project_type, data.subcategory ?? null,
       data.status, data.date_start ?? null, data.date_end ?? null,
-      data.extra_fields ? JSON.stringify(data.extra_fields) : null,
       data.sort_order ?? 0, data.id
     )
     dbLog.info('projects:update', { id: data.id })
@@ -82,32 +252,83 @@ export function registerIpcHandlers(): void {
     return dbRun('DELETE FROM projects WHERE id = ?', id)
   })
 
-  // ── Páginas ──────────────────────────────────────────────────────────────
-  api('pages:list', ({ project_id }) =>
+  api('projects:getProperties', ({ id }) =>
     dbAll(
-      'SELECT * FROM pages WHERE project_id = ? AND is_deleted = 0 ORDER BY sort_order, title',
-      project_id
+      'SELECT * FROM project_properties WHERE project_id = ? ORDER BY sort_order, id',
+      id
     )
   )
 
+  api('projects:getViews', ({ id }) =>
+    dbAll(
+      'SELECT * FROM project_views WHERE project_id = ? ORDER BY sort_order, id',
+      id
+    )
+  )
+
+  // ── Páginas ──────────────────────────────────────────────────────────────
+  api('pages:list', ({ project_id }) => {
+    const pages = dbAll(
+      'SELECT * FROM pages WHERE project_id = ? AND is_deleted = 0 ORDER BY sort_order, title',
+      project_id
+    )
+    if (pages.length === 0) return []
+
+    const pageIds     = pages.map((p: any) => p.id)
+    const placeholders = pageIds.map(() => '?').join(',')
+    const propValues  = dbAll(
+      `SELECT ppv.*, pp.prop_key, pp.prop_type, pp.name AS prop_name
+       FROM page_prop_values ppv
+       JOIN project_properties pp ON pp.id = ppv.property_id
+       WHERE ppv.page_id IN (${placeholders})`,
+      ...pageIds
+    )
+
+    const valuesByPage = new Map<number, any[]>()
+    for (const pv of propValues) {
+      if (!valuesByPage.has(pv.page_id)) valuesByPage.set(pv.page_id, [])
+      valuesByPage.get(pv.page_id)!.push(pv)
+    }
+
+    return pages.map((page: any) => ({
+      ...page,
+      prop_values: valuesByPage.get(page.id) ?? [],
+    }))
+  })
+
+  api('pages:get', ({ id }) => {
+    const page = dbGet('SELECT * FROM pages WHERE id = ? AND is_deleted = 0', id)
+    if (!page) return null
+
+    const propValues = dbAll(
+      `SELECT ppv.*, pp.prop_key, pp.prop_type, pp.name AS prop_name
+       FROM page_prop_values ppv
+       JOIN project_properties pp ON pp.id = ppv.property_id
+       WHERE ppv.page_id = ?`,
+      id
+    )
+    return { ...page, prop_values: propValues }
+  })
+
   api('pages:create', (data) => {
     const r = dbRun(`
-      INSERT INTO pages (project_id, parent_id, title, icon, cover, page_type, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      INSERT INTO pages (project_id, parent_id, title, icon, cover, cover_color, body_json, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       data.project_id, data.parent_id ?? null, data.title ?? 'Sem título',
-      data.icon ?? null, data.cover ?? null, data.page_type ?? 'document',
-      data.sort_order ?? 0
+      data.icon ?? null, data.cover ?? null, data.cover_color ?? null,
+      data.body_json ?? null, data.sort_order ?? 0
     )
     return dbGet('SELECT * FROM pages WHERE id = ?', r.lastInsertRowid)
   })
 
   api('pages:update', (data) => {
     dbRun(`
-      UPDATE pages SET title=?, icon=?, cover=?, content_json=?,
+      UPDATE pages SET title=?, icon=?, cover=?, cover_color=?, body_json=?,
         sort_order=?, updated_at=datetime('now')
       WHERE id=?`,
       data.title, data.icon ?? null, data.cover ?? null,
-      data.content_json ?? null, data.sort_order ?? 0, data.id
+      data.cover_color ?? null, data.body_json ?? null,
+      data.sort_order ?? 0, data.id
     )
     return dbGet('SELECT * FROM pages WHERE id = ?', data.id)
   })
@@ -116,206 +337,183 @@ export function registerIpcHandlers(): void {
     dbRun("UPDATE pages SET is_deleted=1, updated_at=datetime('now') WHERE id=?", id)
   )
 
+  api('pages:reorder', (items: { id: number; sort_order: number }[]) => {
+    const db   = getDb()
+    const stmt = db.prepare('UPDATE pages SET sort_order=? WHERE id=?')
+    db.transaction(() => {
+      for (const { id, sort_order } of items) stmt.run(sort_order, id)
+    })()
+    return { ok: true }
+  })
 
-  // ── Upload de imagens ───────────────────────────────────────────────────
-  api('uploads:saveImage', ({ data, name }: { data: string; name: string }) => {
+  api('pages:setPropValue', (data) => {
+    dbRun(`
+      INSERT INTO page_prop_values
+        (page_id, property_id, value_text, value_num, value_bool, value_date, value_date2, value_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(page_id, property_id) DO UPDATE SET
+        value_text  = excluded.value_text,
+        value_num   = excluded.value_num,
+        value_bool  = excluded.value_bool,
+        value_date  = excluded.value_date,
+        value_date2 = excluded.value_date2,
+        value_json  = excluded.value_json
+    `,
+      data.page_id, data.property_id,
+      data.value_text  ?? null, data.value_num   ?? null,
+      data.value_bool  ?? null, data.value_date  ?? null,
+      data.value_date2 ?? null, data.value_json  ?? null
+    )
+    return { ok: true }
+  })
+
+  // ── Propriedades ─────────────────────────────────────────────────────────
+  api('properties:create', (data) => {
+    const max = dbGet(
+      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM project_properties WHERE project_id = ?',
+      data.project_id
+    )?.m ?? -1
+    const r = dbRun(`
+      INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_required, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?)`,
+      data.project_id, data.name, data.prop_key, data.prop_type,
+      data.is_required ?? 0, data.sort_order ?? (max + 1)
+    )
+    return dbGet('SELECT * FROM project_properties WHERE id = ?', r.lastInsertRowid)
+  })
+
+  api('properties:update', (data) => {
+    dbRun(
+      'UPDATE project_properties SET name=?, prop_type=?, is_required=? WHERE id=?',
+      data.name, data.prop_type, data.is_required ?? 0, data.id
+    )
+    return dbGet('SELECT * FROM project_properties WHERE id = ?', data.id)
+  })
+
+  api('properties:delete', ({ id }) => {
+    dbRun('DELETE FROM project_properties WHERE id = ?', id)
+    return { ok: true }
+  })
+
+  api('properties:reorder', (items: { id: number; sort_order: number }[]) => {
+    const db   = getDb()
+    const stmt = db.prepare('UPDATE project_properties SET sort_order=? WHERE id=?')
+    db.transaction(() => {
+      for (const { id, sort_order } of items) stmt.run(sort_order, id)
+    })()
+    return { ok: true }
+  })
+
+  api('properties:getOptions', ({ id }) =>
+    dbAll('SELECT * FROM prop_options WHERE property_id = ? ORDER BY sort_order, id', id)
+  )
+
+  api('properties:createOption', (data) => {
+    const max = dbGet(
+      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM prop_options WHERE property_id = ?',
+      data.property_id
+    )?.m ?? -1
+    const r = dbRun(
+      'INSERT INTO prop_options (property_id, label, color, sort_order) VALUES (?, ?, ?, ?)',
+      data.property_id, data.label, data.color ?? null,
+      data.sort_order ?? (max + 1)
+    )
+    return dbGet('SELECT * FROM prop_options WHERE id = ?', r.lastInsertRowid)
+  })
+
+  api('properties:updateOption', (data) => {
+    dbRun(
+      'UPDATE prop_options SET label=?, color=? WHERE id=?',
+      data.label, data.color ?? null, data.id
+    )
+    return dbGet('SELECT * FROM prop_options WHERE id = ?', data.id)
+  })
+
+  api('properties:deleteOption', ({ id }) => {
+    dbRun('DELETE FROM prop_options WHERE id = ?', id)
+    return { ok: true }
+  })
+
+  api('properties:reorderOptions', (items: { id: number; sort_order: number }[]) => {
+    const db   = getDb()
+    const stmt = db.prepare('UPDATE prop_options SET sort_order=? WHERE id=?')
+    db.transaction(() => {
+      for (const { id, sort_order } of items) stmt.run(sort_order, id)
+    })()
+    return { ok: true }
+  })
+
+  // ── Views ─────────────────────────────────────────────────────────────────
+  api('views:create', (data) => {
+    const max = dbGet(
+      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM project_views WHERE project_id = ?',
+      data.project_id
+    )?.m ?? -1
+    const r = dbRun(`
+      INSERT INTO project_views
+        (project_id, name, view_type, group_by_property_id, date_property_id,
+         visible_props_json, is_default, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.project_id, data.name, data.view_type,
+      data.group_by_property_id ?? null, data.date_property_id ?? null,
+      data.visible_props_json ?? null, data.is_default ?? 0,
+      data.sort_order ?? (max + 1)
+    )
+    return dbGet('SELECT * FROM project_views WHERE id = ?', r.lastInsertRowid)
+  })
+
+  api('views:update', (data) => {
+    dbRun(`
+      UPDATE project_views SET name=?, view_type=?, group_by_property_id=?,
+        date_property_id=?, visible_props_json=?, filter_json=?, sort_json=?,
+        include_subpages=?
+      WHERE id=?`,
+      data.name, data.view_type, data.group_by_property_id ?? null,
+      data.date_property_id ?? null, data.visible_props_json ?? null,
+      data.filter_json ?? null, data.sort_json ?? null,
+      data.include_subpages ?? 0, data.id
+    )
+    return dbGet('SELECT * FROM project_views WHERE id = ?', data.id)
+  })
+
+  api('views:delete', ({ id }) => {
+    dbRun('DELETE FROM project_views WHERE id = ?', id)
+    return { ok: true }
+  })
+
+  api('views:setDefault', ({ id }) => {
+    const view = dbGet('SELECT project_id FROM project_views WHERE id = ?', id)
+    if (!view) throw new Error('View não encontrada')
+    const db = getDb()
+    db.transaction(() => {
+      db.prepare('UPDATE project_views SET is_default=0 WHERE project_id=?').run(view.project_id)
+      db.prepare('UPDATE project_views SET is_default=1 WHERE id=?').run(id)
+    })()
+    return { ok: true }
+  })
+
+  // ── Upload de imagens ─────────────────────────────────────────────────────
+  api('uploads:saveImage', ({ data }: { data: string; name: string }) => {
     const crypto = require('crypto')
     const fs     = require('fs')
     const path   = require('path')
     const { UPLOADS_DIR } = require('./paths')
 
-    // Extrair extensão e base64
-    const match = data.match(/^data:image\/([a-zA-Z]+);base64,/)
-    const ext   = match ? match[1].replace("jpeg", "jpg") : "png"
-    const base64 = data.replace(/^data:image\/[a-zA-Z]+;base64,/, "")
-    const hash   = crypto.createHash("sha256").update(base64).digest("hex").slice(0, 16)
+    const match  = data.match(/^data:image\/([a-zA-Z]+);base64,/)
+    const ext    = match ? match[1].replace('jpeg', 'jpg') : 'png'
+    const base64 = data.replace(/^data:image\/[a-zA-Z]+;base64,/, '')
+    const hash   = crypto.createHash('sha256').update(base64).digest('hex').slice(0, 16)
     const fname  = `${hash}.${ext}`
     const fpath  = path.join(UPLOADS_DIR, fname)
 
     if (!fs.existsSync(fpath)) {
-      fs.writeFileSync(fpath, Buffer.from(base64, "base64"))
+      fs.writeFileSync(fpath, Buffer.from(base64, 'base64'))
     }
 
     return { url: `file://${fpath}` }
   })
 
-  // ── Kanban ───────────────────────────────────────────────────────────────
-
-  api('kanban:getBoard', ({ page_id }) => {
-    let cols = dbAll(
-      'SELECT * FROM kanban_columns WHERE page_id=? ORDER BY sort_order, id',
-      page_id
-    )
-
-    // Criar colunas padrão se a página ainda não tiver nenhuma
-    if (cols.length === 0) {
-      const defaults: [string, string | null, number][] = [
-        ['A Fazer',      null,       0],
-        ['Em Progresso', '#b8860b',  1],
-        ['Concluído',    '#4A6741',  2],
-      ]
-      for (const [name, color, order] of defaults) {
-        dbRun(
-          'INSERT INTO kanban_columns (page_id, name, color, sort_order) VALUES (?,?,?,?)',
-          page_id, name, color, order
-        )
-      }
-      cols = dbAll(
-        'SELECT * FROM kanban_columns WHERE page_id=? ORDER BY sort_order, id',
-        page_id
-      )
-    }
-
-    return cols.map((col: any) => ({
-      ...col,
-      cards: dbAll(
-        'SELECT * FROM kanban_cards WHERE column_id=? ORDER BY sort_order, id',
-        col.id
-      ).map((card: any) => ({
-        ...card,
-        checklists: dbAll(
-          'SELECT * FROM kanban_checklists WHERE card_id=? ORDER BY sort_order, id',
-          card.id
-        ),
-        tags: dbAll(
-          'SELECT t.* FROM tags t JOIN card_tags ct ON ct.tag_id=t.id WHERE ct.card_id=?',
-          card.id
-        ),
-      })),
-    }))
-  })
-
-  api('kanban:createColumn', ({ page_id, name, color }) => {
-    const max = dbGet(
-      'SELECT COALESCE(MAX(sort_order),-1) AS m FROM kanban_columns WHERE page_id=?',
-      page_id
-    )?.m ?? -1
-    const r = dbRun(
-      'INSERT INTO kanban_columns (page_id, name, color, sort_order) VALUES (?,?,?,?)',
-      page_id, name, color ?? null, max + 1
-    )
-    return dbGet('SELECT * FROM kanban_columns WHERE id=?', r.lastInsertRowid)
-  })
-
-  api('kanban:updateColumn', ({ id, name, color }) => {
-    dbRun('UPDATE kanban_columns SET name=?, color=? WHERE id=?', name, color ?? null, id)
-    return dbGet('SELECT * FROM kanban_columns WHERE id=?', id)
-  })
-
-  api('kanban:deleteColumn', ({ id }) => {
-    dbRun('DELETE FROM kanban_columns WHERE id=?', id)
-    return { ok: true }
-  })
-
-  api('kanban:createCard', ({ column_id, title, description, priority, due_date }) => {
-    const max = dbGet(
-      'SELECT COALESCE(MAX(sort_order),-1) AS m FROM kanban_cards WHERE column_id=?',
-      column_id
-    )?.m ?? -1
-    const r = dbRun(
-      `INSERT INTO kanban_cards
-         (column_id, title, description, priority, due_date, sort_order)
-       VALUES (?,?,?,?,?,?)`,
-      column_id, title,
-      description ?? null, priority ?? 'media',
-      due_date ?? null, max + 1
-    )
-    return dbGet('SELECT * FROM kanban_cards WHERE id=?', r.lastInsertRowid)
-  })
-
-  api('kanban:updateCard', ({ id, title, description, priority, due_date, is_done }) => {
-    dbRun(
-      `UPDATE kanban_cards
-       SET title=?, description=?, priority=?, due_date=?, is_done=?,
-           updated_at=datetime('now')
-       WHERE id=?`,
-      title, description ?? null, priority, due_date ?? null, is_done ?? 0, id
-    )
-    return dbGet('SELECT * FROM kanban_cards WHERE id=?', id)
-  })
-
-  api('kanban:moveCard', ({ card_id, column_id, before_card_id }) => {
-    const db = getDb()
-
-    // Cartas da coluna destino (exceto a carta sendo movida), em ordem
-    const cards: any[] = db.prepare(
-      'SELECT id FROM kanban_cards WHERE column_id=? AND id!=? ORDER BY sort_order, id'
-    ).all(column_id, card_id)
-
-    // Calcular ponto de inserção
-    let insertIdx = cards.length
-    if (before_card_id != null) {
-      const idx = cards.findIndex((c: any) => c.id === before_card_id)
-      if (idx >= 0) insertIdx = idx
-    }
-    cards.splice(insertIdx, 0, { id: card_id })
-
-    const setCol   = db.prepare("UPDATE kanban_cards SET column_id=?, updated_at=datetime('now') WHERE id=?")
-    const setOrder = db.prepare('UPDATE kanban_cards SET sort_order=? WHERE id=?')
-
-    db.transaction(() => {
-      setCol.run(column_id, card_id)
-      cards.forEach((c: any, i: number) => setOrder.run(i, c.id))
-    })()
-
-    return { ok: true }
-  })
-
-  api('kanban:deleteCard', ({ id }) => {
-    dbRun('DELETE FROM kanban_cards WHERE id=?', id)
-    return { ok: true }
-  })
-
-  api('kanban:createChecklist', ({ card_id, text }) => {
-    const max = dbGet(
-      'SELECT COALESCE(MAX(sort_order),-1) AS m FROM kanban_checklists WHERE card_id=?',
-      card_id
-    )?.m ?? -1
-    const r = dbRun(
-      'INSERT INTO kanban_checklists (card_id, text, sort_order) VALUES (?,?,?)',
-      card_id, text, max + 1
-    )
-    return dbGet('SELECT * FROM kanban_checklists WHERE id=?', r.lastInsertRowid)
-  })
-
-  api('kanban:updateChecklist', ({ id, text, is_checked }) => {
-    dbRun(
-      'UPDATE kanban_checklists SET text=?, is_checked=? WHERE id=?',
-      text, is_checked, id
-    )
-    return dbGet('SELECT * FROM kanban_checklists WHERE id=?', id)
-  })
-
-  api('kanban:deleteChecklist', ({ id }) => {
-    dbRun('DELETE FROM kanban_checklists WHERE id=?', id)
-    return { ok: true }
-  })
-
-  api('kanban:setCardTags', ({ card_id, tag_names }) => {
-    const db = getDb()
-    const ws = db.prepare('SELECT id FROM workspaces LIMIT 1').get() as any
-    if (!ws) return { ok: true }
-
-    const upsertTag = db.prepare('INSERT OR IGNORE INTO tags (workspace_id, name) VALUES (?,?)')
-    const getTag    = db.prepare('SELECT id FROM tags WHERE workspace_id=? AND name=?')
-    const clearTags = db.prepare('DELETE FROM card_tags WHERE card_id=?')
-    const addTag    = db.prepare('INSERT OR IGNORE INTO card_tags (card_id, tag_id) VALUES (?,?)')
-
-    db.transaction(() => {
-      clearTags.run(card_id)
-      for (const raw of (tag_names as string[])) {
-        const name = raw.trim()
-        if (!name) continue
-        upsertTag.run(ws.id, name)
-        const tag = getTag.get(ws.id, name) as any
-        if (tag) addTag.run(card_id, tag.id)
-      }
-    })()
-
-    return { ok: true }
-  })
-
-  // ── Configurações ────────────────────────────────────────────────────────
+  // ── Configurações ─────────────────────────────────────────────────────────
   api('config:get', ({ key }) => {
     const row = dbGet('SELECT value FROM settings WHERE key = ?', key)
     return row?.value ?? null
