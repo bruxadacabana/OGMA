@@ -762,6 +762,13 @@ function ReadingDetailView({ reading: initialReading, dark, onBack, onEdit, onSe
 }) {
   const [reading,  setReading]  = useState<Reading>(initialReading)
   const [tab,      setTab]      = useState<'geral' | 'notas' | 'citacoes' | 'vinculos'>('geral')
+
+  // Sincronizar com o prop quando o pai actualiza (ex: após registar sessão)
+  useEffect(() => {
+    setReading(initialReading)
+    fromIpc<any[]>(() => db().readingSessions.list(initialReading.id), 'syncSessions')
+      .then(r => r.match(data => setSessions(data), _e => {}))
+  }, [initialReading.current_page, initialReading.status, initialReading.updated_at])
   const [sessions, setSessions] = useState<ReadingSession[]>([])
   const [notes,    setNotes]    = useState<any[]>([])
   const [quotes,   setQuotes]   = useState<any[]>([])
@@ -1282,8 +1289,15 @@ function ReadingsView({ dark }: { dark: boolean }) {
 
   const handleSessionSave = async (data: any) => {
     await fromIpc<unknown>(() => db().readingSessions.create(data), 'createReadingSession')
-    load()
     setSessionFor(null)
+    const result = await fromIpc<Reading[]>(() => db().readings.list(), 'reloadReadingsAfterSession')
+    result.match(data => {
+      setReadings(data)
+      if (detailReading) {
+        const updated = data.find(r => r.id === detailReading.id)
+        if (updated) setDetailReading(updated)
+      }
+    }, _e => {})
   }
 
   // Mostrar detalhe de leitura se seleccionado
