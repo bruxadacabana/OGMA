@@ -47,8 +47,8 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 
 ## Fase 5 — Table / List
 
-- [ ] Edição inline de propriedades nas views
-- [ ] Filtros, ordenação e busca nas views
+- [x] Edição inline de propriedades nas views (TableView)
+- [x] Filtros, ordenação e busca nas views (TableView: busca + filtro por select; ListView: busca + sort por título/data)
 
 ---
 
@@ -57,7 +57,6 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [ ] `colorUtils.ts` — cores HSL automáticas por disciplina
 - [ ] Gerador de código `PREFIX###` automático
 - [x] Pré-requisitos entre páginas com detecção de ciclo (IPC + UI no PageView para projetos académicos)
-- [ ] Script de migração do StudyFlow
 
 ---
 

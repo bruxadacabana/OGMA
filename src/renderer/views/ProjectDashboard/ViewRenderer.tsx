@@ -47,6 +47,8 @@ const TableView: React.FC<ViewRendererProps> = ({
   const [propOptions, setPropOptions] = useState<Record<number, PropOption[]>>({})
   const [sortCol,     setSortCol]     = useState<number | 'title' | null>(null)
   const [sortDir,     setSortDir]     = useState<'asc' | 'desc'>('asc')
+  const [filterText,  setFilterText]  = useState('')
+  const [filterProps, setFilterProps] = useState<Record<number, string>>({})
 
   // Buscar opções de propriedades select/multi_select
   useEffect(() => {
@@ -119,6 +121,26 @@ const TableView: React.FC<ViewRendererProps> = ({
 
   const visibleProps = properties.slice(0, 6)
 
+  const activeFilterCount = (filterText ? 1 : 0) +
+    Object.values(filterProps).filter(Boolean).length
+
+  const filteredPages = useMemo(() => {
+    let result = sortedPages
+    if (filterText) {
+      const q = filterText.toLowerCase()
+      result = result.filter(p => p.title.toLowerCase().includes(q))
+    }
+    Object.entries(filterProps).forEach(([idStr, val]) => {
+      if (!val) return
+      const propId = Number(idStr)
+      result = result.filter(p => {
+        const pv = p.prop_values?.find(v => v.property_id === propId)
+        return pv?.value_text === val
+      })
+    })
+    return result
+  }, [sortedPages, filterText, filterProps])
+
   const thBase: React.CSSProperties = {
     textAlign:     'left',
     fontFamily:    'var(--font-mono)',
@@ -134,8 +156,82 @@ const TableView: React.FC<ViewRendererProps> = ({
   const sortArrow = (col: number | 'title') =>
     sortCol === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''
 
+  const selectFilters = visibleProps.filter(p => p.prop_type === 'select')
+
   return (
-    <div style={{ flex: 1, overflow: 'auto' }}>
+    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+
+      {/* Toolbar de filtros */}
+      <div style={{
+        display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+        padding: '7px 12px', borderBottom: `1px solid ${border}`, flexShrink: 0,
+      }}>
+        {/* Busca */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          background: dark ? '#211D16' : '#EDE7D9',
+          border: `1px solid ${filterText ? color : border}`,
+          borderRadius: 2, padding: '3px 7px',
+        }}>
+          <span style={{ fontSize: 10, color: ink2 }}>◎</span>
+          <input
+            type="text"
+            value={filterText}
+            onChange={e => setFilterText(e.target.value)}
+            placeholder="Buscar..."
+            style={{
+              background: 'none', border: 'none', outline: 'none',
+              fontSize: 11, color: ink, fontFamily: 'var(--font-mono)', width: 140,
+            }}
+          />
+          {filterText && (
+            <button onClick={() => setFilterText('')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: ink2, fontSize: 13, padding: 0, lineHeight: 1 }}>
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* Filtros por select */}
+        {selectFilters.map(p => (
+          <select
+            key={p.id}
+            value={filterProps[p.id] ?? ''}
+            onChange={e => setFilterProps(prev => ({ ...prev, [p.id]: e.target.value }))}
+            style={{
+              fontSize: 10, fontFamily: 'var(--font-mono)',
+              background: filterProps[p.id] ? (dark ? '#3A3020' : '#EDE7D9') : 'transparent',
+              border: `1px solid ${filterProps[p.id] ? color : border}`,
+              color: filterProps[p.id] ? color : ink2,
+              borderRadius: 2, padding: '3px 6px', cursor: 'pointer',
+            }}
+          >
+            <option value="">{p.name}: todos</option>
+            {(propOptions[p.id] ?? []).map(o => (
+              <option key={o.id} value={o.label}>{o.label}</option>
+            ))}
+          </select>
+        ))}
+
+        {/* Limpar filtros */}
+        {activeFilterCount > 0 && (
+          <button
+            onClick={() => { setFilterText(''); setFilterProps({}) }}
+            style={{
+              fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
+              color: ink2, background: 'none', border: `1px solid ${border}`,
+              borderRadius: 2, padding: '3px 8px', cursor: 'pointer',
+            }}
+          >
+            LIMPAR ({activeFilterCount})
+          </button>
+        )}
+
+        <span style={{ marginLeft: 'auto', fontSize: 9, fontFamily: 'var(--font-mono)', color: ink2 }}>
+          {filteredPages.length}/{pages.length}
+        </span>
+      </div>
+
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${border}` }}>
@@ -159,7 +255,7 @@ const TableView: React.FC<ViewRendererProps> = ({
           </tr>
         </thead>
         <tbody>
-          {sortedPages.map(page => (
+          {filteredPages.map(page => (
             <tr
               key={page.id}
               style={{ borderBottom: `1px solid ${border}` }}
@@ -246,12 +342,12 @@ const TableView: React.FC<ViewRendererProps> = ({
         </tbody>
       </table>
 
-      {pages.length === 0 && (
+      {filteredPages.length === 0 && (
         <div style={{
           padding: '40px', textAlign: 'center', color: ink2,
           fontStyle: 'italic', fontSize: 12,
         }}>
-          Nenhuma página neste projeto.
+          {pages.length === 0 ? 'Nenhuma página neste projeto.' : 'Nenhum resultado para os filtros aplicados.'}
         </div>
       )}
     </div>
@@ -381,12 +477,46 @@ function InlineCellEditor({ prop, pv, options, onSet, onClose, dark, ink, ink2, 
 // ── ListView ──────────────────────────────────────────────────────────────────
 
 const ListView: React.FC<ViewRendererProps> = ({
-  project, pages, dark, onPageOpen, onNewPage,
+  project, pages, properties, dark, onPageOpen, onNewPage,
 }) => {
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const border = dark ? '#3A3020' : '#C4B9A8'
   const color  = project.color ?? '#8B7355'
+
+  const [filterText, setFilterText] = useState('')
+  const [sortBy,     setSortBy]     = useState<'default' | 'title' | 'date'>('default')
+  const [sortDir,    setSortDir]    = useState<'asc' | 'desc'>('asc')
+
+  // First date property available
+  const dateProp = properties.find(p => p.prop_type === 'date')
+
+  const displayPages = useMemo(() => {
+    let result = [...pages]
+    if (filterText) {
+      const q = filterText.toLowerCase()
+      result = result.filter(p => p.title.toLowerCase().includes(q))
+    }
+    if (sortBy === 'title') {
+      result.sort((a, b) => {
+        const cmp = a.title.localeCompare(b.title, 'pt-BR')
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+    } else if (sortBy === 'date' && dateProp) {
+      result.sort((a, b) => {
+        const va = a.prop_values?.find(v => v.property_id === dateProp.id)?.value_date ?? ''
+        const vb = b.prop_values?.find(v => v.property_id === dateProp.id)?.value_date ?? ''
+        const cmp = va.localeCompare(vb)
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+    }
+    return result
+  }, [pages, filterText, sortBy, sortDir, dateProp])
+
+  const toggleSort = (col: 'title' | 'date') => {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortBy(col); setSortDir('asc') }
+  }
 
   if (pages.length === 0) {
     return (
@@ -408,17 +538,64 @@ const ListView: React.FC<ViewRendererProps> = ({
 
   return (
     <div style={{ padding: '16px 0' }}>
+      {/* Toolbar */}
       <div style={{
-        display: 'flex', justifyContent: 'flex-end',
-        marginBottom: 10, padding: '0 0 6px', borderBottom: `1px solid ${border}`,
+        display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+        padding: '0 0 8px', marginBottom: 2, borderBottom: `1px solid ${border}`,
       }}>
+        {/* Busca */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          background: dark ? '#211D16' : '#EDE7D9',
+          border: `1px solid ${filterText ? color : border}`,
+          borderRadius: 2, padding: '3px 7px',
+        }}>
+          <span style={{ fontSize: 10, color: ink2 }}>◎</span>
+          <input
+            type="text"
+            value={filterText}
+            onChange={e => setFilterText(e.target.value)}
+            placeholder="Buscar..."
+            style={{
+              background: 'none', border: 'none', outline: 'none',
+              fontSize: 11, color: ink, fontFamily: 'var(--font-mono)', width: 140,
+            }}
+          />
+          {filterText && (
+            <button onClick={() => setFilterText('')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: ink2, fontSize: 13, padding: 0, lineHeight: 1 }}>
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* Ordenação */}
+        {(['title', ...(dateProp ? ['date'] : [])] as Array<'title' | 'date'>).map(col => (
+          <button key={col} onClick={() => toggleSort(col)}
+            style={{
+              fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
+              color: sortBy === col ? color : ink2,
+              background: 'none', border: `1px solid ${sortBy === col ? color : border}`,
+              borderRadius: 2, padding: '3px 7px', cursor: 'pointer',
+            }}
+          >
+            {col === 'title' ? 'TÍTULO' : (dateProp?.name.toUpperCase() ?? 'DATA')}
+            {sortBy === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+          </button>
+        ))}
+
         <button className="btn btn-ghost btn-sm" onClick={onNewPage}
-          style={{ color: ink2, fontSize: 10 }}>
+          style={{ color: ink2, fontSize: 10, marginLeft: 'auto' }}>
           + Nova página
         </button>
       </div>
+
       <div className="pages-list">
-        {pages.map((p, i) => (
+        {displayPages.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: ink2, fontStyle: 'italic', fontSize: 12 }}>
+            Nenhum resultado.
+          </div>
+        ) : displayPages.map((p, i) => (
           <button
             key={p.id}
             className="page-row"
