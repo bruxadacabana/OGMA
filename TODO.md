@@ -74,8 +74,28 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 
 ## Fase 9 — Dashboard Global
 
-- [ ] Fase da lua (cálculo astronómico)
-- [ ] Drag-and-drop dos widgets + persistência da ordem
+- [x] Fase da lua (cálculo astronómico) — getMoonPhase() com referência J2000 + ciclo 29.53 dias
+- [x] Drag-and-drop dos widgets + persistência da ordem (localStorage `ogma_dashboard_order`)
+- [x] Roda do Ano (WheelOfYearWidget) — SVG com 8 Sabás, setores sazonais, marcador do dia atual, próximo Sabá destacado
+
+### Widgets novos
+
+#### Alta prioridade (dados já disponíveis)
+- [ ] **Agenda da Semana** — faixa de 7 dias com chips de `calendar_events` por dia, coloridos por tipo
+- [ ] **Lembretes Pendentes** — lista de reminders com `is_dismissed = 0` e `trigger_at` próximo, ordenados por data
+- [ ] **Próximas Provas / Defesas** — filtro de `calendar_events` por tipos acadêmicos (`prova`, `defesa`, `trabalho`) com countdown em dias
+- [ ] **Progresso dos Projetos** — barra de progresso por projeto ativo (páginas concluídas / total)
+- [ ] **Leituras Pendentes** — recursos do tipo `book`/`article` ainda não lidos (requer campo `status` em `page_resources`)
+
+#### Média prioridade (UI mais rica)
+- [ ] **Mapa de Calor de Atividade** — grid estilo GitHub dos últimos 90 dias com contagem de páginas criadas/editadas
+- [ ] **Nuvem de Tags** — tags mais usadas com tamanho proporcional à frequência, clicáveis para filtrar
+- [ ] **Sumário do Dia** — briefing textual: eventos hoje, prazos próximos, lembretes ativos
+
+#### Futuros (dependem de features pendentes)
+- [ ] **Meta de Leitura Anual** — gauge circular de progresso da meta (depende de `reading_goals`)
+- [ ] **Tempo de Foco Hoje** — sessões Pomodoro do dia (depende de Pomodoro/`time_sessions`)
+- [ ] **Grafo de Conexões** — mini grafo de força com páginas mais interligadas via backlinks (requer lib de visualização)
 
 ---
 

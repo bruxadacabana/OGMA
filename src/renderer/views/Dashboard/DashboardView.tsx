@@ -50,7 +50,7 @@ function formatUpcomingDate(iso: string): string {
   } catch { return iso }
 }
 
-// ── Fase da Lua ───────────────────────────────────────────────────────────────
+// ── Fase da Lua (cálculo astronómico) ────────────────────────────────────────
 
 function getMoonPhase(): { emoji: string; name: string; pct: number } {
   const knownNew = new Date('2000-01-06T18:14:00Z').getTime()
@@ -61,32 +61,6 @@ function getMoonPhase(): { emoji: string; name: string; pct: number } {
   const names    = ['Lua Nova','Crescente','Quarto Crescente','Gibosa Crescente',
                     'Lua Cheia','Gibosa Minguante','Quarto Minguante','Minguante']
   return { emoji: emojis[idx], name: names[idx], pct: Math.round(phase * 100) }
-}
-
-// ── Próximo Sabá ──────────────────────────────────────────────────────────────
-
-function getNextSabbat(): { name: string; ptName: string; days: number; symbol: string } {
-  const y = new Date().getFullYear()
-  const sabbats = [
-    { name: 'Imbolc',     ptName: 'Imbolc',     symbol: '❄', month: 1,  day: 2  },
-    { name: 'Ostara',     ptName: 'Ostara',      symbol: '🌱', month: 2,  day: 20 },
-    { name: 'Beltane',    ptName: 'Beltane',     symbol: '🔥', month: 4,  day: 1  },
-    { name: 'Litha',      ptName: 'Litha',       symbol: '☀', month: 5,  day: 21 },
-    { name: 'Lughnasadh', ptName: 'Lughnasadh',  symbol: '🌾', month: 7,  day: 1  },
-    { name: 'Mabon',      ptName: 'Mabon',       symbol: '🍂', month: 8,  day: 22 },
-    { name: 'Samhain',    ptName: 'Samhain',     symbol: '🕯', month: 9,  day: 31 },
-    { name: 'Yule',       ptName: 'Yule',        symbol: '✦', month: 11, day: 21 },
-  ]
-  const now = new Date(); now.setHours(0, 0, 0, 0)
-  for (const s of sabbats) {
-    const d = new Date(y, s.month, s.day)
-    if (d >= now) {
-      const days = Math.round((d.getTime() - now.getTime()) / 86400000)
-      return { ...s, days }
-    }
-  }
-  const next = new Date(y + 1, 1, 2)
-  return { name: 'Imbolc', ptName: 'Imbolc', symbol: '❄', days: Math.round((next.getTime() - now.getTime()) / 86400000) }
 }
 
 // ── Widget: Boas-vindas ───────────────────────────────────────────────────────
@@ -416,7 +390,7 @@ function PrazosWidget({ dark, onPageOpen }: { dark: boolean; onPageOpen: (projec
   )
 }
 
-// ── Widget: Cosmos (Lua + Próximo Sabá) ───────────────────────────────────────
+// ── Widget: Cosmos (Lua) ──────────────────────────────────────────────────────
 
 function CosmosWidget({ dark }: { dark: boolean }) {
   const ink    = dark ? '#E8DFC8' : '#2C2416'
@@ -425,8 +399,15 @@ function CosmosWidget({ dark }: { dark: boolean }) {
   const border = dark ? '#3A3020' : '#C4B9A8'
   const cardBg = dark ? '#211D16' : '#EDE7D9'
 
-  const moon   = getMoonPhase()
-  const sabbat = getNextSabbat()
+  const moon = getMoonPhase()
+
+  // Lunar cycle arc (SVG)
+  const arcR = 36, arcCx = 50, arcCy = 50
+  const pct  = moon.pct / 100
+  const endAngle = pct * 2 * Math.PI - Math.PI / 2
+  const arcX = arcCx + arcR * Math.cos(endAngle)
+  const arcY = arcCy + arcR * Math.sin(endAngle)
+  const largeArc = pct > 0.5 ? 1 : 0
 
   return (
     <div className="card" style={{
@@ -436,35 +417,208 @@ function CosmosWidget({ dark }: { dark: boolean }) {
       <CosmosLayer width={260} height={120} seed="dash_cosmos" density="medium" dark={dark}
         style={{ opacity: 0.4 }} />
 
-      <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 20 }}>
+      <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 20, alignItems: 'center' }}>
         {/* Lua */}
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
             color: ink2, textTransform: 'uppercase', marginBottom: 8 }}>
             ☽ Fase da Lua
           </div>
-          <div style={{ fontSize: 32, lineHeight: 1, marginBottom: 4 }}>{moon.emoji}</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13,
-            fontStyle: 'italic', color: ink }}>{moon.name}</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10,
-            color: accent, marginTop: 2 }}>{moon.pct}% do ciclo</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 34, lineHeight: 1 }}>{moon.emoji}</div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 13,
+                fontStyle: 'italic', color: ink }}>{moon.name}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10,
+                color: ink2, marginTop: 2 }}>{moon.pct}% do ciclo</div>
+            </div>
+          </div>
         </div>
 
         {/* Divisor */}
-        <div style={{ width: 1, background: border, flexShrink: 0 }} />
+        <div style={{ width: 1, background: border, flexShrink: 0, alignSelf: 'stretch' }} />
 
-        {/* Próximo Sabá */}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
-            color: ink2, textTransform: 'uppercase', marginBottom: 8 }}>
-            ✦ Próximo Sabá
+        {/* Arco do ciclo lunar */}
+        <div style={{ flex: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <svg width={100} height={100} viewBox="0 0 100 100">
+            {/* Trilha */}
+            <circle cx={arcCx} cy={arcCy} r={arcR} fill="none" stroke={border} strokeWidth={6} />
+            {/* Progresso */}
+            {pct > 0 && pct < 1 && (
+              <path
+                d={`M ${arcCx} ${arcCy - arcR} A ${arcR} ${arcR} 0 ${largeArc} 1 ${arcX.toFixed(1)} ${arcY.toFixed(1)}`}
+                fill="none" stroke={accent} strokeWidth={6} strokeLinecap="round"
+              />
+            )}
+            {pct === 1 && (
+              <circle cx={arcCx} cy={arcCy} r={arcR} fill="none" stroke={accent} strokeWidth={6} />
+            )}
+            {/* Emoji central */}
+            <text x={arcCx} y={arcCy} textAnchor="middle" dominantBaseline="middle" fontSize={22}>
+              {moon.emoji}
+            </text>
+          </svg>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
+            color: accent, letterSpacing: '0.08em' }}>
+            {moon.pct}%
           </div>
-          <div style={{ fontSize: 28, lineHeight: 1, marginBottom: 4 }}>{sabbat.symbol}</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13,
-            fontStyle: 'italic', color: ink }}>{sabbat.ptName}</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10,
-            color: accent, marginTop: 2 }}>
-            {sabbat.days === 0 ? 'hoje' : sabbat.days === 1 ? 'amanhã' : `em ${sabbat.days} dias`}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Widget: Roda do Ano ───────────────────────────────────────────────────────
+
+const SABBATS = [
+  { name: 'Imbolc',     symbol: '❄', day: 33  },
+  { name: 'Ostara',     symbol: '🌱', day: 79  },
+  { name: 'Beltane',    symbol: '🔥', day: 121 },
+  { name: 'Litha',      symbol: '☀', day: 172 },
+  { name: 'Lughnasadh', symbol: '🌾', day: 213 },
+  { name: 'Mabon',      symbol: '🍂', day: 265 },
+  { name: 'Samhain',    symbol: '🕯', day: 304 },
+  { name: 'Yule',       symbol: '✦', day: 355 },
+]
+
+function WheelOfYearWidget({ dark }: { dark: boolean }) {
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+
+  const cx = 100, cy = 100, rim = 78, inner = 14
+
+  const now = new Date()
+  const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000) + 1
+
+  const toRad = (day: number) => (day / 365 * 360 - 90) * Math.PI / 180
+  const f = (n: number) => n.toFixed(1)
+  const pt = (day: number, r: number) => ({
+    x: cx + r * Math.cos(toRad(day)),
+    y: cy + r * Math.sin(toRad(day)),
+  })
+
+  const nextSabbat = SABBATS.find(s => s.day >= dayOfYear) ?? SABBATS[0]
+  const daysLeft = nextSabbat.day - dayOfYear
+  const daysUntil = daysLeft >= 0 ? daysLeft : 365 - dayOfYear + nextSabbat.day
+  const daysLabel = daysUntil === 0 ? 'hoje' : daysUntil === 1 ? 'amanhã' : `em ${daysUntil} dias`
+
+  const sector = (startDay: number, endDay: number, fill: string, key: string) => {
+    const a1 = toRad(startDay), a2 = toRad(endDay)
+    const ox1 = cx + rim * Math.cos(a1),   oy1 = cy + rim * Math.sin(a1)
+    const ox2 = cx + rim * Math.cos(a2),   oy2 = cy + rim * Math.sin(a2)
+    const ix1 = cx + inner * Math.cos(a1), iy1 = cy + inner * Math.sin(a1)
+    const ix2 = cx + inner * Math.cos(a2), iy2 = cy + inner * Math.sin(a2)
+    const span = ((endDay - startDay) + 730) % 365
+    const large = span > 182 ? 1 : 0
+    return (
+      <path key={key} fill={fill} d={
+        `M ${f(ix1)} ${f(iy1)} L ${f(ox1)} ${f(oy1)} ` +
+        `A ${rim} ${rim} 0 ${large} 1 ${f(ox2)} ${f(oy2)} ` +
+        `L ${f(ix2)} ${f(iy2)} ` +
+        `A ${inner} ${inner} 0 ${large} 0 ${f(ix1)} ${f(iy1)} Z`
+      } />
+    )
+  }
+
+  return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
+        color: ink2, textTransform: 'uppercase', marginBottom: 8 }}>
+        ✦ Roda do Ano
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        {/* Roda SVG */}
+        <svg width={200} height={200} viewBox="0 0 200 200" style={{ flexShrink: 0 }}>
+          {/* Setores sazonais */}
+          {sector(33,  121, 'rgba(107,140,74,0.22)',  'spring')}
+          {sector(121, 213, 'rgba(196,137,42,0.20)',  'summer')}
+          {sector(213, 304, 'rgba(140,74,26,0.20)',   'autumn')}
+          {sector(304, 398, 'rgba(100,120,150,0.18)', 'winter')}
+
+          {/* Aro externo */}
+          <circle cx={cx} cy={cy} r={rim}   fill="none" stroke={border} strokeWidth={1} />
+          {/* Anel interno */}
+          <circle cx={cx} cy={cy} r={inner} fill={cardBg} stroke={border} strokeWidth={1} />
+
+          {/* Raios */}
+          {SABBATS.map(s => {
+            const o = pt(s.day, inner), i = pt(s.day, rim)
+            return <line key={s.name + 'r'} x1={f(o.x)} y1={f(o.y)} x2={f(i.x)} y2={f(i.y)}
+              stroke={border} strokeWidth={0.8} />
+          })}
+
+          {/* Símbolos dos sabás */}
+          {SABBATS.map(s => {
+            const p = pt(s.day, 54)
+            const isNext = s === nextSabbat
+            return (
+              <text key={s.name + 't'} x={f(p.x)} y={f(p.y)}
+                textAnchor="middle" dominantBaseline="middle"
+                fontSize={isNext ? 16 : 13} opacity={isNext ? 1 : 0.55}>
+                {s.symbol}
+              </text>
+            )
+          })}
+
+          {/* Marcador do dia atual */}
+          {(() => {
+            const p = pt(dayOfYear, 71)
+            return <circle cx={f(p.x)} cy={f(p.y)} r={5.5}
+              fill={accent} stroke={cardBg} strokeWidth={1.5} />
+          })()}
+
+          {/* Centro */}
+          <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle"
+            fontSize={13} fill={accent}>✦</text>
+        </svg>
+
+        {/* Legenda lateral */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
+              letterSpacing: '0.15em', color: ink2, textTransform: 'uppercase', marginBottom: 6 }}>
+              Próximo Sabá
+            </div>
+            <div style={{ fontSize: 26, marginBottom: 4 }}>{nextSabbat.symbol}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 15,
+              fontStyle: 'italic', color: ink }}>{nextSabbat.name}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10,
+              color: accent, marginTop: 3 }}>{daysLabel}</div>
+          </div>
+
+          <div style={{ borderTop: `1px solid ${border}`, paddingTop: 10 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
+              letterSpacing: '0.15em', color: ink2, textTransform: 'uppercase', marginBottom: 6 }}>
+              Posição no Ano
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink, marginBottom: 6 }}>
+              Dia {dayOfYear} · {Math.round(dayOfYear / 365 * 100)}%
+            </div>
+            <div style={{ height: 3, background: border, borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: `${Math.round(dayOfYear / 365 * 100)}%`,
+                background: accent, borderRadius: 2,
+              }} />
+            </div>
+
+            {/* Todos os sabás */}
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {SABBATS.filter(s => s.day >= dayOfYear).slice(0, 3).map(s => (
+                <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 11 }}>{s.symbol}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
+                    color: s === nextSabbat ? accent : ink2 }}>
+                    {s.name}
+                    {s === nextSabbat && ' ←'}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -474,7 +628,57 @@ function CosmosWidget({ dark }: { dark: boolean }) {
 
 // ── Dashboard principal ───────────────────────────────────────────────────────
 
+type WidgetId = 'stats' | 'projects' | 'recent' | 'prazos' | 'cosmos' | 'wheel'
+const DEFAULT_ORDER: WidgetId[] = ['stats', 'projects', 'recent', 'prazos', 'cosmos', 'wheel']
+
+function loadOrder(): WidgetId[] {
+  try {
+    const s = localStorage.getItem('ogma_dashboard_order')
+    if (s) {
+      const arr = JSON.parse(s) as string[]
+      const valid = arr.filter(id => DEFAULT_ORDER.includes(id as WidgetId)) as WidgetId[]
+      DEFAULT_ORDER.forEach(id => { if (!valid.includes(id)) valid.push(id) })
+      return valid
+    }
+  } catch {}
+  return [...DEFAULT_ORDER]
+}
+
 export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen }) => {
+  const [order,    setOrder]    = useState<WidgetId[]>(loadOrder)
+  const [dragging, setDragging] = useState<WidgetId | null>(null)
+
+  const handleDragStart = (id: WidgetId) => setDragging(id)
+
+  const handleDragEnter = (id: WidgetId) => {
+    if (!dragging || dragging === id) return
+    setOrder(prev => {
+      const arr  = [...prev]
+      const from = arr.indexOf(dragging)
+      const to   = arr.indexOf(id)
+      arr.splice(from, 1)
+      arr.splice(to, 0, dragging)
+      return arr
+    })
+  }
+
+  const handleDrop = () => {
+    setOrder(prev => {
+      localStorage.setItem('ogma_dashboard_order', JSON.stringify(prev))
+      return prev
+    })
+    setDragging(null)
+  }
+
+  const WIDGETS: Record<WidgetId, React.ReactNode> = {
+    stats:    <StatsWidget    dark={dark} />,
+    projects: <ProjectsWidget dark={dark} onProjectOpen={onProjectOpen} />,
+    recent:   <RecentWidget   dark={dark} onPageOpen={onPageOpen} />,
+    prazos:   <PrazosWidget   dark={dark} onPageOpen={onPageOpen} />,
+    cosmos:   <CosmosWidget   dark={dark} />,
+    wheel:    <WheelOfYearWidget dark={dark} />,
+  }
+
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 40px' }}>
       <div style={{
@@ -483,12 +687,21 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
         gap: 16,
         maxWidth: 1100,
       }}>
-        <WelcomeWidget  dark={dark} />
-        <StatsWidget    dark={dark} />
-        <ProjectsWidget dark={dark} onProjectOpen={onProjectOpen} />
-        <RecentWidget   dark={dark} onPageOpen={onPageOpen} />
-        <PrazosWidget   dark={dark} onPageOpen={onPageOpen} />
-        <CosmosWidget   dark={dark} />
+        <WelcomeWidget dark={dark} />
+        {order.map(id => (
+          <div
+            key={id}
+            draggable
+            onDragStart={() => handleDragStart(id)}
+            onDragEnter={() => handleDragEnter(id)}
+            onDragOver={e => e.preventDefault()}
+            onDrop={handleDrop}
+            onDragEnd={() => setDragging(null)}
+            style={{ opacity: dragging === id ? 0.35 : 1, transition: 'opacity 120ms', cursor: 'grab' }}
+          >
+            {WIDGETS[id]}
+          </div>
+        ))}
       </div>
     </div>
   )
