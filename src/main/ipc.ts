@@ -68,15 +68,23 @@ function seedProjectProperties(projectId: number, projectType: string): Map<stri
         ['Pendente', '#8B7355'], ['Cursando', '#b8860b'],
         ['Concluída', '#4A6741'], ['Trancada', '#8B3A2A'],
       ])
-      addProp('Semestre',      'semestre',     'select')
-      addProp('Área',          'area',         'multi_select')
-      addProp('Carga Horária', 'carga_horaria','number')
+      const year = new Date().getFullYear()
+      addProp('Semestre', 'semestre', 'select', [
+        [`${year - 1}.1`, null], [`${year - 1}.2`, null],
+        [`${year}.1`,     null], [`${year}.2`,     null],
+        [`${year + 1}.1`, null], [`${year + 1}.2`, null],
+      ])
+      addProp('Área', 'area', 'multi_select', [
+        ['Humanas', '#7A5C2E'], ['Exatas', '#2C5F8A'], ['Biológicas', '#4A6741'],
+        ['Computação', '#4A3A7A'], ['Linguagens', '#6A4A2E'], ['Artes', '#8A2A5A'],
+      ])
+      addProp('Nota',          'nota',         'number')
       addProp('Créditos',      'creditos',     'number')
+      addProp('Carga Horária', 'carga_horaria','number')
       addProp('Professor',     'professor',    'text')
+      addProp('Código',        'codigo',       'text')
       addProp('Data Início',   'data_inicio',  'date')
       addProp('Data Fim',      'data_fim',     'date')
-      addProp('Código',        'codigo',       'text')
-      addProp('Cor',           'cor',          'color')
     },
     software: () => {
       addProp('Status', 'status', 'select', [
@@ -157,9 +165,10 @@ function seedProjectViews(
 
   const viewConfigs: Record<string, ViewDef[]> = {
     academic: [
-      ['Tabela',     'table',    null,     null       ],
-      ['Kanban',     'kanban',   'status', null       ],
-      ['Calendário', 'calendar', null,     'data_fim' ],
+      ['Progresso',  'progress', 'semestre', null     ],
+      ['Tabela',     'table',    null,        null     ],
+      ['Kanban',     'kanban',   'status',    null     ],
+      ['Calendário', 'calendar', null,        'data_fim'],
     ],
     software: [
       ['Kanban',     'kanban',   'status', null          ],
@@ -193,6 +202,32 @@ function seedProjectViews(
     const isDefault     = i === 0 ? 1 : 0
     insertView.run(projectId, name, type, groupByPropId, datePropId, isDefault, i)
   })
+}
+
+// ── FTS5: extração de texto do body_json do Editor.js ────────────────────────
+
+function extractBodyText(bodyJson: string | null | undefined): string {
+  if (!bodyJson) return ''
+  try {
+    const data = JSON.parse(bodyJson)
+    return (data.blocks ?? []).map((b: any) => {
+      const d = b.data ?? {}
+      if (typeof d.text === 'string')   return d.text.replace(/<[^>]*>/g, ' ')
+      if (Array.isArray(d.items))       return d.items.map((it: any) =>
+        typeof it === 'string' ? it : (it.content ?? '')
+      ).join(' ')
+      if (typeof d.caption === 'string') return d.caption
+      return ''
+    }).filter(Boolean).join(' ')
+  } catch { return '' }
+}
+
+function ftsUpsert(pageId: number, projectId: number, title: string, body: string) {
+  dbRun(`DELETE FROM search_index WHERE entity_type = 'page' AND entity_id = ?`, pageId)
+  dbRun(
+    `INSERT INTO search_index (entity_type, entity_id, project_id, title, body) VALUES ('page', ?, ?, ?, ?)`,
+    pageId, projectId, title, body
+  )
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -338,7 +373,9 @@ export function registerIpcHandlers(): void {
       data.icon ?? null, data.cover ?? null, data.cover_color ?? null,
       data.body_json ?? null, data.sort_order ?? 0
     )
-    return dbGet('SELECT * FROM pages WHERE id = ?', r.lastInsertRowid)
+    const pageId = Number(r.lastInsertRowid)
+    ftsUpsert(pageId, data.project_id, data.title ?? 'Sem título', extractBodyText(data.body_json))
+    return dbGet('SELECT * FROM pages WHERE id = ?', pageId)
   })
 
   api('pages:update', (data) => {
@@ -352,12 +389,18 @@ export function registerIpcHandlers(): void {
     if (data.sort_order  !== undefined) { cols.push('sort_order = ?');  params.push(data.sort_order) }
     params.push(data.id)
     dbRun(`UPDATE pages SET ${cols.join(', ')} WHERE id = ?`, ...params)
+    // Atualizar índice FTS5
+    if (data.title !== undefined || data.body_json !== undefined) {
+      const page = dbGet('SELECT project_id, title, body_json FROM pages WHERE id = ?', data.id)
+      if (page) ftsUpsert(data.id, page.project_id, page.title, extractBodyText(page.body_json))
+    }
     return dbGet('SELECT * FROM pages WHERE id = ?', data.id)
   })
 
-  api('pages:delete', ({ id }) =>
-    dbRun("UPDATE pages SET is_deleted=1, updated_at=datetime('now') WHERE id=?", id)
-  )
+  api('pages:delete', ({ id }) => {
+    dbRun(`DELETE FROM search_index WHERE entity_type = 'page' AND entity_id = ?`, id)
+    return dbRun("UPDATE pages SET is_deleted=1, updated_at=datetime('now') WHERE id=?", id)
+  })
 
   api('pages:reorder', (items: { id: number; sort_order: number }[]) => {
     const db   = getDb()
@@ -366,6 +409,87 @@ export function registerIpcHandlers(): void {
       for (const { id, sort_order } of items) stmt.run(sort_order, id)
     })()
     return { ok: true }
+  })
+
+  api('calendar:pagesForMonth', ({ year, month }) => {
+    const start = `${year}-${String(month + 1).padStart(2, '0')}-01`
+    const d     = new Date(year, month + 1, 0)
+    const end   = `${year}-${String(month + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return dbAll(`
+      SELECT p.id, p.title, p.icon, p.project_id,
+             ppv.value_date, pp.name AS prop_name,
+             pr.name AS project_name, pr.color AS project_color, pr.icon AS project_icon
+      FROM pages p
+      JOIN page_prop_values ppv ON ppv.page_id = p.id
+      JOIN project_properties pp ON pp.id = ppv.property_id
+      JOIN projects pr ON pr.id = p.project_id
+      WHERE p.is_deleted = 0
+        AND pp.prop_type = 'date'
+        AND ppv.value_date IS NOT NULL
+        AND ppv.value_date >= ?
+        AND ppv.value_date <= ?
+      ORDER BY ppv.value_date ASC
+    `, start, end)
+  })
+
+  api('dashboard:stats', () => {
+    const totals = dbGet(`
+      SELECT
+        (SELECT COUNT(*) FROM pages    WHERE is_deleted = 0)                                    AS total_pages,
+        (SELECT COUNT(*) FROM pages    WHERE is_deleted = 0
+           AND date(created_at) >= date('now', '-7 days'))                                      AS pages_this_week,
+        (SELECT COUNT(*) FROM projects WHERE status = 'active')                                 AS active_projects,
+        (SELECT COUNT(*) FROM projects)                                                         AS total_projects
+    `)
+    const pageCounts = dbAll(`
+      SELECT project_id, COUNT(*) AS count
+      FROM pages WHERE is_deleted = 0
+      GROUP BY project_id
+    `)
+    return { ...(totals ?? {}), page_counts: pageCounts }
+  })
+
+  api('pages:search', ({ query, limit }) => {
+    const n = limit ?? 20
+    const q = (query ?? '').trim()
+    if (!q) return []
+    // Tentar FTS5 primeiro; fallback para LIKE se falhar (ex: caracteres especiais)
+    try {
+      return dbAll(`
+        SELECT p.id, p.title, p.icon, p.project_id, p.updated_at,
+               pr.name AS project_name, pr.color AS project_color, pr.icon AS project_icon
+        FROM pages p
+        JOIN projects pr ON pr.id = p.project_id
+        WHERE p.is_deleted = 0
+          AND p.id IN (
+            SELECT CAST(entity_id AS INTEGER)
+            FROM search_index
+            WHERE search_index MATCH ? AND entity_type = 'page'
+          )
+        ORDER BY p.updated_at DESC
+        LIMIT ?
+      `, `"${q.replace(/"/g, '""')}"*`, n)
+    } catch {
+      return dbAll(`
+        SELECT p.id, p.title, p.icon, p.project_id, p.updated_at,
+               pr.name AS project_name, pr.color AS project_color, pr.icon AS project_icon
+        FROM pages p
+        JOIN projects pr ON pr.id = p.project_id
+        WHERE p.is_deleted = 0
+          AND p.title LIKE ?
+        ORDER BY p.updated_at DESC
+        LIMIT ?
+      `, `%${q}%`, n)
+    }
+  })
+
+  api('pages:reindexAll', () => {
+    const pages = dbAll(`SELECT id, project_id, title, body_json FROM pages WHERE is_deleted = 0`)
+    dbRun(`DELETE FROM search_index WHERE entity_type = 'page'`)
+    for (const p of pages) {
+      ftsUpsert(p.id, p.project_id, p.title, extractBodyText(p.body_json))
+    }
+    return { indexed: pages.length }
   })
 
   api('pages:listRecent', ({ limit }) => {
@@ -585,4 +709,113 @@ export function registerIpcHandlers(): void {
     const rows = dbAll('SELECT key, value FROM settings')
     return Object.fromEntries(rows.map((r: any) => [r.key, r.value]))
   })
+
+  // ── Tags globais ──────────────────────────────────────────────────────────
+  api('tags:list', () => {
+    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
+    return dbAll('SELECT * FROM tags WHERE workspace_id = ? ORDER BY name', ws.id)
+  })
+
+  api('tags:create', ({ name, color }) => {
+    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
+    const r  = dbRun('INSERT OR IGNORE INTO tags (workspace_id, name, color) VALUES (?, ?, ?)',
+      ws.id, name, color ?? null)
+    return dbGet('SELECT * FROM tags WHERE id = ?', r.lastInsertRowid)
+  })
+
+  api('tags:delete', ({ id }) =>
+    dbRun('DELETE FROM tags WHERE id = ?', id)
+  )
+
+  api('tags:listForPage', ({ page_id }) =>
+    dbAll(`
+      SELECT t.* FROM tags t
+      JOIN page_tags pt ON pt.tag_id = t.id
+      WHERE pt.page_id = ?
+      ORDER BY t.name
+    `, page_id)
+  )
+
+  api('tags:assign', ({ page_id, tag_id }) =>
+    dbRun('INSERT OR IGNORE INTO page_tags (page_id, tag_id) VALUES (?, ?)', page_id, tag_id)
+  )
+
+  api('tags:remove', ({ page_id, tag_id }) =>
+    dbRun('DELETE FROM page_tags WHERE page_id = ? AND tag_id = ?', page_id, tag_id)
+  )
+
+  // ── Leituras ───────────────────────────────────────────────────────────────
+  api('readings:list', () => {
+    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
+    return dbAll(`SELECT * FROM readings WHERE workspace_id = ? ORDER BY updated_at DESC`, ws.id)
+  })
+
+  api('readings:create', (d) => {
+    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
+    const r = dbRun(`
+      INSERT INTO readings
+        (workspace_id, title, reading_type, author, publisher, year, isbn, status, rating,
+         current_page, total_pages, date_start, date_end, review)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+      ws.id, d.title, d.reading_type ?? 'book', d.author ?? null, d.publisher ?? null,
+      d.year ?? null, d.isbn ?? null, d.status ?? 'want', d.rating ?? null,
+      d.current_page ?? 0, d.total_pages ?? null, d.date_start ?? null,
+      d.date_end ?? null, d.review ?? null
+    )
+    return dbGet('SELECT * FROM readings WHERE id = ?', r.lastInsertRowid)
+  })
+
+  api('readings:update', (d) => {
+    dbRun(`
+      UPDATE readings SET
+        title = ?, reading_type = ?, author = ?, publisher = ?, year = ?,
+        isbn = ?, status = ?, rating = ?, current_page = ?, total_pages = ?,
+        date_start = ?, date_end = ?, review = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `,
+      d.title, d.reading_type, d.author ?? null, d.publisher ?? null, d.year ?? null,
+      d.isbn ?? null, d.status, d.rating ?? null, d.current_page ?? 0,
+      d.total_pages ?? null, d.date_start ?? null, d.date_end ?? null,
+      d.review ?? null, d.id
+    )
+    return dbGet('SELECT * FROM readings WHERE id = ?', d.id)
+  })
+
+  api('readings:delete', ({ id }) =>
+    dbRun('DELETE FROM readings WHERE id = ?', id)
+  )
+
+  // ── Recursos ───────────────────────────────────────────────────────────────
+  api('resources:list', () => {
+    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
+    return dbAll(`SELECT * FROM resources WHERE workspace_id = ? ORDER BY created_at DESC`, ws.id)
+  })
+
+  api('resources:create', (d) => {
+    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
+    const r = dbRun(`
+      INSERT INTO resources (workspace_id, title, resource_type, url, description, tags_json)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `,
+      ws.id, d.title, d.resource_type ?? null, d.url ?? null,
+      d.description ?? null, d.tags_json ?? null
+    )
+    return dbGet('SELECT * FROM resources WHERE id = ?', r.lastInsertRowid)
+  })
+
+  api('resources:update', (d) => {
+    dbRun(`
+      UPDATE resources SET title = ?, resource_type = ?, url = ?, description = ?, tags_json = ?
+      WHERE id = ?
+    `,
+      d.title, d.resource_type ?? null, d.url ?? null,
+      d.description ?? null, d.tags_json ?? null, d.id
+    )
+    return dbGet('SELECT * FROM resources WHERE id = ?', d.id)
+  })
+
+  api('resources:delete', ({ id }) =>
+    dbRun('DELETE FROM resources WHERE id = ?', id)
+  )
 }

@@ -10,6 +10,10 @@ import { NewPageModal } from './components/Pages/NewPageModal'
 import { CosmosLayer } from './components/Cosmos/CosmosLayer'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ToastContainer } from './components/UI/Toast'
+import { SearchModal } from './components/Search/SearchModal'
+import { SettingsView } from './views/Settings/SettingsView'
+import { LibraryView } from './views/Library/LibraryView'
+import { GlobalCalendarView } from './views/GlobalCalendar/GlobalCalendarView'
 import { useAppStore } from './store/useAppStore'
 import { Project, Page, PROJECT_TYPE_ICONS } from './types'
 
@@ -43,6 +47,7 @@ export default function App() {
   const [showNewProject,  setShowNewProject]  = useState(false)
   const [showEditProject, setShowEditProject] = useState(false)
   const [showNewPage,     setShowNewPage]     = useState(false)
+  const [showSearch,      setShowSearch]      = useState(false)
 
   const {
     dark, setDark,
@@ -67,7 +72,19 @@ export default function App() {
     if (!splashDone) return
     loadWorkspace()
     loadProjects()
+    ;(window as any).db.pages.reindexAll()
   }, [splashDone, loadWorkspace, loadProjects])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowSearch(s => !s)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   const toggleTheme = useCallback(() => {
     const next = !dark
@@ -90,6 +107,20 @@ export default function App() {
     setActivePage(page)
     setView('page')
   }
+
+  const handleSearchOpen = useCallback((projectId: number, pageId: number) => {
+    selectProject(projectId)
+    const page = pages.find(p => p.id === pageId)
+    if (page) {
+      setActivePage(page)
+      setView('page')
+      setSection('projects')
+    } else {
+      // Projeto não estava carregado — navegar para o projeto e abrir a página depois
+      setView('project')
+      setSection('projects')
+    }
+  }, [selectProject, pages])
 
   const handleProjectDeleted = () => {
     setView('projects'); setSection('projects'); setActivePage(null)
@@ -167,7 +198,12 @@ export default function App() {
           </div>
 
           {/* Ações contextuais */}
-          <button className="btn btn-ghost btn-sm" style={{ color: ink2 }} title="Ctrl+K">
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ color: ink2 }}
+            title="Ctrl+K"
+            onClick={() => setShowSearch(true)}
+          >
             ⌕ Buscar
           </button>
 
@@ -193,7 +229,7 @@ export default function App() {
         </header>
 
         {/* Conteúdo */}
-        {view === 'dashboard' && <DashboardView dark={dark} onProjectOpen={handleProjectSelect} />}
+        {view === 'dashboard' && <DashboardView dark={dark} onProjectOpen={handleProjectSelect} onPageOpen={handleSearchOpen} />}
 
         {view === 'project' && activeProject && (
           <ProjectDashboardView
@@ -219,13 +255,22 @@ export default function App() {
           />
         )}
 
-        {view === 'calendar'  && <PlaceholderView title="Calendário"    dark={dark} />}
-        {view === 'library'   && <PlaceholderView title="Biblioteca"    dark={dark} />}
+        {view === 'calendar'  && <GlobalCalendarView dark={dark} onPageOpen={handleSearchOpen} />}
+        {view === 'library'   && <LibraryView dark={dark} activeSub={activeSub}
+            onNavigateSub={s => { setActiveSub(s); setSection('library'); setView('library') }} />}
         {view === 'analytics' && <PlaceholderView title="Analytics"     dark={dark} />}
-        {view === 'settings'  && <PlaceholderView title="Configurações" dark={dark} />}
+        {view === 'settings'  && <SettingsView dark={dark} onToggleTheme={toggleTheme} />}
       </div>
 
       {/* Modais */}
+      {showSearch && (
+        <SearchModal
+          dark={dark}
+          onClose={() => setShowSearch(false)}
+          onOpen={handleSearchOpen}
+        />
+      )}
+
       {showNewProject && (
         <NewProjectModal
           onClose={() => setShowNewProject(false)}

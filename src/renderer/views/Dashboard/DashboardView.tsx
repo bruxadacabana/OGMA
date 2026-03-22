@@ -8,6 +8,7 @@ const db = () => (window as any).db
 interface Props {
   dark:          boolean
   onProjectOpen: (id: number) => void
+  onPageOpen:    (projectId: number, pageId: number) => void
 }
 
 // ── Helpers de tempo ─────────────────────────────────────────────────────────
@@ -91,6 +92,8 @@ function getNextSabbat(): { name: string; ptName: string; days: number; symbol: 
 
 function WelcomeWidget({ dark }: { dark: boolean }) {
   const [time, setTime] = useState(formatTime())
+  const workspace = useAppStore(s => s.workspace)
+
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const accent = dark ? '#D4A820' : '#b8860b'
@@ -107,6 +110,7 @@ function WelcomeWidget({ dark }: { dark: boolean }) {
   const phrase   = phrases[new Date().getDate() % phrases.length]
   const hour     = new Date().getHours()
   const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
+  const wsName   = workspace?.name ?? 'Viajante'
 
   useEffect(() => {
     const t = setInterval(() => setTime(formatTime()), 1000)
@@ -124,7 +128,7 @@ function WelcomeWidget({ dark }: { dark: boolean }) {
       <div style={{ position: 'relative', zIndex: 2 }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24,
           fontStyle: 'italic', color: ink, fontWeight: 'normal', marginBottom: 4 }}>
-          {greeting}, Viajante
+          {greeting}, {wsName}
         </h1>
         <p style={{ fontSize: 12, color: ink2, fontStyle: 'italic', marginBottom: 8 }}>{phrase}</p>
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11,
@@ -136,16 +140,96 @@ function WelcomeWidget({ dark }: { dark: boolean }) {
   )
 }
 
+// ── Widget: Estatísticas ──────────────────────────────────────────────────────
+
+interface Stats {
+  total_pages:     number
+  pages_this_week: number
+  active_projects: number
+  total_projects:  number
+}
+
+function StatsWidget({ dark }: { dark: boolean }) {
+  const [stats, setStats] = useState<Stats | null>(null)
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+
+  useEffect(() => {
+    db().dashboard.stats().then((res: any) => {
+      if (res?.ok) setStats(res.data)
+    })
+  }, [])
+
+  const items = stats ? [
+    { label: 'Páginas',         value: stats.total_pages,     sub: `+${stats.pages_this_week} esta semana` },
+    { label: 'Projetos ativos', value: stats.active_projects, sub: `${stats.total_projects} no total` },
+  ] : []
+
+  return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
+        color: ink2, textTransform: 'uppercase', marginBottom: 12 }}>
+        ◈ Estatísticas
+      </div>
+
+      {!stats ? (
+        <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>A carregar…</p>
+      ) : (
+        <div style={{ display: 'flex', gap: 0 }}>
+          {items.map((item, i) => (
+            <div key={item.label} style={{
+              flex: 1,
+              paddingRight: i < items.length - 1 ? 16 : 0,
+              marginRight: i < items.length - 1 ? 16 : 0,
+              borderRight: i < items.length - 1 ? `1px solid ${border}` : 'none',
+            }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 36,
+                fontStyle: 'italic', color: accent, lineHeight: 1, marginBottom: 4 }}>
+                {item.value}
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10,
+                color: ink, letterSpacing: '0.08em' }}>
+                {item.label}
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10,
+                color: ink2, marginTop: 2 }}>
+                {item.sub}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Widget: Projetos Ativos ───────────────────────────────────────────────────
 
 function ProjectsWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen: (id: number) => void }) {
   const projects = useAppStore(s => s.projects)
+  const [pageCounts, setPageCounts] = useState<Record<number, number>>({})
+
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const border = dark ? '#3A3020' : '#C4B9A8'
   const cardBg = dark ? '#211D16' : '#EDE7D9'
 
-  const active = projects.filter(p => p.status === 'active').slice(0, 5)
+  useEffect(() => {
+    db().dashboard.stats().then((res: any) => {
+      if (!res?.ok) return
+      const map: Record<number, number> = {}
+      for (const { project_id, count } of (res.data?.page_counts ?? [])) {
+        map[project_id] = count
+      }
+      setPageCounts(map)
+    })
+  }, [])
+
+  const active = projects.filter(p => p.status === 'active').slice(0, 6)
 
   return (
     <div className="card" style={{ background: cardBg, borderColor: border }}>
@@ -160,6 +244,7 @@ function ProjectsWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen:
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {active.map(p => {
             const color = p.color ?? '#8B7355'
+            const count = pageCounts[p.id] ?? 0
             return (
               <button key={p.id} onClick={() => onProjectOpen(p.id)} style={{
                 display: 'flex', alignItems: 'center', gap: 8,
@@ -179,16 +264,16 @@ function ProjectsWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen:
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {p.name}
                 </span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
-                  color, letterSpacing: '0.04em', flexShrink: 0, opacity: 0.8 }}>
-                  ativo
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10,
+                  color: ink2, flexShrink: 0 }}>
+                  {count} {count === 1 ? 'pág' : 'págs'}
                 </span>
               </button>
             )
           })}
-          {projects.filter(p => p.status === 'active').length > 5 && (
+          {projects.filter(p => p.status === 'active').length > 6 && (
             <p style={{ fontSize: 10, color: ink2, fontStyle: 'italic', textAlign: 'right' }}>
-              +{projects.filter(p => p.status === 'active').length - 5} mais
+              +{projects.filter(p => p.status === 'active').length - 6} mais
             </p>
           )}
         </div>
@@ -199,7 +284,7 @@ function ProjectsWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen:
 
 // ── Widget: Atividade Recente ─────────────────────────────────────────────────
 
-function RecentWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen: (id: number) => void }) {
+function RecentWidget({ dark, onPageOpen }: { dark: boolean; onPageOpen: (projectId: number, pageId: number) => void }) {
   const [pages, setPages] = useState<any[]>([])
 
   useEffect(() => {
@@ -225,7 +310,7 @@ function RecentWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen: (
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {pages.map((p, i) => (
-            <button key={p.id} onClick={() => onProjectOpen(p.project_id)} style={{
+            <button key={p.id} onClick={() => onPageOpen(p.project_id, p.id)} style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '6px 4px', background: 'transparent', border: 'none',
               borderBottom: i < pages.length - 1 ? `1px solid ${border}` : 'none',
@@ -235,7 +320,7 @@ function RecentWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen: (
               onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(232,223,200,0.05)' : 'rgba(44,36,22,0.04)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
-              <span style={{ fontSize: 13, flexShrink: 0 }}>{p.icon ?? '📄'}</span>
+              <span style={{ fontSize: 13, flexShrink: 0 }}>{p.icon ?? '◦'}</span>
               <div style={{ flex: 1, overflow: 'hidden' }}>
                 <div style={{ fontSize: 12, color: ink, fontFamily: 'var(--font-display)',
                   fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden',
@@ -260,7 +345,7 @@ function RecentWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen: (
 
 // ── Widget: Prazos Próximos ───────────────────────────────────────────────────
 
-function PrazosWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen: (id: number) => void }) {
+function PrazosWidget({ dark, onPageOpen }: { dark: boolean; onPageOpen: (projectId: number, pageId: number) => void }) {
   const [items, setItems] = useState<any[]>([])
 
   useEffect(() => {
@@ -293,7 +378,7 @@ function PrazosWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen: (
             const dateLabel  = formatUpcomingDate(item.value_date)
             const isUrgent   = dateLabel === 'hoje' || dateLabel === 'amanhã'
             return (
-              <button key={`${item.id}_${i}`} onClick={() => onProjectOpen(item.project_id)} style={{
+              <button key={`${item.id}_${i}`} onClick={() => onPageOpen(item.project_id, item.id)} style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '5px 8px', border: `1px solid ${border}`,
                 borderLeft: `3px solid ${isUrgent ? ribbon : color}`,
@@ -303,7 +388,7 @@ function PrazosWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen: (
                 onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(232,223,200,0.05)' : 'rgba(44,36,22,0.04)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
               >
-                <span style={{ fontSize: 13, flexShrink: 0 }}>{item.icon ?? '📄'}</span>
+                <span style={{ fontSize: 13, flexShrink: 0 }}>{item.icon ?? '◦'}</span>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                   <div style={{ fontSize: 12, color: ink, fontFamily: 'var(--font-display)',
                     fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -387,7 +472,7 @@ function CosmosWidget({ dark }: { dark: boolean }) {
 
 // ── Dashboard principal ───────────────────────────────────────────────────────
 
-export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen }) => {
+export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen }) => {
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 40px' }}>
       <div style={{
@@ -396,10 +481,11 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen }) => {
         gap: 16,
         maxWidth: 1100,
       }}>
-        <WelcomeWidget dark={dark} />
+        <WelcomeWidget  dark={dark} />
+        <StatsWidget    dark={dark} />
         <ProjectsWidget dark={dark} onProjectOpen={onProjectOpen} />
-        <RecentWidget   dark={dark} onProjectOpen={onProjectOpen} />
-        <PrazosWidget   dark={dark} onProjectOpen={onProjectOpen} />
+        <RecentWidget   dark={dark} onPageOpen={onPageOpen} />
+        <PrazosWidget   dark={dark} onPageOpen={onPageOpen} />
         <CosmosWidget   dark={dark} />
       </div>
     </div>

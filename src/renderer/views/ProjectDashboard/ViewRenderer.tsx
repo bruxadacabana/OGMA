@@ -1,9 +1,13 @@
-import React from 'react'
-import { Page, Project, ProjectView, ProjectProperty } from '../../types'
+import React, { useEffect, useState, useMemo } from 'react'
+import { Page, Project, ProjectView, ProjectProperty, PropOption, PagePropValue } from '../../types'
 import { KanbanView } from '../KanbanView/KanbanView'
 import { CalendarView } from '../CalendarView/CalendarView'
 import { TimelineView } from '../TimelineView/TimelineView'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
+import { AcademicProgressView } from '../AcademicProgress/AcademicProgressView'
+import { useAppStore } from '../../store/useAppStore'
+
+const db = () => (window as any).db
 
 export interface ViewRendererProps {
   view:       ProjectView
@@ -22,8 +26,9 @@ export const ViewRenderer: React.FC<ViewRendererProps> = (props) => {
     case 'list':     return <ListView     {...props} />
     case 'calendar': return <CalendarView {...props} />
     case 'timeline': return <TimelineView {...props} />
-    case 'gallery':  return <GalleryView  {...props} />
-    default:         return <ListView     {...props} />
+    case 'gallery':  return <GalleryView          {...props} />
+    case 'progress': return <AcademicProgressView {...props} />
+    default:         return <ListView             {...props} />
   }
 }
 
@@ -37,46 +42,129 @@ const TableView: React.FC<ViewRendererProps> = ({
   const border = dark ? '#3A3020' : '#C4B9A8'
   const color  = project.color ?? '#8B7355'
 
-  const visibleProps = properties.slice(0, 4)
+  const [editCell,    setEditCell]    = useState<{ pageId: number; propId: number } | null>(null)
+  const [propOptions, setPropOptions] = useState<Record<number, PropOption[]>>({})
+  const [sortCol,     setSortCol]     = useState<number | 'title' | null>(null)
+  const [sortDir,     setSortDir]     = useState<'asc' | 'desc'>('asc')
+
+  const { loadPages } = useAppStore()
+
+  // Buscar opções de propriedades select/multi_select
+  useEffect(() => {
+    const selects = properties.filter(p =>
+      p.prop_type === 'select' || p.prop_type === 'multi_select'
+    )
+    if (!selects.length) return
+    Promise.all(
+      selects.map(p =>
+        db().properties.getOptions(p.id).then((res: any) => ({
+          propId:  p.id,
+          options: res?.ok ? (res.data ?? []) : [],
+        }))
+      )
+    ).then(results => {
+      const map: Record<number, PropOption[]> = {}
+      results.forEach(r => { map[r.propId] = r.options })
+      setPropOptions(map)
+    })
+  }, [properties])
+
+  // Ordenação
+  const toggleSort = (col: number | 'title') => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  const sortedPages = useMemo(() => {
+    if (!sortCol) return pages
+    return [...pages].sort((a, b) => {
+      let va: string | number = ''
+      let vb: string | number = ''
+      if (sortCol === 'title') {
+        va = a.title.toLowerCase()
+        vb = b.title.toLowerCase()
+      } else {
+        const pva  = a.prop_values?.find(v => v.property_id === sortCol)
+        const pvb  = b.prop_values?.find(v => v.property_id === sortCol)
+        const prop = properties.find(p => p.id === sortCol)
+        if (prop?.prop_type === 'number') {
+          va = pva?.value_num ?? -Infinity
+          vb = pvb?.value_num ?? -Infinity
+        } else if (prop?.prop_type === 'date') {
+          va = pva?.value_date ?? ''
+          vb = pvb?.value_date ?? ''
+        } else {
+          va = (pva?.value_text ?? '').toLowerCase()
+          vb = (pvb?.value_text ?? '').toLowerCase()
+        }
+      }
+      const cmp = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb
+        : String(va).localeCompare(String(vb), 'pt-BR')
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [pages, sortCol, sortDir, properties])
+
+  const setPropValue = async (pageId: number, propId: number, field: string, value: any) => {
+    setEditCell(null)
+    await db().pages.setPropValue({ page_id: pageId, property_id: propId, [field]: value })
+    loadPages(project.id)
+  }
+
+  const visibleProps = properties.slice(0, 6)
+
+  const thBase: React.CSSProperties = {
+    textAlign:     'left',
+    fontFamily:    'var(--font-mono)',
+    fontSize:      9,
+    letterSpacing: '0.15em',
+    fontWeight:    'normal',
+    textTransform: 'uppercase',
+    cursor:        'pointer',
+    userSelect:    'none',
+    whiteSpace:    'nowrap',
+  }
+
+  const sortArrow = (col: number | 'title') =>
+    sortCol === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''
 
   return (
     <div style={{ flex: 1, overflow: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${border}` }}>
-            <th style={{
-              padding: '8px 20px', textAlign: 'left',
-              fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
-              color: ink2, fontWeight: 'normal', textTransform: 'uppercase',
-            }}>
-              Título
+            <th
+              style={{ ...thBase, padding: '8px 20px', color: sortCol === 'title' ? color : ink2 }}
+              onClick={() => toggleSort('title')}
+              title="Ordenar por título"
+            >
+              Título{sortArrow('title')}
             </th>
             {visibleProps.map(p => (
-              <th key={p.id} style={{
-                padding: '8px 16px', textAlign: 'left',
-                fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
-                color: ink2, fontWeight: 'normal', textTransform: 'uppercase',
-                whiteSpace: 'nowrap',
-              }}>
-                {p.name}
+              <th
+                key={p.id}
+                style={{ ...thBase, padding: '8px 12px', color: sortCol === p.id ? color : ink2 }}
+                onClick={() => toggleSort(p.id)}
+                title={`Ordenar por ${p.name}`}
+              >
+                {p.name}{sortArrow(p.id)}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {pages.map((page, i) => (
+          {sortedPages.map(page => (
             <tr
               key={page.id}
-              onClick={() => onPageOpen(page)}
-              style={{
-                borderBottom: `1px solid ${border}`,
-                cursor: 'pointer',
-                transition: 'background 100ms',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(232,223,200,0.04)' : 'rgba(44,36,22,0.04)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              style={{ borderBottom: `1px solid ${border}` }}
             >
-              <td style={{ padding: '9px 20px' }}>
+              {/* Célula de título — abre a página */}
+              <td
+                style={{ padding: '9px 20px', cursor: 'pointer' }}
+                onClick={() => { setEditCell(null); onPageOpen(page) }}
+                onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(232,223,200,0.04)' : 'rgba(44,36,22,0.04)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 14, flexShrink: 0 }}>{page.icon ?? '📄'}</span>
                   <span style={{
@@ -89,16 +177,58 @@ const TableView: React.FC<ViewRendererProps> = ({
                   </span>
                 </div>
               </td>
+
+              {/* Células de propriedade — editáveis inline */}
               {visibleProps.map(p => {
-                const pv = page.prop_values?.find(v => v.property_id === p.id)
+                const pv        = page.prop_values?.find(v => v.property_id === p.id)
+                const isEditing = editCell?.pageId === page.id && editCell?.propId === p.id
+                const editable  = p.prop_type !== 'multi_select'
+
                 return (
-                  <td key={p.id} style={{ padding: '9px 16px' }}>
-                    <PropCell pv={pv} propType={p.prop_type} dark={dark} ink2={ink2} border={border} />
+                  <td
+                    key={p.id}
+                    style={{
+                      padding:   isEditing ? '5px 8px' : '9px 12px',
+                      cursor:    editable ? 'pointer' : 'default',
+                      minWidth:  100,
+                      maxWidth:  220,
+                    }}
+                    onClick={() => {
+                      if (!editable || isEditing) return
+                      if (p.prop_type === 'checkbox') {
+                        setPropValue(page.id, p.id, 'value_bool', pv?.value_bool ? 0 : 1)
+                        return
+                      }
+                      setEditCell({ pageId: page.id, propId: p.id })
+                    }}
+                    onMouseEnter={e => {
+                      if (!isEditing && editable)
+                        e.currentTarget.style.background = dark ? 'rgba(232,223,200,0.04)' : 'rgba(44,36,22,0.04)'
+                    }}
+                    onMouseLeave={e => {
+                      if (!isEditing) e.currentTarget.style.background = 'transparent'
+                    }}
+                  >
+                    {isEditing ? (
+                      <InlineCellEditor
+                        prop={p} pv={pv}
+                        options={propOptions[p.id] ?? []}
+                        onSet={(field, value) => setPropValue(page.id, p.id, field, value)}
+                        onClose={() => setEditCell(null)}
+                        dark={dark} ink={ink} ink2={ink2} border={border}
+                      />
+                    ) : (
+                      <PropCell
+                        pv={pv} propType={p.prop_type}
+                        dark={dark} ink2={ink2} border={border}
+                      />
+                    )}
                   </td>
                 )
               })}
             </tr>
           ))}
+
           <tr>
             <td colSpan={visibleProps.length + 1} style={{ padding: '6px 20px' }}>
               <button className="btn btn-ghost btn-sm" onClick={onNewPage}
@@ -122,6 +252,97 @@ const TableView: React.FC<ViewRendererProps> = ({
   )
 }
 
+// ── InlineCellEditor ──────────────────────────────────────────────────────────
+
+function InlineCellEditor({ prop, pv, options, onSet, onClose, dark, ink, ink2, border }: {
+  prop:    ProjectProperty
+  pv:      PagePropValue | undefined
+  options: PropOption[]
+  onSet:   (field: string, value: any) => void
+  onClose: () => void
+  dark: boolean; ink: string; ink2: string; border: string
+}) {
+  const base: React.CSSProperties = {
+    fontSize:     11,
+    color:        ink,
+    background:   dark ? '#211D16' : '#EDE7D9',
+    border:       `1px solid ${border}`,
+    borderRadius: 2,
+    padding:      '2px 6px',
+    outline:      'none',
+  }
+
+  if (prop.prop_type === 'select') {
+    return (
+      <select
+        autoFocus
+        value={pv?.value_text ?? ''}
+        onChange={e => onSet('value_text', e.target.value || null)}
+        onBlur={onClose}
+        style={{ ...base, width: '100%', maxWidth: 180 }}
+      >
+        <option value="">—</option>
+        {options.map(o => (
+          <option key={o.id} value={o.label}>{o.label}</option>
+        ))}
+      </select>
+    )
+  }
+
+  if (prop.prop_type === 'text' || prop.prop_type === 'url') {
+    return (
+      <input
+        autoFocus
+        type="text"
+        defaultValue={pv?.value_text ?? ''}
+        onBlur={e => onSet('value_text', e.target.value.trim() || null)}
+        onKeyDown={e => {
+          if (e.key === 'Enter')  onSet('value_text', (e.target as HTMLInputElement).value.trim() || null)
+          if (e.key === 'Escape') onClose()
+        }}
+        style={{ ...base, width: '100%', maxWidth: 180 }}
+      />
+    )
+  }
+
+  if (prop.prop_type === 'number') {
+    return (
+      <input
+        autoFocus
+        type="number"
+        defaultValue={pv?.value_num ?? ''}
+        onBlur={e => {
+          const v = parseFloat(e.target.value)
+          onSet('value_num', isNaN(v) ? null : v)
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            const v = parseFloat((e.target as HTMLInputElement).value)
+            onSet('value_num', isNaN(v) ? null : v)
+          }
+          if (e.key === 'Escape') onClose()
+        }}
+        style={{ ...base, width: 90 }}
+      />
+    )
+  }
+
+  if (prop.prop_type === 'date') {
+    return (
+      <input
+        autoFocus
+        type="date"
+        defaultValue={pv?.value_date ?? ''}
+        onChange={e => onSet('value_date', e.target.value || null)}
+        onBlur={onClose}
+        style={{ ...base, colorScheme: dark ? 'dark' : 'light' }}
+      />
+    )
+  }
+
+  return null
+}
+
 // ── ListView ──────────────────────────────────────────────────────────────────
 
 const ListView: React.FC<ViewRendererProps> = ({
@@ -130,7 +351,6 @@ const ListView: React.FC<ViewRendererProps> = ({
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const border = dark ? '#3A3020' : '#C4B9A8'
-  const cardBg = dark ? '#211D16' : '#EDE7D9'
   const color  = project.color ?? '#8B7355'
 
   if (pages.length === 0) {
@@ -189,7 +409,7 @@ const ListView: React.FC<ViewRendererProps> = ({
                       fontFamily: 'var(--font-mono)', fontSize: 9,
                       letterSpacing: '0.04em', color: ink2,
                     }}>
-                      {pv.prop_type === 'date'   ? formatDate(pv.value_date) : pv.value_text}
+                      {pv.prop_type === 'date' ? formatDate(pv.value_date) : pv.value_text}
                     </span>
                   ))}
                 </div>
@@ -265,9 +485,9 @@ const GalleryView: React.FC<ViewRendererProps> = ({
           >
             {/* Cover strip */}
             <div style={{
-              height: page.cover_color ? 48 : 8,
+              height:     page.cover_color ? 48 : 8,
               background: page.cover_color ?? color,
-              opacity: page.cover_color ? 1 : 0.35,
+              opacity:    page.cover_color ? 1 : 0.35,
               flexShrink: 0,
             }} />
 
@@ -287,15 +507,14 @@ const GalleryView: React.FC<ViewRendererProps> = ({
                 </span>
               </div>
 
-              {/* Props */}
               {previewProps.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {previewProps.map(p => {
-                    const pv = page.prop_values?.find(v => v.property_id === p.id)
+                    const pv  = page.prop_values?.find(v => v.property_id === p.id)
                     if (!pv) return null
                     const val = p.prop_type === 'date'     ? formatDate(pv.value_date)
                               : p.prop_type === 'checkbox' ? (pv.value_bool ? '☑' : null)
-                              : p.prop_type === 'number'   ? (pv.value_num  != null ? String(pv.value_num) : null)
+                              : p.prop_type === 'number'   ? (pv.value_num != null ? String(pv.value_num) : null)
                               : pv.value_text
                     if (!val) return null
                     return (
@@ -409,6 +628,27 @@ function PropCell({ pv, propType, dark, ink2, border }: {
         {pv.value_text}
       </span>
     )
+  }
+  if (propType === 'multi_select' && pv.value_json) {
+    try {
+      const tags: string[] = JSON.parse(pv.value_json)
+      if (!tags.length) return <span style={{ color: border, fontSize: 11 }}>—</span>
+      return (
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+          {tags.slice(0, 3).map(t => (
+            <span key={t} style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px',
+              border: `1px solid ${border}`, borderRadius: 2, color: ink2,
+            }}>
+              {t}
+            </span>
+          ))}
+          {tags.length > 3 && (
+            <span style={{ fontSize: 9, color: border }}>+{tags.length - 3}</span>
+          )}
+        </div>
+      )
+    } catch { return <span style={{ color: border, fontSize: 11 }}>—</span> }
   }
   if (propType === 'number' && pv.value_num !== null) {
     return <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink2 }}>{pv.value_num}</span>

@@ -10,6 +10,130 @@ import './PageView.css'
 const log = createLogger('PageView')
 const db  = () => (window as any).db
 
+// ── Tags Globais ──────────────────────────────────────────────────────────────
+
+interface Tag { id: number; name: string; color: string | null }
+
+function GlobalTagPanel({ pageId, dark }: { pageId: number; dark: boolean }) {
+  const [allTags,    setAllTags]    = useState<Tag[]>([])
+  const [pageTags,   setPageTags]   = useState<Tag[]>([])
+  const [newTag,     setNewTag]     = useState('')
+  const [showInput,  setShowInput]  = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const bg     = dark ? '#1A1610' : '#F5F0E8'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  const loadTags = useCallback(() => {
+    db().tags.list().then((res: any) => { if (res?.ok) setAllTags(res.data ?? []) })
+    db().tags.listForPage(pageId).then((res: any) => { if (res?.ok) setPageTags(res.data ?? []) })
+  }, [pageId])
+
+  useEffect(() => { loadTags() }, [loadTags])
+  useEffect(() => { if (showInput) inputRef.current?.focus() }, [showInput])
+
+  const pageTagIds = new Set(pageTags.map(t => t.id))
+
+  const handleToggle = async (tag: Tag) => {
+    if (pageTagIds.has(tag.id)) {
+      await db().tags.remove(pageId, tag.id)
+    } else {
+      await db().tags.assign(pageId, tag.id)
+    }
+    loadTags()
+  }
+
+  const handleCreate = async () => {
+    const name = newTag.trim()
+    if (!name) return
+    const res = await db().tags.create(name)
+    if (res?.ok && res.data) {
+      await db().tags.assign(pageId, res.data.id)
+    }
+    setNewTag('')
+    setShowInput(false)
+    loadTags()
+  }
+
+  if (allTags.length === 0 && !showInput) {
+    return (
+      <div style={{
+        padding: '4px 16px 0', background: bg,
+        borderTop: `1px solid ${border}`,
+      }}>
+        <button onClick={() => setShowInput(true)} style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em',
+          color: ink2, background: 'none', border: 'none', cursor: 'pointer',
+          padding: '6px 0',
+        }}>
+          + Tag global
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      padding: '8px 16px', background: bg,
+      borderTop: `1px solid ${border}`,
+      display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 5,
+    }}>
+      <span style={{
+        fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em',
+        color: ink2, flexShrink: 0,
+      }}>
+        TAGS
+      </span>
+
+      {allTags.map(tag => {
+        const active = pageTagIds.has(tag.id)
+        const color  = tag.color ?? ink2
+        return (
+          <button key={tag.id} onClick={() => handleToggle(tag)} style={{
+            fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.06em',
+            padding: '2px 8px', borderRadius: 1, cursor: 'pointer', transition: 'all 80ms',
+            border: `1px solid ${active ? color : border}`,
+            background: active ? color + '22' : 'transparent',
+            color: active ? color : ink2,
+          }}>
+            {tag.name}
+          </button>
+        )
+      })}
+
+      {showInput ? (
+        <input
+          ref={inputRef}
+          value={newTag}
+          onChange={e => setNewTag(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') handleCreate()
+            if (e.key === 'Escape') { setShowInput(false); setNewTag('') }
+          }}
+          onBlur={() => { if (!newTag.trim()) setShowInput(false) }}
+          placeholder="nova tag…"
+          style={{
+            fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.06em',
+            padding: '2px 8px', borderRadius: 1, outline: 'none',
+            border: `1px solid ${accent}`, background: 'transparent',
+            color: accent, width: 100,
+          }}
+        />
+      ) : (
+        <button onClick={() => setShowInput(true)} style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2,
+          background: 'none', border: `1px dashed ${border}`, borderRadius: 1,
+          padding: '2px 8px', cursor: 'pointer',
+        }}>
+          +
+        </button>
+      )}
+    </div>
+  )
+}
+
 interface Props {
   page:    Page
   project: Project
@@ -550,6 +674,9 @@ export const PageView: React.FC<Props> = ({ page, project, dark, onBack }) => {
           onChanged={() => loadPages(project.id)}
         />
       )}
+
+      {/* Tags Globais */}
+      <GlobalTagPanel pageId={page.id} dark={dark} />
 
       {/* Editor */}
       <div className="page-editor-area">

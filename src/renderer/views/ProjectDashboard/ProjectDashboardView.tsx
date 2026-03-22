@@ -22,6 +22,7 @@ const VIEW_TYPE_ICONS: Record<string, string> = {
   calendar: '☽',
   gallery:  '⊞',
   timeline: '⟶',
+  progress: '◎',
 }
 
 // ── Header ────────────────────────────────────────────────────────────────────
@@ -84,7 +85,7 @@ function ProjectHeader({ project, dark, onEdit }: {
 export const ProjectDashboardView: React.FC<Props> = ({
   project, dark, onPageOpen, onEdit, onNewPage,
 }) => {
-  const { pages, projectProperties, projectViews, activeViewId, setActiveView, loadViews, loadProperties } = useAppStore()
+  const { pages, projectProperties, projectViews, activeViewId, setActiveView, loadViews, loadProperties, loadPages } = useAppStore()
   const [showNewView,  setShowNewView]  = useState(false)
   const [showManageProps, setShowManageProps] = useState(false)
 
@@ -191,7 +192,7 @@ export const ProjectDashboardView: React.FC<Props> = ({
           project={project}
           dark={dark}
           onClose={() => setShowManageProps(false)}
-          onChanged={() => loadProperties(project.id)}
+          onChanged={() => { loadProperties(project.id); loadViews(project.id); loadPages(project.id) }}
         />
       )}
     </div>
