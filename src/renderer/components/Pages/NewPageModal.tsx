@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Modal } from '../UI/Modal'
+import { IconPicker } from '../UI/IconPicker'
 import { Project } from '../../types'
 import { useAppStore } from '../../store/useAppStore'
 import { fromIpc } from '../../types/errors'
@@ -42,13 +43,9 @@ export const NewPageModal: React.FC<Props> = ({ project, onClose, onCreated }) =
       <div className="form-row" style={{ marginBottom: 14 }}>
         <div className="form-group" style={{ flex: 0, minWidth: 56 }}>
           <label className="form-label" style={{ color: ink2 }}>Ícone</label>
-          <input
-            className="input"
-            value={icon}
-            onChange={e => setIcon(e.target.value)}
-            style={{ textAlign: 'center', fontSize: 20, padding: '4px 6px' }}
-            maxLength={4}
-          />
+          <div style={{ paddingTop: 4 }}>
+            <IconPicker value={icon} onChange={setIcon} dark={dark} size={26} />
+          </div>
         </div>
         <div className="form-group" style={{ flex: 1 }}>
           <label className="form-label" style={{ color: ink2 }}>Título *</label>

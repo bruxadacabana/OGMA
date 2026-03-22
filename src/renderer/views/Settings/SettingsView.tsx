@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { fromIpc } from '../../types/errors'
+import { IconPicker } from '../../components/UI/IconPicker'
 import './SettingsView.css'
 
 const db = () => (window as any).db
@@ -82,19 +83,13 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
           <div className="settings-row">
             <span className="settings-row-label">Ícone</span>
             <div className="settings-row-control">
-              <input
-                className="settings-input-icon"
-                value={icon}
-                onChange={e => setIcon(e.target.value)}
-                maxLength={2}
-                title="Emoji ou símbolo"
-              />
+              <IconPicker value={icon} onChange={setIcon} dark={dark} size={22} />
               <span style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10,
                 color: 'var(--ink-faint)',
               }}>
-                emoji ou símbolo
+                clique para escolher
               </span>
             </div>
           </div>

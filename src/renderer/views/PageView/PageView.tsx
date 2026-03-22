@@ -3,6 +3,7 @@ import { Page, Project, ProjectProperty, PagePropValue, PropOption } from '../..
 import { fromIpc } from '../../types/errors'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { EditorFrame } from '../../components/Editor/EditorFrame'
+import { IconPicker } from '../../components/UI/IconPicker'
 import { useAppStore } from '../../store/useAppStore'
 import { createLogger } from '../../utils/logger'
 import './PageView.css'
@@ -1105,13 +1106,12 @@ export const PageView: React.FC<Props> = ({ page, project, dark, onBack }) => {
   const [lastSaved,    setLastSaved]    = useState<Date | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleVal,     setTitleVal]     = useState(page.title)
-  const [editingIcon,  setEditingIcon]  = useState(false)
-  const [iconVal,      setIconVal]      = useState(page.icon ?? '📄')
+  const [iconVal, setIconVal] = useState(page.icon ?? '📄')
 
   // Sync title/icon if page prop changes (e.g., store reload)
   useEffect(() => {
     if (!editingTitle) setTitleVal(page.title)
-    if (!editingIcon)  setIconVal(page.icon ?? '📄')
+    setIconVal(page.icon ?? '📄')
   }, [page.title, page.icon])
 
   const color  = project.color ?? '#8B7355'
@@ -1149,19 +1149,6 @@ export const PageView: React.FC<Props> = ({ page, project, dark, onBack }) => {
     loadPages(project.id)
   }, [titleVal, page.id, project.id, loadPages, pushToast])
 
-  const saveIcon = useCallback(async () => {
-    setEditingIcon(false)
-    const i = iconVal.trim() || '📄'
-    setIconVal(i)
-    const result = await fromIpc<Page>(
-      () => db().pages.update({ id: page.id, icon: i }),
-      'page:saveIcon',
-    )
-    if (result.isErr()) {
-      pushToast({ kind: 'error', title: 'Erro ao guardar ícone', detail: result.error.message })
-    }
-    loadPages(project.id)
-  }, [iconVal, page.id, project.id, loadPages, pushToast])
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm(`Excluir "${page.title}"? Esta ação pode ser desfeita restaurando do lixo.`)) return
@@ -1193,29 +1180,21 @@ export const PageView: React.FC<Props> = ({ page, project, dark, onBack }) => {
 
         <div className="page-header-content" style={{ position: 'relative', zIndex: 2 }}>
           {/* Ícone editável */}
-          {editingIcon ? (
-            <input
-              autoFocus
-              value={iconVal}
-              onChange={e => setIconVal(e.target.value)}
-              onBlur={saveIcon}
-              onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') saveIcon() }}
-              style={{
-                fontSize: 22, width: 40, textAlign: 'center', padding: '2px',
-                border: `1px solid ${border}`, borderRadius: 2,
-                background: 'transparent', color: ink, flexShrink: 0,
-              }}
-              maxLength={4}
-            />
-          ) : (
-            <span
-              style={{ fontSize: 28, lineHeight: 1, flexShrink: 0, cursor: 'pointer' }}
-              onClick={() => setEditingIcon(true)}
-              title="Clique para alterar o ícone"
-            >
-              {iconVal}
-            </span>
-          )}
+          <IconPicker
+            value={iconVal}
+            onChange={async (i) => {
+              setIconVal(i)
+              const result = await fromIpc<Page>(
+                () => db().pages.update({ id: page.id, icon: i }),
+                'page:saveIcon',
+              )
+              if (result.isErr())
+                pushToast({ kind: 'error', title: 'Erro ao guardar ícone', detail: result.error.message })
+              else loadPages(project.id)
+            }}
+            dark={dark}
+            size={28}
+          />
 
           <div style={{ flex: 1, overflow: 'hidden' }}>
             {/* Título editável */}
