@@ -519,6 +519,44 @@ export function registerIpcHandlers(): void {
     )
     const pageId = Number(r.lastInsertRowid)
     ftsUpsert(pageId, data.project_id, data.title ?? 'Sem título', extractBodyText(data.body_json))
+
+    // Auto-gerar código PREFIX### para projetos académicos
+    if (data.project_id) {
+      try {
+        const project = dbGet(`SELECT project_type FROM projects WHERE id = ?`, data.project_id)
+        if (project?.project_type === 'academic') {
+          const codigoProp = dbGet(
+            `SELECT id FROM project_properties WHERE project_id = ? AND prop_key = 'codigo'`,
+            data.project_id
+          )
+          if (codigoProp) {
+            const existingCodes = dbAll(
+              `SELECT ppv.value_text FROM page_prop_values ppv WHERE ppv.property_id = ? AND ppv.value_text IS NOT NULL`,
+              codigoProp.id
+            ).map((row: any) => row.value_text as string)
+
+            const title  = data.title ?? 'Sem título'
+            const prefix = title
+              .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+              .toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3).padEnd(3, 'X')
+            const pattern = new RegExp(`^${prefix}(\\d+)$`)
+            const nums = existingCodes
+              .map(c => c?.match(pattern)?.[1])
+              .filter(Boolean).map(Number)
+            const next = nums.length > 0 ? Math.max(...nums) + 1 : 1
+            const codigo = `${prefix}${String(next).padStart(3, '0')}`
+
+            dbRun(
+              `INSERT INTO page_prop_values (page_id, property_id, value_text)
+               VALUES (?, ?, ?)
+               ON CONFLICT(page_id, property_id) DO UPDATE SET value_text = excluded.value_text`,
+              pageId, codigoProp.id, codigo
+            )
+          }
+        }
+      } catch { /* não bloqueia a criação da página */ }
+    }
+
     return dbGet('SELECT * FROM pages WHERE id = ?', pageId)
   })
 

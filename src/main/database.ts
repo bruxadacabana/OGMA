@@ -85,6 +85,23 @@ function initSchema(db: Database.Database): void {
     )
   `) } catch {}
 
+  // Garante propriedade "Código" (PREFIX###) em projetos académicos existentes
+  try {
+    const academicProjects = db.prepare(
+      `SELECT id FROM projects WHERE project_type = 'academic'`
+    ).all() as { id: number }[]
+    const checkCodigo = db.prepare(
+      `SELECT id FROM project_properties WHERE project_id = ? AND prop_key = 'codigo'`
+    )
+    const insertCodigo = db.prepare(
+      `INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order)
+       VALUES (?, 'Código', 'codigo', 'text', 1, 0)`
+    )
+    for (const { id } of academicProjects) {
+      if (!checkCodigo.get(id)) insertCodigo.run(id)
+    }
+  } catch {}
+
   // Pré-requisitos entre páginas (projetos académicos)
   try { db.exec(`
     CREATE TABLE IF NOT EXISTS page_prerequisites (

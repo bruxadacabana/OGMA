@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { ViewRendererProps } from '../ProjectDashboard/ViewRenderer'
+import { disciplineColor, disciplineColorAlpha } from '../../utils/colorUtils'
 
 export const AcademicProgressView: React.FC<ViewRendererProps> = ({
   project, pages, properties, dark, onPageOpen, onNewPage,
@@ -12,10 +13,11 @@ export const AcademicProgressView: React.FC<ViewRendererProps> = ({
   const color  = project.color ?? '#8B7355'
 
   // Encontrar propriedades relevantes
-  const statusProp   = properties.find(p => p.prop_key === 'status')
+  const statusProp    = properties.find(p => p.prop_key === 'status')
   const trimestreProp = properties.find(p => p.prop_key === 'trimestre')
-  const notaProp     = properties.find(p => p.prop_key === 'nota')
-  const creditosProp = properties.find(p => p.prop_key === 'creditos')
+  const notaProp      = properties.find(p => p.prop_key === 'nota')
+  const creditosProp  = properties.find(p => p.prop_key === 'creditos')
+  const codigoProp    = properties.find(p => p.prop_key === 'codigo')
 
   const getPV = (page: typeof pages[0], propId: number | undefined) => {
     if (!propId) return undefined
@@ -91,6 +93,10 @@ export const AcademicProgressView: React.FC<ViewRendererProps> = ({
     if (!creditosProp) return null
     return getPV(page, creditosProp.id)?.value_num ?? null
   }
+  const getCodigo = (page: typeof pages[0]) => {
+    if (!codigoProp) return null
+    return getPV(page, codigoProp.id)?.value_text ?? null
+  }
 
   const statusColors: Record<string, string> = {
     'Cursando':  accent,
@@ -151,7 +157,7 @@ export const AcademicProgressView: React.FC<ViewRendererProps> = ({
       </div>
 
       {/* ── Semestres ── */}
-      {bySemester.length === 0 ? (
+      {byTrimester.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
           gap: 12, padding: 40, color: ink2, fontStyle: 'italic' }}>
           <span style={{ fontSize: 32, opacity: 0.4 }}>◎</span>
@@ -212,7 +218,10 @@ export const AcademicProgressView: React.FC<ViewRendererProps> = ({
                     const status   = getStatus(page)
                     const nota     = getNota(page)
                     const creditos = getCreditos(page)
+                    const codigo   = getCodigo(page)
                     const stColor  = status ? (statusColors[status] ?? ink2) : ink2
+                    const dColor   = disciplineColor(page.title, dark)
+                    const dColorBg = disciplineColorAlpha(page.title, dark, 0.08)
 
                     return (
                       <button key={page.id}
@@ -228,15 +237,35 @@ export const AcademicProgressView: React.FC<ViewRendererProps> = ({
                         onMouseLeave={e => (e.currentTarget.style.transform = 'none')}
                       >
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 5 }}>
-                          <span style={{ fontSize: 14, flexShrink: 0 }}>{page.icon ?? '◦'}</span>
+                          {/* Ícone com cor automática da disciplina */}
                           <span style={{
-                            fontFamily: 'var(--font-display)', fontSize: 13, fontStyle: 'italic',
-                            color: ink, flex: 1, lineHeight: 1.3,
-                            display: '-webkit-box', WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                            fontSize: 14, flexShrink: 0, lineHeight: 1,
+                            width: 26, height: 26, display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            borderRadius: 2, background: dColorBg,
+                            border: `1px solid ${dColor}33`,
                           }}>
-                            {page.title}
+                            {page.icon ?? '◦'}
                           </span>
+                          <div style={{ flex: 1, overflow: 'hidden' }}>
+                            {codigo && (
+                              <div style={{
+                                fontFamily: 'var(--font-mono)', fontSize: 8,
+                                letterSpacing: '0.12em', color: dColor,
+                                marginBottom: 2,
+                              }}>
+                                {codigo}
+                              </div>
+                            )}
+                            <span style={{
+                              fontFamily: 'var(--font-display)', fontSize: 13, fontStyle: 'italic',
+                              color: ink, lineHeight: 1.3,
+                              display: '-webkit-box', WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                            }}>
+                              {page.title}
+                            </span>
+                          </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           {status && (
