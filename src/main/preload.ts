@@ -59,6 +59,18 @@ contextBridge.exposeInMainWorld('db', {
     assign:      (page_id: number, tag_id: number)     => api('tags:assign',      { page_id, tag_id }),
     remove:      (page_id: number, tag_id: number)     => api('tags:remove',      { page_id, tag_id }),
   },
+  prerequisites: {
+    list:           (page_id: number)                            => api('prerequisites:list',           { page_id }),
+    listDependents: (page_id: number)                            => api('prerequisites:listDependents', { page_id }),
+    add:            (page_id: number, prerequisite_id: number)   => api('prerequisites:add',            { page_id, prerequisite_id }),
+    remove:         (page_id: number, prerequisite_id: number)   => api('prerequisites:remove',         { page_id, prerequisite_id }),
+  },
+  backlinks: {
+    list:        (page_id: number)                              => api('backlinks:list',        { page_id }),
+    listOutgoing:(page_id: number)                              => api('backlinks:listOutgoing',{ page_id }),
+    add:         (source_page_id: number, target_page_id: number) => api('backlinks:add',      { source_page_id, target_page_id }),
+    remove:      (source_page_id: number, target_page_id: number) => api('backlinks:remove',   { source_page_id, target_page_id }),
+  },
   readings: {
     list:   ()       => api('readings:list',   {}),
     create: (d: any) => api('readings:create', d),

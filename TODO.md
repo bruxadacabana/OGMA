@@ -32,7 +32,7 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Progresso de leitura por páginas ou porcentagem (escolha ao cadastrar)
 - [ ] Meta de leitura anual (tabela `reading_goals`)
 - [ ] Histórico de versões de página (tabela `page_versions` já existe no schema)
-- [ ] Backlinks: mostrar no PageView as páginas que referenciam a atual
+- [x] Backlinks: mostrar no PageView as páginas que referenciam a atual
 - [ ] Pomodoro / timer com histórico por página (tabela `time_sessions`)
 - [ ] Exportar página como PDF ou Markdown
 
@@ -56,7 +56,7 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 
 - [ ] `colorUtils.ts` — cores HSL automáticas por disciplina
 - [ ] Gerador de código `PREFIX###` automático
-- [ ] Pré-requisitos com detecção de ciclo (BFS)
+- [x] Pré-requisitos entre páginas com detecção de ciclo (IPC + UI no PageView para projetos académicos)
 - [ ] Script de migração do StudyFlow
 
 ---

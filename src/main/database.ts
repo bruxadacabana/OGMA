@@ -85,6 +85,15 @@ function initSchema(db: Database.Database): void {
     )
   `) } catch {}
 
+  // Pré-requisitos entre páginas (projetos académicos)
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS page_prerequisites (
+      page_id         INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+      prerequisite_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+      PRIMARY KEY (page_id, prerequisite_id)
+    )
+  `) } catch {}
+
   // Progresso de leitura por porcentagem
   try { db.exec(`ALTER TABLE readings ADD COLUMN progress_type TEXT DEFAULT 'pages'`) } catch {}
   try { db.exec(`ALTER TABLE readings ADD COLUMN progress_percent INTEGER DEFAULT 0`) } catch {}

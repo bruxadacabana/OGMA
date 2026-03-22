@@ -888,6 +888,79 @@ export function registerIpcHandlers(): void {
     dbRun('DELETE FROM page_tags WHERE page_id = ? AND tag_id = ?', page_id, tag_id)
   )
 
+  // ── Pré-requisitos entre páginas ──────────────────────────────────────────
+  api('prerequisites:list', ({ page_id }) =>
+    dbAll(`
+      SELECT pp.prerequisite_id AS id, p.title, p.icon, p.project_id,
+             pv.value_text AS status_value
+      FROM page_prerequisites pp
+      JOIN pages p ON p.id = pp.prerequisite_id
+      LEFT JOIN page_prop_values pv ON pv.page_id = p.id
+        AND pv.property_id = (
+          SELECT id FROM project_properties
+          WHERE project_id = p.project_id AND prop_key = 'status' LIMIT 1
+        )
+      WHERE pp.page_id = ?
+      ORDER BY p.sort_order, p.title
+    `, page_id)
+  )
+
+  api('prerequisites:listDependents', ({ page_id }) =>
+    dbAll(`
+      SELECT pp.page_id AS id, p.title, p.icon
+      FROM page_prerequisites pp
+      JOIN pages p ON p.id = pp.page_id
+      WHERE pp.prerequisite_id = ?
+      ORDER BY p.sort_order, p.title
+    `, page_id)
+  )
+
+  api('prerequisites:add', ({ page_id, prerequisite_id }) => {
+    if (page_id === prerequisite_id) return { ok: false, error: 'Uma página não pode ser pré-requisito de si mesma.' }
+    // Verificação simples de ciclo: se prerequisite_id já requer page_id, não permitir
+    const cycle = dbGet(`SELECT 1 FROM page_prerequisites WHERE page_id = ? AND prerequisite_id = ?`, prerequisite_id, page_id)
+    if (cycle) return { ok: false, error: 'Isso criaria uma dependência circular.' }
+    try { dbRun(`INSERT OR IGNORE INTO page_prerequisites (page_id, prerequisite_id) VALUES (?, ?)`, page_id, prerequisite_id) } catch {}
+    return { ok: true }
+  })
+
+  api('prerequisites:remove', ({ page_id, prerequisite_id }) =>
+    dbRun(`DELETE FROM page_prerequisites WHERE page_id = ? AND prerequisite_id = ?`, page_id, prerequisite_id)
+  )
+
+  // ── Backlinks ─────────────────────────────────────────────────────────────
+  api('backlinks:list', ({ page_id }) =>
+    dbAll(`
+      SELECT pb.source_page_id AS id, p.title, p.icon, p.project_id, pr.name AS project_name
+      FROM page_backlinks pb
+      JOIN pages p    ON p.id    = pb.source_page_id
+      JOIN projects pr ON pr.id = p.project_id
+      WHERE pb.target_page_id = ?
+      ORDER BY p.title
+    `, page_id)
+  )
+
+  api('backlinks:listOutgoing', ({ page_id }) =>
+    dbAll(`
+      SELECT pb.target_page_id AS id, p.title, p.icon, p.project_id, pr.name AS project_name
+      FROM page_backlinks pb
+      JOIN pages p     ON p.id   = pb.target_page_id
+      JOIN projects pr ON pr.id  = p.project_id
+      WHERE pb.source_page_id = ?
+      ORDER BY p.title
+    `, page_id)
+  )
+
+  api('backlinks:add', ({ source_page_id, target_page_id }) => {
+    if (source_page_id === target_page_id) return { ok: true }
+    try { dbRun(`INSERT OR IGNORE INTO page_backlinks (source_page_id, target_page_id) VALUES (?, ?)`, source_page_id, target_page_id) } catch {}
+    return { ok: true }
+  })
+
+  api('backlinks:remove', ({ source_page_id, target_page_id }) =>
+    dbRun(`DELETE FROM page_backlinks WHERE source_page_id = ? AND target_page_id = ?`, source_page_id, target_page_id)
+  )
+
   // ── Leituras ───────────────────────────────────────────────────────────────
   api('readings:list', () => {
     const ws = dbGet('SELECT id FROM workspaces LIMIT 1')

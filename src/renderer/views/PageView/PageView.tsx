@@ -219,6 +219,357 @@ function GlobalTagPanel({ pageId, dark }: { pageId: number; dark: boolean }) {
   )
 }
 
+// ── Pré-requisitos (projetos académicos) ──────────────────────────────────────
+
+function PrerequisitesPanel({ page, project, dark }: { page: Page; project: Project; dark: boolean }) {
+  const [prereqs,    setPrereqs]    = useState<any[]>([])
+  const [dependents, setDependents] = useState<any[]>([])
+  const [allPages,   setAllPages]   = useState<any[]>([])
+  const [expanded,   setExpanded]   = useState(false)
+  const [query,      setQuery]      = useState('')
+  const [adding,     setAdding]     = useState(false)
+  const { pushToast } = useAppStore()
+
+  const bg     = dark ? '#1A1710' : '#F5F0E8'
+  const border = dark ? '#3A3020' : '#D4C9B4'
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  const load = () => {
+    fromIpc<any[]>(() => db().prerequisites.list(page.id), 'listPrereqs')
+      .then(r => r.match(data => setPrereqs(data), _e => {}))
+    fromIpc<any[]>(() => db().prerequisites.listDependents(page.id), 'listDependents')
+      .then(r => r.match(data => setDependents(data), _e => {}))
+  }
+
+  useEffect(() => { load() }, [page.id])
+
+  useEffect(() => {
+    if (!adding) return
+    fromIpc<any[]>(() => db().pages.list(project.id), 'listPagesForPrereqs')
+      .then(r => r.match(data => setAllPages(data.filter((p: any) => p.id !== page.id)), _e => {}))
+  }, [adding, project.id, page.id])
+
+  const addPrereq = async (prereqId: number) => {
+    const result = await fromIpc<any>(() => db().prerequisites.add(page.id, prereqId), 'addPrereq')
+    if (result.isErr() || result.value?.ok === false) {
+      pushToast({ kind: 'error', title: 'Erro ao adicionar pré-requisito', detail: result.isErr() ? result.error.message : result.value?.error })
+      return
+    }
+    setQuery(''); setAdding(false); load()
+  }
+
+  const removePrereq = async (prereqId: number) => {
+    await fromIpc<unknown>(() => db().prerequisites.remove(page.id, prereqId), 'removePrereq')
+    load()
+  }
+
+  const filtered = allPages.filter(p =>
+    !prereqs.find(r => r.id === p.id) &&
+    (!query.trim() || p.title.toLowerCase().includes(query.toLowerCase()))
+  ).slice(0, 8)
+
+  const hasContent = prereqs.length > 0 || dependents.length > 0
+
+  if (!hasContent && !expanded) {
+    return (
+      <div style={{ padding: '4px 16px 0', background: bg, borderTop: `1px solid ${border}` }}>
+        <button onClick={() => setExpanded(true)} style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em',
+          color: ink2, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0',
+        }}>
+          + Pré-requisitos
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ background: bg, borderTop: `1px solid ${border}`, padding: '8px 16px 10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', color: ink2, flex: 1 }}>
+          PRÉ-REQUISITOS
+        </span>
+        <button onClick={() => setAdding(a => !a)} style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, color: accent,
+          background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+        }}>
+          {adding ? '✕ Cancelar' : '+ Adicionar'}
+        </button>
+      </div>
+
+      {/* Lista de pré-requisitos desta página */}
+      {prereqs.length === 0 && !adding && (
+        <div style={{ fontSize: 11, color: ink2, fontStyle: 'italic', marginBottom: 4 }}>
+          Nenhum pré-requisito configurado.
+        </div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: prereqs.length ? 6 : 0 }}>
+        {prereqs.map(r => (
+          <div key={r.id} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: dark ? '#211D16' : '#EDE7D9',
+            border: `1px solid ${border}`, borderRadius: 3, padding: '4px 8px',
+          }}>
+            <span style={{ fontSize: 13, flexShrink: 0 }}>{r.icon ?? '📄'}</span>
+            <span style={{ flex: 1, fontSize: 12, color: ink, fontStyle: 'italic',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {r.title}
+            </span>
+            {r.status_value && (
+              <span style={{ fontSize: 9, color: ink2, fontFamily: 'var(--font-mono)',
+                border: `1px solid ${border}`, borderRadius: 2, padding: '1px 5px', flexShrink: 0 }}>
+                {r.status_value}
+              </span>
+            )}
+            <button onClick={() => removePrereq(r.id)} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: dark ? '#8A4A3A' : '#9B3A2A', fontSize: 13, padding: '0 2px', flexShrink: 0,
+            }}>×</button>
+          </div>
+        ))}
+      </div>
+
+      {/* Buscador inline para adicionar */}
+      {adding && (
+        <div style={{ marginBottom: 6 }}>
+          <input
+            autoFocus
+            placeholder="Buscar página do projecto…"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              background: dark ? '#211D16' : '#EDE7D9',
+              border: `1px solid ${border}`, borderRadius: 3,
+              color: ink, fontSize: 12, padding: '5px 8px',
+              fontFamily: 'var(--font-mono)', outline: 'none',
+            }}
+          />
+          {filtered.map(p => (
+            <button key={p.id} onClick={() => addPrereq(p.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              width: '100%', padding: '5px 8px', background: 'none',
+              border: 'none', borderBottom: `1px solid ${border}`,
+              cursor: 'pointer', textAlign: 'left',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = dark ? '#2A2520' : '#EDE7D9')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+            >
+              <span style={{ fontSize: 13 }}>{p.icon ?? '📄'}</span>
+              <span style={{ fontSize: 12, color: ink }}>{p.title}</span>
+            </button>
+          ))}
+          {query && filtered.length === 0 && (
+            <div style={{ fontSize: 11, color: ink2, padding: '4px 0', fontStyle: 'italic' }}>
+              Nenhuma página encontrada.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Dependentes: páginas que requerem esta */}
+      {dependents.length > 0 && (
+        <>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em',
+            color: ink2, marginBottom: 4, marginTop: 6 }}>
+            DESBLOQUEIA
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {dependents.map(d => (
+              <span key={d.id} style={{
+                fontSize: 11, color: ink2, fontStyle: 'italic',
+                background: dark ? '#211D16' : '#EDE7D9',
+                border: `1px solid ${border}`, borderRadius: 3, padding: '2px 7px',
+              }}>
+                {d.icon ?? '📄'} {d.title}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Backlinks ─────────────────────────────────────────────────────────────────
+
+function BacklinksPanel({ page, dark }: { page: Page; dark: boolean }) {
+  const [incoming, setIncoming] = useState<any[]>([])
+  const [outgoing, setOutgoing] = useState<any[]>([])
+  const [allPages, setAllPages] = useState<any[]>([])
+  const [expanded, setExpanded] = useState(false)
+  const [addMode,  setAddMode]  = useState<'in' | 'out' | null>(null)
+  const [query,    setQuery]    = useState('')
+  const { pushToast } = useAppStore()
+
+  const bg     = dark ? '#1A1710' : '#F5F0E8'
+  const border = dark ? '#3A3020' : '#D4C9B4'
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  const load = () => {
+    fromIpc<any[]>(() => db().backlinks.list(page.id), 'listBacklinks')
+      .then(r => r.match(data => setIncoming(data), _e => {}))
+    fromIpc<any[]>(() => db().backlinks.listOutgoing(page.id), 'listOutgoing')
+      .then(r => r.match(data => setOutgoing(data), _e => {}))
+  }
+
+  useEffect(() => { load() }, [page.id])
+
+  useEffect(() => {
+    if (!addMode) return
+    fromIpc<any[]>(() => db().pages.search('', 50), 'searchPagesForBacklinks')
+      .then(r => r.match(data => setAllPages(data.filter((p: any) => p.id !== page.id)), _e => {}))
+  }, [addMode, page.id])
+
+  const addLink = async (targetId: number) => {
+    const [src, tgt] = addMode === 'out' ? [page.id, targetId] : [targetId, page.id]
+    await fromIpc<unknown>(() => db().backlinks.add(src, tgt), 'addBacklink')
+    setQuery(''); setAddMode(null); load()
+  }
+
+  const removeIncoming = async (sourceId: number) => {
+    await fromIpc<unknown>(() => db().backlinks.remove(sourceId, page.id), 'removeBacklinkIn')
+    load()
+  }
+  const removeOutgoing = async (targetId: number) => {
+    await fromIpc<unknown>(() => db().backlinks.remove(page.id, targetId), 'removeBacklinkOut')
+    load()
+  }
+
+  const existing = addMode === 'out'
+    ? new Set(outgoing.map((p: any) => p.id))
+    : new Set(incoming.map((p: any) => p.id))
+
+  const filtered = allPages.filter(p =>
+    !existing.has(p.id) &&
+    (!query.trim() || p.title.toLowerCase().includes(query.toLowerCase()) || (p.project_name ?? '').toLowerCase().includes(query.toLowerCase()))
+  ).slice(0, 8)
+
+  const hasContent = incoming.length > 0 || outgoing.length > 0
+
+  if (!hasContent && !expanded) {
+    return (
+      <div style={{ padding: '4px 16px 0', background: bg, borderTop: `1px solid ${border}` }}>
+        <button onClick={() => setExpanded(true)} style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em',
+          color: ink2, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0',
+        }}>
+          + Backlinks
+        </button>
+      </div>
+    )
+  }
+
+  const PageChip = ({ p, onRemove }: { p: any; onRemove: () => void }) => (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 5,
+      background: dark ? '#211D16' : '#EDE7D9',
+      border: `1px solid ${border}`, borderRadius: 3, padding: '3px 7px',
+    }}>
+      <span style={{ fontSize: 12 }}>{p.icon ?? '📄'}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {p.title}
+        </div>
+        {p.project_name && (
+          <div style={{ fontSize: 9, color: ink2, fontFamily: 'var(--font-mono)' }}>{p.project_name}</div>
+        )}
+      </div>
+      <button onClick={onRemove} style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: dark ? '#8A4A3A' : '#9B3A2A', fontSize: 13, padding: '0 2px', flexShrink: 0,
+      }}>×</button>
+    </div>
+  )
+
+  const SearchDropdown = () => (
+    <div style={{ marginTop: 4 }}>
+      <input autoFocus placeholder="Buscar página…" value={query}
+        onChange={e => setQuery(e.target.value)}
+        style={{
+          width: '100%', boxSizing: 'border-box',
+          background: dark ? '#211D16' : '#EDE7D9',
+          border: `1px solid ${border}`, borderRadius: 3,
+          color: ink, fontSize: 12, padding: '5px 8px',
+          fontFamily: 'var(--font-mono)', outline: 'none',
+        }}
+      />
+      {filtered.map(p => (
+        <button key={p.id} onClick={() => addLink(p.id)} style={{
+          display: 'flex', alignItems: 'center', gap: 7,
+          width: '100%', padding: '5px 8px', background: 'none',
+          border: 'none', borderBottom: `1px solid ${border}`,
+          cursor: 'pointer', textAlign: 'left',
+        }}
+          onMouseEnter={e => (e.currentTarget.style.background = dark ? '#2A2520' : '#EDE7D9')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+        >
+          <span style={{ fontSize: 13 }}>{p.icon ?? '📄'}</span>
+          <div>
+            <div style={{ fontSize: 12, color: ink }}>{p.title}</div>
+            {p.project_name && <div style={{ fontSize: 9, color: ink2, fontFamily: 'var(--font-mono)' }}>{p.project_name}</div>}
+          </div>
+        </button>
+      ))}
+      {query && filtered.length === 0 && (
+        <div style={{ fontSize: 11, color: ink2, padding: '4px 0', fontStyle: 'italic' }}>Nenhuma página encontrada.</div>
+      )}
+    </div>
+  )
+
+  return (
+    <div style={{ background: bg, borderTop: `1px solid ${border}`, padding: '8px 16px 10px' }}>
+      {/* Referenciado por (incoming) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', color: ink2, flex: 1 }}>
+          ← REFERENCIADO POR{incoming.length > 0 ? ` (${incoming.length})` : ''}
+        </span>
+        <button onClick={() => { setAddMode(addMode === 'in' ? null : 'in'); setQuery('') }} style={{
+          fontSize: 10, color: accent, background: 'none', border: 'none', cursor: 'pointer',
+          fontFamily: 'var(--font-mono)',
+        }}>
+          {addMode === 'in' ? '✕' : '+'}
+        </button>
+      </div>
+      {incoming.length === 0 && addMode !== 'in' && (
+        <div style={{ fontSize: 11, color: ink2, fontStyle: 'italic', marginBottom: 6 }}>—</div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 4 }}>
+        {incoming.map(p => (
+          <PageChip key={p.id} p={p} onRemove={() => removeIncoming(p.id)} />
+        ))}
+      </div>
+      {addMode === 'in' && <SearchDropdown />}
+
+      {/* Esta página referencia (outgoing) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, marginTop: 8 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', color: ink2, flex: 1 }}>
+          → REFERENCIA{outgoing.length > 0 ? ` (${outgoing.length})` : ''}
+        </span>
+        <button onClick={() => { setAddMode(addMode === 'out' ? null : 'out'); setQuery('') }} style={{
+          fontSize: 10, color: accent, background: 'none', border: 'none', cursor: 'pointer',
+          fontFamily: 'var(--font-mono)',
+        }}>
+          {addMode === 'out' ? '✕' : '+'}
+        </button>
+      </div>
+      {outgoing.length === 0 && addMode !== 'out' && (
+        <div style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>—</div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {outgoing.map(p => (
+          <PageChip key={p.id} p={p} onRemove={() => removeOutgoing(p.id)} />
+        ))}
+      </div>
+      {addMode === 'out' && <SearchDropdown />}
+    </div>
+  )
+}
+
 interface Props {
   page:    Page
   project: Project
@@ -701,6 +1052,14 @@ export const PageView: React.FC<Props> = ({ page, project, dark, onBack }) => {
 
       {/* Tags Globais */}
       <GlobalTagPanel pageId={page.id} dark={dark} />
+
+      {/* Pré-requisitos (apenas projetos académicos) */}
+      {project.project_type === 'academic' && (
+        <PrerequisitesPanel page={page} project={project} dark={dark} />
+      )}
+
+      {/* Backlinks */}
+      <BacklinksPanel page={page} dark={dark} />
 
       {/* Editor */}
       <div className="page-editor-area">
