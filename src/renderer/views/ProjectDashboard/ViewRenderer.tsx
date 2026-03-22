@@ -6,6 +6,7 @@ import { TimelineView } from '../TimelineView/TimelineView'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { AcademicProgressView } from '../AcademicProgress/AcademicProgressView'
 import { useAppStore } from '../../store/useAppStore'
+import { fromIpc } from '../../types/errors'
 
 const db = () => (window as any).db
 
@@ -47,8 +48,6 @@ const TableView: React.FC<ViewRendererProps> = ({
   const [sortCol,     setSortCol]     = useState<number | 'title' | null>(null)
   const [sortDir,     setSortDir]     = useState<'asc' | 'desc'>('asc')
 
-  const { loadPages } = useAppStore()
-
   // Buscar opções de propriedades select/multi_select
   useEffect(() => {
     const selects = properties.filter(p =>
@@ -57,10 +56,8 @@ const TableView: React.FC<ViewRendererProps> = ({
     if (!selects.length) return
     Promise.all(
       selects.map(p =>
-        db().properties.getOptions(p.id).then((res: any) => ({
-          propId:  p.id,
-          options: res?.ok ? (res.data ?? []) : [],
-        }))
+        fromIpc<PropOption[]>(() => db().properties.getOptions(p.id), 'tableGetOptions')
+          .then(r => ({ propId: p.id, options: r.isOk() ? r.value : [] }))
       )
     ).then(results => {
       const map: Record<number, PropOption[]> = {}
@@ -105,9 +102,18 @@ const TableView: React.FC<ViewRendererProps> = ({
     })
   }, [pages, sortCol, sortDir, properties])
 
-  const setPropValue = async (pageId: number, propId: number, field: string, value: any) => {
-    setEditCell(null)
-    await db().pages.setPropValue({ page_id: pageId, property_id: propId, [field]: value })
+  const { loadPages, pushToast } = useAppStore()
+
+  const setPropValue = async (pageId: number, propId: number, field: string, value: any, keepOpen = false) => {
+    if (!keepOpen) setEditCell(null)
+    const result = await fromIpc<unknown>(
+      () => db().pages.setPropValue({ page_id: pageId, property_id: propId, [field]: value }),
+      'tableSetPropValue',
+    )
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao editar célula', detail: result.error.message })
+      return
+    }
     loadPages(project.id)
   }
 
@@ -182,7 +188,7 @@ const TableView: React.FC<ViewRendererProps> = ({
               {visibleProps.map(p => {
                 const pv        = page.prop_values?.find(v => v.property_id === p.id)
                 const isEditing = editCell?.pageId === page.id && editCell?.propId === p.id
-                const editable  = p.prop_type !== 'multi_select'
+                const editable  = true
 
                 return (
                   <td
@@ -213,7 +219,7 @@ const TableView: React.FC<ViewRendererProps> = ({
                       <InlineCellEditor
                         prop={p} pv={pv}
                         options={propOptions[p.id] ?? []}
-                        onSet={(field, value) => setPropValue(page.id, p.id, field, value)}
+                        onSet={(field, value) => setPropValue(page.id, p.id, field, value, p.prop_type === 'multi_select')}
                         onClose={() => setEditCell(null)}
                         dark={dark} ink={ink} ink2={ink2} border={border}
                       />
@@ -286,6 +292,35 @@ function InlineCellEditor({ prop, pv, options, onSet, onClose, dark, ink, ink2, 
           <option key={o.id} value={o.label}>{o.label}</option>
         ))}
       </select>
+    )
+  }
+
+  if (prop.prop_type === 'multi_select') {
+    const selected: string[] = (() => {
+      try { return JSON.parse(pv?.value_json ?? '[]') } catch { return [] }
+    })()
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 120 }}>
+        {options.map(o => {
+          const active = selected.includes(o.label)
+          const next   = active ? selected.filter(l => l !== o.label) : [...selected, o.label]
+          return (
+            <button key={o.id} onClick={() => onSet('value_json', JSON.stringify(next))}
+              style={{ ...base, display: 'flex', alignItems: 'center', gap: 5,
+                background: active ? (o.color ? o.color + '22' : (dark ? '#3A3020' : '#EDE7D9')) : 'transparent',
+                borderColor: active ? (o.color ?? border) : border }}>
+              <span style={{ width: 7, height: 7, borderRadius: 1, flexShrink: 0,
+                background: o.color ?? border }} />
+              <span style={{ fontSize: 10 }}>{o.label}</span>
+            </button>
+          )
+        })}
+        <button onClick={onClose}
+          style={{ ...base, marginTop: 3, borderTop: `1px solid ${border}`,
+            fontSize: 10, color: ink2, background: 'transparent', cursor: 'pointer' }}>
+          ✓ Ok
+        </button>
+      </div>
     )
   }
 

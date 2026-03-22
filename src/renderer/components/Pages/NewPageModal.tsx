@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Modal } from '../UI/Modal'
 import { Project } from '../../types'
 import { useAppStore } from '../../store/useAppStore'
+import { fromIpc } from '../../types/errors'
 import './NewPageModal.css'
 
 interface Props {
@@ -25,25 +26,15 @@ export const NewPageModal: React.FC<Props> = ({ project, onClose, onCreated }) =
     if (!title.trim()) { setError('O título é obrigatório.'); return }
     setSubmit(true)
     setError('')
-    try {
-      const res = await (window as any).db.pages.create({
-        project_id: project.id,
-        title:      title.trim(),
-        icon,
-        sort_order: 0,
-      })
-      if (res?.ok && res.data) {
-        await loadPages(project.id)
-        onCreated?.(res.data.id)
-        onClose()
-      } else {
-        setError(res?.error ?? 'Erro ao criar página.')
-      }
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setSubmit(false)
-    }
+    const result = await fromIpc<{ id: number }>(
+      () => (window as any).db.pages.create({ project_id: project.id, title: title.trim(), icon, sort_order: 0 }),
+      'createPage',
+    )
+    setSubmit(false)
+    result.match(
+      async data => { await loadPages(project.id); onCreated?.(data.id); onClose() },
+      e           => setError(e.message),
+    )
   }
 
   return (

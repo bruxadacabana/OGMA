@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAppStore } from '../../store/useAppStore'
+import { fromIpc } from '../../types/errors'
 import './SettingsView.css'
 
 const db = () => (window as any).db
@@ -10,7 +11,7 @@ interface Props {
 }
 
 export function SettingsView({ dark, onToggleTheme }: Props) {
-  const { workspace, loadWorkspace } = useAppStore()
+  const { workspace, loadWorkspace, pushToast } = useAppStore()
 
   const [name,        setName]        = useState('')
   const [icon,        setIcon]        = useState('')
@@ -29,14 +30,21 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
   const handleSave = async () => {
     if (!workspace) return
     setSaving(true)
-    await db().workspace.update({
-      id:           workspace.id,
-      name:         name.trim() || 'Meu Workspace',
-      icon:         icon.trim() || '✦',
-      accent_color: accentColor,
-    })
-    await loadWorkspace()
+    const result = await fromIpc<unknown>(
+      () => db().workspace.update({
+        id:           workspace.id,
+        name:         name.trim() || 'Meu Workspace',
+        icon:         icon.trim() || '✦',
+        accent_color: accentColor,
+      }),
+      'updateWorkspace',
+    )
     setSaving(false)
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao guardar workspace', detail: result.error.message })
+      return
+    }
+    await loadWorkspace()
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }

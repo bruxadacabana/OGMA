@@ -36,7 +36,8 @@ export const EditProjectModal: React.FC<Props> = ({ project, onClose, onDeleted 
       ...project,
       name: name.trim(),
       description: description.trim() || null,
-      icon, color, subcategory: subcategory || null, status,
+      icon, color, subcategory: subcategory || null,
+      status,
     })
     setSubmit(false)
     if (result.isErr()) { setError(result.error.message); return }

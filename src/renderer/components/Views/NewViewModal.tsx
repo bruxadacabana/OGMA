@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Modal } from '../UI/Modal'
 import { Project, ProjectProperty } from '../../types'
 import { useAppStore } from '../../store/useAppStore'
+import { fromIpc } from '../../types/errors'
 
 const db = () => (window as any).db
 
@@ -48,26 +49,21 @@ export const NewViewModal: React.FC<Props> = ({
     if (!n) { setError('O nome da vista é obrigatório.'); return }
     setSubmitting(true)
     setError('')
-    try {
-      const res = await db().views.create({
+    const result = await fromIpc<{ id: number }>(
+      () => db().views.create({
         project_id:           project.id,
         name:                 n,
         view_type:            viewType,
         group_by_property_id: viewType === 'kanban' && groupById ? Number(groupById) : null,
         date_property_id:     needsDate && datePropId ? Number(datePropId) : null,
-      })
-      if (res?.ok && res.data) {
-        await loadViews(project.id)
-        onCreated(res.data.id)
-        onClose()
-      } else {
-        setError(res?.error ?? 'Erro ao criar vista.')
-      }
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setSubmitting(false)
-    }
+      }),
+      'createView',
+    )
+    setSubmitting(false)
+    result.match(
+      async data => { await loadViews(project.id); onCreated(data.id); onClose() },
+      e           => setError(e.message),
+    )
   }
 
   return (

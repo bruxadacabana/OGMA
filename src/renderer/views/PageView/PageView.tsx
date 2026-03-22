@@ -10,6 +10,90 @@ import './PageView.css'
 const log = createLogger('PageView')
 const db  = () => (window as any).db
 
+// ── Recursos vinculados ───────────────────────────────────────────────────────
+
+const RESOURCE_ICONS: Record<string, string> = {
+  livro: '📖', artigo: '📄', link: '🔗', video: '▶', podcast: '🎙',
+  tool: '⚙', template: '◧', dataset: '◈', doc: '📃', other: '◦',
+}
+
+function PageResourcePanel({ pageId, dark }: { pageId: number; dark: boolean }) {
+  const [resources, setResources] = useState<any[]>([])
+  const [expanded,  setExpanded]  = useState(false)
+
+  const bg     = dark ? '#1A1710' : '#F5F0E8'
+  const border = dark ? '#3A3020' : '#D4C9B4'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  const load = () => {
+    fromIpc<any[]>(() => db().resourcePages.listForPage(pageId), 'listResourcePages')
+      .then(r => r.match(data => setResources(data), _e => {}))
+  }
+
+  useEffect(() => { load() }, [pageId])
+
+  if (resources.length === 0 && !expanded) {
+    return (
+      <div style={{ padding: '4px 16px 0', background: bg, borderTop: `1px solid ${border}` }}>
+        <button onClick={() => setExpanded(true)} style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em',
+          color: ink2, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0',
+        }}>
+          + Recurso
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '8px 16px', background: bg, borderTop: `1px solid ${border}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: resources.length ? 6 : 0 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', color: ink2 }}>
+          RECURSOS
+        </span>
+        {resources.length > 0 && (
+          <span style={{ fontSize: 9, color: ink2 }}>({resources.length})</span>
+        )}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+        {resources.map((r: any) => {
+          let meta: any = {}
+          try { if (r.metadata_json) meta = JSON.parse(r.metadata_json) } catch {}
+          const cover = meta.cover_url || meta.cover_url_m || meta.thumbnail_url
+          return (
+            <div key={r.resource_id} title={r.title} style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '3px 8px 3px 5px', borderRadius: 3,
+              border: `1px solid ${border}`, background: 'transparent',
+              fontSize: 11, color: ink,
+            }}>
+              {cover
+                ? <img src={cover} alt="" style={{ width: 16, height: 22, objectFit: 'cover', borderRadius: 1 }} />
+                : <span style={{ fontSize: 12 }}>{RESOURCE_ICONS[r.resource_type ?? ''] ?? '◦'}</span>
+              }
+              <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {r.title}
+              </span>
+              <button onClick={async () => {
+                await fromIpc<unknown>(
+                  () => db().resourcePages.remove(r.resource_id, pageId),
+                  'removeResourcePage',
+                )
+                load()
+              }} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 9, color: ink2, padding: '0 0 0 2px', lineHeight: 1,
+              }}>✕</button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Tags Globais ──────────────────────────────────────────────────────────────
 
 interface Tag { id: number; name: string; color: string | null }
@@ -27,8 +111,10 @@ function GlobalTagPanel({ pageId, dark }: { pageId: number; dark: boolean }) {
   const accent = dark ? '#D4A820' : '#b8860b'
 
   const loadTags = useCallback(() => {
-    db().tags.list().then((res: any) => { if (res?.ok) setAllTags(res.data ?? []) })
-    db().tags.listForPage(pageId).then((res: any) => { if (res?.ok) setPageTags(res.data ?? []) })
+    fromIpc<Tag[]>(() => db().tags.list(), 'listTags')
+      .then(r => r.match(data => setAllTags(data), _e => {}))
+    fromIpc<Tag[]>(() => db().tags.listForPage(pageId), 'listPageTags')
+      .then(r => r.match(data => setPageTags(data), _e => {}))
   }, [pageId])
 
   useEffect(() => { loadTags() }, [loadTags])
@@ -37,20 +123,19 @@ function GlobalTagPanel({ pageId, dark }: { pageId: number; dark: boolean }) {
   const pageTagIds = new Set(pageTags.map(t => t.id))
 
   const handleToggle = async (tag: Tag) => {
-    if (pageTagIds.has(tag.id)) {
-      await db().tags.remove(pageId, tag.id)
-    } else {
-      await db().tags.assign(pageId, tag.id)
-    }
+    const call = pageTagIds.has(tag.id)
+      ? () => db().tags.remove(pageId, tag.id)
+      : () => db().tags.assign(pageId, tag.id)
+    await fromIpc<unknown>(call, 'toggleTag')
     loadTags()
   }
 
   const handleCreate = async () => {
     const name = newTag.trim()
     if (!name) return
-    const res = await db().tags.create(name)
-    if (res?.ok && res.data) {
-      await db().tags.assign(pageId, res.data.id)
+    const result = await fromIpc<{ id: number }>(() => db().tags.create(name), 'createTag')
+    if (result.isOk()) {
+      await fromIpc<unknown>(() => db().tags.assign(pageId, result.value.id), 'assignTag')
     }
     setNewTag('')
     setShowInput(false)
@@ -179,10 +264,8 @@ function PropPanel({ page, properties, dark, projectId, onChanged }: PropPanelPr
     if (selects.length === 0) return
     Promise.all(
       selects.map(p =>
-        db().properties.getOptions(p.id).then((res: any) => ({
-          propId:  p.id,
-          options: res?.ok ? (res.data ?? []) : [],
-        }))
+        fromIpc<PropOption[]>(() => db().properties.getOptions(p.id), 'getOptions')
+          .then(r => ({ propId: p.id, options: r.isOk() ? r.value : [] }))
       )
     ).then(results => {
       const map: Record<number, PropOption[]> = {}
@@ -192,18 +275,17 @@ function PropPanel({ page, properties, dark, projectId, onChanged }: PropPanelPr
   }, [properties])
 
   const setPropValue = useCallback(async (propId: number, field: string, value: any) => {
-    // Atualiza local
+    // Atualiza local imediatamente (optimistic)
     setLocalValues(prev => ({
       ...prev,
       [propId]: { ...(prev[propId] ?? {} as any), property_id: propId, [field]: value },
     }))
     // Persiste
-    await db().pages.setPropValue({
-      page_id:     page.id,
-      property_id: propId,
-      [field]:     value,
-    })
-    onChanged()
+    const result = await fromIpc<unknown>(
+      () => db().pages.setPropValue({ page_id: page.id, property_id: propId, [field]: value }),
+      'setPropValue',
+    )
+    if (result.isOk()) onChanged()
   }, [page.id, onChanged])
 
   if (properties.length === 0) return null
@@ -245,81 +327,42 @@ interface EditorProps {
 }
 
 function PropValueEditor({ prop, pv, options, onSet, dark, ink, ink2, border, cardBg }: EditorProps) {
-  const [showDrop, setShowDrop] = useState(false)
   const [editing,  setEditing]  = useState(false)
   const [textVal,  setTextVal]  = useState(pv?.value_text ?? '')
   const [numVal,   setNumVal]   = useState(pv?.value_num != null ? String(pv.value_num) : '')
-  const dropRef = useRef<HTMLDivElement>(null)
 
   // Sync local state ao trocar de página
   useEffect(() => {
     setTextVal(pv?.value_text ?? '')
     setNumVal(pv?.value_num != null ? String(pv.value_num) : '')
     setEditing(false)
-    setShowDrop(false)
   }, [pv?.value_text, pv?.value_num])
-
-  // Fechar dropdown ao clicar fora
-  useEffect(() => {
-    if (!showDrop) return
-    const handler = (e: MouseEvent) => {
-      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
-        setShowDrop(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showDrop])
 
   // ── select ────────────────────────────────────────────────────────────────
   if (prop.prop_type === 'select') {
-    const current = options.find(o => o.label === pv?.value_text)
+    if (options.length === 0)
+      return <span style={{ color: border, fontSize: 11, fontStyle: 'italic' }}>—</span>
     return (
-      <div style={{ position: 'relative' }} ref={dropRef}>
-        <button
-          className="prop-select-btn"
-          onClick={() => setShowDrop(v => !v)}
-          style={{
-            borderColor: current?.color ?? border,
-            background:  current?.color ? current.color + '22' : 'transparent',
-            color:       current?.color ?? ink2,
-          }}
-        >
-          {current ? (
-            <>
-              <span className="prop-dot" style={{ background: current.color ?? border }} />
-              {current.label}
-            </>
-          ) : (
-            <span style={{ color: border, fontStyle: 'italic' }}>—</span>
-          )}
-        </button>
-        {showDrop && (
-          <div className="prop-dropdown" style={{ background: cardBg, borderColor: border }}>
-            {options.map(opt => (
-              <button
-                key={opt.id}
-                className="prop-dropdown-item"
-                onClick={() => { onSet(prop.id, 'value_text', opt.label); setShowDrop(false) }}
-                style={{ color: ink }}
-                onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(232,223,200,0.06)' : 'rgba(44,36,22,0.05)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                <span className="prop-dot" style={{ background: opt.color ?? border }} />
-                {opt.label}
-              </button>
-            ))}
-            {pv?.value_text && (
-              <button
-                className="prop-dropdown-clear"
-                onClick={() => { onSet(prop.id, 'value_text', null); setShowDrop(false) }}
-                style={{ color: border, borderColor: border }}
-              >
-                ✕ Limpar
-              </button>
-            )}
-          </div>
-        )}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {options.map(opt => {
+          const active = pv?.value_text === opt.label
+          return (
+            <button
+              key={opt.id}
+              onClick={() => onSet(prop.id, 'value_text', active ? null : opt.label)}
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9,
+                padding: '2px 8px', borderRadius: 20, cursor: 'pointer',
+                border: `1px solid ${active ? (opt.color ?? ink2) : border}`,
+                background: active ? (opt.color ? opt.color + '22' : (dark ? '#3A3020' : '#EDE7D9')) : 'transparent',
+                color: active ? (opt.color ?? ink) : ink2,
+                transition: 'all 80ms',
+              }}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
       </div>
     )
   }
@@ -329,53 +372,31 @@ function PropValueEditor({ prop, pv, options, onSet, dark, ink, ink2, border, ca
     const selected: string[] = (() => {
       try { return JSON.parse(pv?.value_json ?? '[]') } catch { return [] }
     })()
-    const toggleTag = (label: string) => {
-      const next = selected.includes(label)
-        ? selected.filter(l => l !== label)
-        : [...selected, label]
-      onSet(prop.id, 'value_json', JSON.stringify(next))
+    if (options.length === 0) {
+      return <span style={{ color: border, fontSize: 11, fontStyle: 'italic' }}>—</span>
     }
     return (
-      <div style={{ position: 'relative' }} ref={dropRef}>
-        <div
-          className="prop-tags"
-          onClick={() => setShowDrop(v => !v)}
-          style={{ cursor: 'pointer', minHeight: 24 }}
-        >
-          {selected.length > 0 ? selected.map(label => {
-            const opt = options.find(o => o.label === label)
-            return (
-              <span key={label} className="prop-tag"
-                style={{ background: opt?.color ? opt.color + '33' : border + '55', color: ink2 }}>
-                {label}
-              </span>
-            )
-          }) : <span style={{ color: border, fontStyle: 'italic', fontSize: 11 }}>—</span>}
-        </div>
-        {showDrop && (
-          <div className="prop-dropdown" style={{ background: cardBg, borderColor: border }}>
-            {options.map(opt => {
-              const active = selected.includes(opt.label)
-              return (
-                <button
-                  key={opt.id}
-                  className="prop-dropdown-item"
-                  onClick={() => toggleTag(opt.label)}
-                  style={{ color: ink, fontWeight: active ? 'bold' : 'normal' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(232,223,200,0.06)' : 'rgba(44,36,22,0.05)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <span style={{
-                    width: 10, height: 10, borderRadius: 2, flexShrink: 0,
-                    border: `2px solid ${active ? (opt.color ?? border) : border}`,
-                    background: active ? (opt.color ?? border) : 'transparent',
-                  }} />
-                  {opt.label}
-                </button>
-              )
-            })}
-          </div>
-        )}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {options.map(opt => {
+          const active = selected.includes(opt.label)
+          const next   = active ? selected.filter(l => l !== opt.label) : [...selected, opt.label]
+          return (
+            <button
+              key={opt.id}
+              onClick={() => onSet(prop.id, 'value_json', JSON.stringify(next))}
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9,
+                padding: '2px 8px', borderRadius: 20, cursor: 'pointer',
+                border: `1px solid ${active ? (opt.color ?? ink2) : border}`,
+                background: active ? (opt.color ? opt.color + '22' : (dark ? '#3A3020' : '#EDE7D9')) : 'transparent',
+                color: active ? (opt.color ?? ink) : ink2,
+                transition: 'all 80ms',
+              }}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
       </div>
     )
   }
@@ -674,6 +695,9 @@ export const PageView: React.FC<Props> = ({ page, project, dark, onBack }) => {
           onChanged={() => loadPages(project.id)}
         />
       )}
+
+      {/* Recursos vinculados */}
+      <PageResourcePanel pageId={page.id} dark={dark} />
 
       {/* Tags Globais */}
       <GlobalTagPanel pageId={page.id} dark={dark} />

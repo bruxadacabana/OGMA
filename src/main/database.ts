@@ -60,6 +60,59 @@ function initSchema(db: Database.Database): void {
   }
 
   createTables(db)
+
+  // Migrações incrementais (seguras — só adicionam colunas)
+  try { db.exec(`ALTER TABLE readings ADD COLUMN resource_id INTEGER REFERENCES resources(id) ON DELETE SET NULL`) } catch {}
+  try { db.exec(`ALTER TABLE resources ADD COLUMN metadata_json TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE projects ADD COLUMN semester TEXT`) } catch {}
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS resource_pages (
+      resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+      page_id     INTEGER NOT NULL REFERENCES pages(id)     ON DELETE CASCADE,
+      PRIMARY KEY (resource_id, page_id)
+    )
+  `) } catch {}
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS reading_sessions (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      reading_id  INTEGER NOT NULL REFERENCES readings(id) ON DELETE CASCADE,
+      date        TEXT NOT NULL DEFAULT (date('now')),
+      page_start  INTEGER NOT NULL DEFAULT 0,
+      page_end    INTEGER NOT NULL DEFAULT 0,
+      duration_min INTEGER,
+      notes       TEXT,
+      created_at  TEXT DEFAULT (datetime('now'))
+    )
+  `) } catch {}
+
+  // Garante propriedade "Semestre" em projetos acadêmicos existentes
+  try {
+    const year = new Date().getFullYear()
+    const academicProjects = db.prepare(
+      `SELECT id FROM projects WHERE project_type = 'academic'`
+    ).all() as { id: number }[]
+    const checkProp   = db.prepare(
+      `SELECT id FROM project_properties WHERE project_id = ? AND prop_key = 'trimestre'`
+    )
+    const insertProp  = db.prepare(
+      `INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order) VALUES (?, 'Trimestre', 'trimestre', 'select', 1, 1)`
+    )
+    const insertOption = db.prepare(
+      `INSERT INTO prop_options (property_id, label, color, sort_order) VALUES (?, ?, null, ?)`
+    )
+    for (const { id } of academicProjects) {
+      if (!checkProp.get(id)) {
+        const r      = insertProp.run(id)
+        const propId = Number(r.lastInsertRowid)
+        const labels = [
+          `${year - 1}.1`, `${year - 1}.2`, `${year - 1}.3`, `${year - 1}.4`,
+          `${year}.1`,     `${year}.2`,     `${year}.3`,     `${year}.4`,
+          `${year + 1}.1`, `${year + 1}.2`, `${year + 1}.3`, `${year + 1}.4`,
+        ]
+        labels.forEach((label, i) => insertOption.run(propId, label, i))
+      }
+    }
+  } catch {}
 }
 
 function runMigration(db: Database.Database): void {
@@ -256,6 +309,7 @@ function createTables(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS readings (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      resource_id  INTEGER REFERENCES resources(id) ON DELETE SET NULL,
       title        TEXT NOT NULL,
       reading_type TEXT DEFAULT 'book',
       author       TEXT,

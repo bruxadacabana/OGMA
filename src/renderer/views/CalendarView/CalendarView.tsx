@@ -7,6 +7,11 @@ const DAY_NAMES   = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
 
 function pad(n: number) { return String(n).padStart(2, '0') }
 
+// Trimestre: meses 0-2 = .1 ; 3-5 = .2 ; 6-8 = .3 ; 9-11 = .4
+function trimesterLabel(year: number, month: number): string {
+  return `${year}.${Math.floor(month / 3) + 1}`
+}
+
 export const CalendarView: React.FC<ViewRendererProps> = ({
   view, project, pages, properties, dark, onPageOpen,
 }) => {
@@ -33,7 +38,16 @@ export const CalendarView: React.FC<ViewRendererProps> = ({
     setYear(new Date().getFullYear())
   }
 
-  const dateProp = properties.find(p => p.id === view.date_property_id)
+  const dateProp     = properties.find(p => p.id === view.date_property_id)
+  const trimestreProp = project.project_type === 'academic'
+    ? properties.find(p => p.prop_key === 'trimestre')
+    : undefined
+
+  // Trimestre do mês exibido (ex: "2025.2")
+  const currentTri = trimesterLabel(year, month)
+
+  // Filtro por trimestre: null = todos
+  const [triFilter, setTriFilter] = useState<string | null>(null)
 
   if (!dateProp) {
     return (
@@ -46,15 +60,28 @@ export const CalendarView: React.FC<ViewRendererProps> = ({
     )
   }
 
-  // Group pages by YYYY-MM-DD key
+  // Group pages by YYYY-MM-DD key (respeitando filtro de trimestre)
   const pagesByDate: Record<string, typeof pages> = {}
   pages.forEach(page => {
     const pv = page.prop_values?.find(v => v.property_id === dateProp.id)
     if (!pv?.value_date) return
+    if (triFilter) {
+      const pageTri = page.prop_values?.find(v => v.prop_key === 'trimestre')?.value_text
+      if (pageTri !== triFilter) return
+    }
     const key = pv.value_date.slice(0, 10)
     if (!pagesByDate[key]) pagesByDate[key] = []
     pagesByDate[key].push(page)
   })
+
+  // Trimestres únicos presentes nas páginas (para botões de filtro)
+  const availableTris = trimestreProp
+    ? [...new Set(
+        pages
+          .map(p => p.prop_values?.find(v => v.prop_key === 'trimestre')?.value_text)
+          .filter(Boolean) as string[]
+      )].sort()
+    : []
 
   // Build 42-cell grid
   const firstWeekday  = new Date(year, month, 1).getDay()
@@ -87,7 +114,7 @@ export const CalendarView: React.FC<ViewRendererProps> = ({
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '8px 16px', borderBottom: `1px solid ${border}`, flexShrink: 0,
-        background: bg,
+        background: bg, flexWrap: 'wrap',
       }}>
         <button className="btn btn-ghost btn-sm" onClick={prevMonth} style={{ color: ink2, fontSize: 16 }}>‹</button>
         <h3 style={{
@@ -101,6 +128,17 @@ export const CalendarView: React.FC<ViewRendererProps> = ({
           style={{ color: ink2, fontFamily: 'var(--font-mono)', fontSize: 10 }}>
           hoje
         </button>
+
+        {/* Indicador de trimestre (projetos acadêmicos) */}
+        {trimestreProp && (
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: accent,
+            letterSpacing: '0.06em', borderLeft: `1px solid ${border}`, paddingLeft: 10,
+          }}>
+            ◗ {currentTri}
+          </span>
+        )}
+
         <span style={{
           fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2,
           letterSpacing: '0.06em', borderLeft: `1px solid ${border}`, paddingLeft: 10,
@@ -108,6 +146,46 @@ export const CalendarView: React.FC<ViewRendererProps> = ({
           via {dateProp.name}
         </span>
       </div>
+
+      {/* Filtros de trimestre */}
+      {trimestreProp && availableTris.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+          padding: '4px 16px', borderBottom: `1px solid ${border}`, background: bg,
+          flexWrap: 'wrap',
+        }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, letterSpacing: '0.08em' }}>
+            TRI.
+          </span>
+          <button
+            onClick={() => setTriFilter(null)}
+            style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 7px',
+              borderRadius: 2, cursor: 'pointer', letterSpacing: '0.04em',
+              border: `1px solid ${triFilter === null ? accent : border}`,
+              background: triFilter === null ? accent + '22' : 'transparent',
+              color: triFilter === null ? accent : ink2,
+            }}
+          >
+            todos
+          </button>
+          {availableTris.map(tri => (
+            <button
+              key={tri}
+              onClick={() => setTriFilter(tri === triFilter ? null : tri)}
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 7px',
+                borderRadius: 2, cursor: 'pointer', letterSpacing: '0.04em',
+                border: `1px solid ${triFilter === tri ? accent : border}`,
+                background: triFilter === tri ? accent + '22' : 'transparent',
+                color: triFilter === tri ? accent : ink2,
+              }}
+            >
+              {tri}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Day-of-week header */}
       <div style={{
@@ -168,22 +246,31 @@ export const CalendarView: React.FC<ViewRendererProps> = ({
               </div>
 
               {/* Page chips */}
-              {cellPages.slice(0, 3).map(page => (
-                <button key={page.id} onClick={() => onPageOpen(page)} style={{
-                  display: 'block', width: '100%',
-                  background: color + '22', border: `1px solid ${color}44`,
-                  borderRadius: 2, padding: '1px 5px', marginBottom: 2,
-                  cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 9,
-                  color: ink, textAlign: 'left',
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  transition: 'background 80ms',
-                }}
-                  onMouseEnter={e => (e.currentTarget.style.background = color + '44')}
-                  onMouseLeave={e => (e.currentTarget.style.background = color + '22')}
-                >
-                  {page.icon ?? '📄'} {page.title}
-                </button>
-              ))}
+              {cellPages.slice(0, 3).map(page => {
+                const pageTri = trimestreProp
+                  ? page.prop_values?.find(v => v.prop_key === 'trimestre')?.value_text
+                  : undefined
+                return (
+                  <button key={page.id} onClick={() => onPageOpen(page)} style={{
+                    display: 'block', width: '100%',
+                    background: color + '22', border: `1px solid ${color}44`,
+                    borderRadius: 2, padding: '1px 5px', marginBottom: 2,
+                    cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 9,
+                    color: ink, textAlign: 'left',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    transition: 'background 80ms',
+                  }}
+                    title={pageTri ? `[${pageTri}] ${page.title}` : page.title}
+                    onMouseEnter={e => (e.currentTarget.style.background = color + '44')}
+                    onMouseLeave={e => (e.currentTarget.style.background = color + '22')}
+                  >
+                    {pageTri && (
+                      <span style={{ color: accent, opacity: 0.8, marginRight: 3 }}>{pageTri}</span>
+                    )}
+                    {page.icon ?? '📄'} {page.title}
+                  </button>
+                )
+              })}
               {cellPages.length > 3 && (
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
                   +{cellPages.length - 3}

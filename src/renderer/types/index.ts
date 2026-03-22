@@ -15,6 +15,7 @@ export interface Project {
   color:        string | null
   project_type: ProjectType
   subcategory:  string | null
+  semester:     string | null
   status:       ProjectStatus
   date_start:   string | null
   date_end:     string | null

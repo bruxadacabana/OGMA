@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Modal } from '../UI/Modal'
 import { Project, ProjectProperty, PropOption, PropType } from '../../types'
 import { useAppStore } from '../../store/useAppStore'
+import { fromIpc } from '../../types/errors'
 
 const db = () => (window as any).db
 
@@ -37,7 +38,7 @@ interface Props {
 export const ManagePropertiesModal: React.FC<Props> = ({
   project, dark, onClose, onChanged,
 }) => {
-  const { projectProperties, loadProperties } = useAppStore()
+  const { projectProperties, loadProperties, pushToast } = useAppStore()
 
   const color  = project.color ?? '#8B7355'
   const ink    = dark ? '#E8DFC8' : '#2C2416'
@@ -62,9 +63,19 @@ export const ManagePropertiesModal: React.FC<Props> = ({
   const [newOptColor,   setNewOptColor]   = useState('#8B7355')
 
   const loadOptions = useCallback(async (propId: number) => {
-    const res = await db().properties.getOptions(propId)
-    if (res?.ok) setOptions(prev => ({ ...prev, [propId]: res.data ?? [] }))
+    const result = await fromIpc<PropOption[]>(() => db().properties.getOptions(propId), 'getOptions')
+    result.match(
+      data => setOptions(prev => ({ ...prev, [propId]: data })),
+      _e   => {},
+    )
   }, [])
+
+  // Pre-carregar opções de todos os select/multi_select ao abrir
+  useEffect(() => {
+    projectProperties
+      .filter(p => p.prop_type === 'select' || p.prop_type === 'multi_select')
+      .forEach(p => loadOptions(p.id))
+  }, [projectProperties, loadOptions])
 
   const toggleExpand = async (propId: number) => {
     const next = new Set(expanded)
@@ -80,7 +91,15 @@ export const ManagePropertiesModal: React.FC<Props> = ({
   const saveName = async (prop: ProjectProperty) => {
     const n = nameVal.trim()
     if (n && n !== prop.name) {
-      await db().properties.update({ id: prop.id, name: n, prop_type: prop.prop_type })
+      const result = await fromIpc<unknown>(
+        () => db().properties.update({ id: prop.id, name: n, prop_type: prop.prop_type }),
+        'updateProperty',
+      )
+      if (result.isErr()) {
+        pushToast({ kind: 'error', title: 'Erro ao renomear propriedade', detail: result.error.message })
+        setEditingName(null)
+        return
+      }
       await loadProperties(project.id)
       onChanged()
     }
@@ -89,7 +108,11 @@ export const ManagePropertiesModal: React.FC<Props> = ({
 
   const deleteProp = async (prop: ProjectProperty) => {
     if (!window.confirm(`Excluir propriedade "${prop.name}"? Todos os valores serão perdidos.`)) return
-    await db().properties.delete(prop.id)
+    const result = await fromIpc<unknown>(() => db().properties.delete(prop.id), 'deleteProperty')
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao excluir propriedade', detail: result.error.message })
+      return
+    }
     await loadProperties(project.id)
     onChanged()
   }
@@ -99,25 +122,30 @@ export const ManagePropertiesModal: React.FC<Props> = ({
     if (!n) return
     setAddingProp(true)
     const key = n.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `prop_${Date.now()}`
-    await db().properties.create({
-      project_id: project.id,
-      name:       n,
-      prop_key:   key,
-      prop_type:  newPropType,
-    })
+    const result = await fromIpc<unknown>(
+      () => db().properties.create({ project_id: project.id, name: n, prop_key: key, prop_type: newPropType }),
+      'createProperty',
+    )
+    setAddingProp(false)
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao criar propriedade', detail: result.error.message })
+      return
+    }
     await loadProperties(project.id)
     onChanged()
     setNewPropName('')
-    setAddingProp(false)
   }
 
   const addOption = async (propId: number) => {
     if (!newOptLabel.trim()) return
-    await db().properties.createOption({
-      property_id: propId,
-      label:       newOptLabel.trim(),
-      color:       newOptColor,
-    })
+    const result = await fromIpc<unknown>(
+      () => db().properties.createOption({ property_id: propId, label: newOptLabel.trim(), color: newOptColor }),
+      'createOption',
+    )
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao criar opção', detail: result.error.message })
+      return
+    }
     await loadOptions(propId)
     setNewOptLabel('')
     setNewOptColor('#8B7355')
@@ -125,7 +153,11 @@ export const ManagePropertiesModal: React.FC<Props> = ({
   }
 
   const deleteOption = async (propId: number, optId: number) => {
-    await db().properties.deleteOption(optId)
+    const result = await fromIpc<unknown>(() => db().properties.deleteOption(optId), 'deleteOption')
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao excluir opção', detail: result.error.message })
+      return
+    }
     await loadOptions(propId)
   }
 
@@ -136,7 +168,7 @@ export const ManagePropertiesModal: React.FC<Props> = ({
   }
 
   return (
-    <Modal title="Gerenciar Propriedades" onClose={onClose} dark={dark} width={540}>
+    <Modal title="Propriedades das Páginas" onClose={onClose} dark={dark} width={540}>
       <div style={{ maxHeight: 400, overflowY: 'auto', marginBottom: 4 }}>
         {projectProperties.length === 0 ? (
           <p style={{ color: ink2, fontSize: 12, fontStyle: 'italic', padding: '8px 0' }}>

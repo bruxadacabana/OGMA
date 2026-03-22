@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { useAppStore } from '../../store/useAppStore'
 import { PROJECT_TYPE_ICONS } from '../../types'
+import { fromIpc } from '../../types/errors'
 
 const db = () => (window as any).db
 
@@ -159,9 +160,8 @@ function StatsWidget({ dark }: { dark: boolean }) {
   const cardBg = dark ? '#211D16' : '#EDE7D9'
 
   useEffect(() => {
-    db().dashboard.stats().then((res: any) => {
-      if (res?.ok) setStats(res.data)
-    })
+    fromIpc<Stats>(() => db().dashboard.stats(), 'dashboardStats')
+      .then(r => r.match(data => setStats(data), _e => {}))
   }, [])
 
   const items = stats ? [
@@ -219,14 +219,18 @@ function ProjectsWidget({ dark, onProjectOpen }: { dark: boolean; onProjectOpen:
   const cardBg = dark ? '#211D16' : '#EDE7D9'
 
   useEffect(() => {
-    db().dashboard.stats().then((res: any) => {
-      if (!res?.ok) return
-      const map: Record<number, number> = {}
-      for (const { project_id, count } of (res.data?.page_counts ?? [])) {
-        map[project_id] = count
-      }
-      setPageCounts(map)
-    })
+    fromIpc<Stats & { page_counts?: { project_id: number; count: number }[] }>(
+      () => db().dashboard.stats(), 'dashboardStatsProjects'
+    ).then(r => r.match(
+      data => {
+        const map: Record<number, number> = {}
+        for (const { project_id, count } of (data.page_counts ?? [])) {
+          map[project_id] = count
+        }
+        setPageCounts(map)
+      },
+      _e => {},
+    ))
   }, [])
 
   const active = projects.filter(p => p.status === 'active').slice(0, 6)
@@ -288,9 +292,8 @@ function RecentWidget({ dark, onPageOpen }: { dark: boolean; onPageOpen: (projec
   const [pages, setPages] = useState<any[]>([])
 
   useEffect(() => {
-    db().pages.listRecent(8).then((res: any) => {
-      if (res?.ok) setPages(res.data ?? [])
-    })
+    fromIpc<any[]>(() => db().pages.listRecent(8), 'listRecent')
+      .then(r => r.match(data => setPages(data), _e => {}))
   }, [])
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
@@ -349,9 +352,8 @@ function PrazosWidget({ dark, onPageOpen }: { dark: boolean; onPageOpen: (projec
   const [items, setItems] = useState<any[]>([])
 
   useEffect(() => {
-    db().pages.listUpcoming(14).then((res: any) => {
-      if (res?.ok) setItems(res.data ?? [])
-    })
+    fromIpc<any[]>(() => db().pages.listUpcoming(14), 'listUpcoming')
+      .then(r => r.match(data => setItems(data), _e => {}))
   }, [])
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'

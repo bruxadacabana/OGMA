@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { Page, Project, ProjectView, ProjectProperty, PropOption } from '../../types'
 import { useAppStore } from '../../store/useAppStore'
+import { fromIpc } from '../../types/errors'
 import './KanbanView.css'
 
 const db = () => (window as any).db
@@ -19,15 +20,14 @@ export const KanbanView: React.FC<Props> = ({
   view, project, pages, properties, dark, onPageOpen,
 }) => {
   const [options, setOptions] = useState<PropOption[]>([])
-  const { loadPages } = useAppStore()
+  const { loadPages, pushToast } = useAppStore()
 
   const groupPropId = view.group_by_property_id
 
   useEffect(() => {
     if (!groupPropId) return
-    db().properties.getOptions(groupPropId).then((res: any) => {
-      if (res?.ok) setOptions(res.data ?? [])
-    })
+    fromIpc<PropOption[]>(() => db().properties.getOptions(groupPropId), 'kanbanGetOptions')
+      .then(r => r.match(data => setOptions(data), _e => {}))
   }, [groupPropId])
 
   // ── Paleta ────────────────────────────────────────────────────────────────
@@ -77,13 +77,16 @@ export const KanbanView: React.FC<Props> = ({
     const drag = dragRef.current
     if (!drag || !groupPropId) return
     dragRef.current = null
-    await db().pages.setPropValue({
-      page_id:     drag.pageId,
-      property_id: groupPropId,
-      value_text:  optionLabel,
-    })
+    const result = await fromIpc<unknown>(
+      () => db().pages.setPropValue({ page_id: drag.pageId, property_id: groupPropId, value_text: optionLabel }),
+      'kanbanSetStatus',
+    )
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao mover card', detail: result.error.message })
+      return
+    }
     loadPages(project.id)
-  }, [groupPropId, project.id, loadPages])
+  }, [groupPropId, project.id, loadPages, pushToast])
 
   // ── Quick add ─────────────────────────────────────────────────────────────
 
@@ -93,18 +96,24 @@ export const KanbanView: React.FC<Props> = ({
   const handleQuickAdd = useCallback(async (optionLabel: string) => {
     const title = quickTitle.trim()
     if (!title) { setCreatingIn(null); return }
-    const res = await db().pages.create({ project_id: project.id, title, sort_order: 0 })
-    if (res?.ok && res.data && groupPropId) {
-      await db().pages.setPropValue({
-        page_id:     res.data.id,
-        property_id: groupPropId,
-        value_text:  optionLabel,
-      })
+    const createResult = await fromIpc<{ id: number }>(
+      () => db().pages.create({ project_id: project.id, title, sort_order: 0 }),
+      'kanbanCreatePage',
+    )
+    if (createResult.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao criar página', detail: createResult.error.message })
+      return
+    }
+    if (groupPropId) {
+      await fromIpc<unknown>(
+        () => db().pages.setPropValue({ page_id: createResult.value.id, property_id: groupPropId, value_text: optionLabel }),
+        'kanbanSetInitialStatus',
+      )
     }
     setQuickTitle('')
     setCreatingIn(null)
     loadPages(project.id)
-  }, [quickTitle, groupPropId, project.id, loadPages])
+  }, [quickTitle, groupPropId, project.id, loadPages, pushToast])
 
   // ── Rodapé do card ────────────────────────────────────────────────────────
 

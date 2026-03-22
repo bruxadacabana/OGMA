@@ -1,4 +1,6 @@
 import { ipcMain } from 'electron'
+import https from 'https'
+import http from 'http'
 import { dbGet, dbAll, dbRun, getDb } from './database'
 import { createLogger, RENDERER_LOG_CHANNEL } from './logger'
 
@@ -69,10 +71,10 @@ function seedProjectProperties(projectId: number, projectType: string): Map<stri
         ['Concluída', '#4A6741'], ['Trancada', '#8B3A2A'],
       ])
       const year = new Date().getFullYear()
-      addProp('Semestre', 'semestre', 'select', [
-        [`${year - 1}.1`, null], [`${year - 1}.2`, null],
-        [`${year}.1`,     null], [`${year}.2`,     null],
-        [`${year + 1}.1`, null], [`${year + 1}.2`, null],
+      addProp('Trimestre', 'trimestre', 'select', [
+        [`${year - 1}.1`, null], [`${year - 1}.2`, null], [`${year - 1}.3`, null], [`${year - 1}.4`, null],
+        [`${year}.1`,     null], [`${year}.2`,     null], [`${year}.3`,     null], [`${year}.4`,     null],
+        [`${year + 1}.1`, null], [`${year + 1}.2`, null], [`${year + 1}.3`, null], [`${year + 1}.4`, null],
       ])
       addProp('Área', 'area', 'multi_select', [
         ['Humanas', '#7A5C2E'], ['Exatas', '#2C5F8A'], ['Biológicas', '#4A6741'],
@@ -165,7 +167,7 @@ function seedProjectViews(
 
   const viewConfigs: Record<string, ViewDef[]> = {
     academic: [
-      ['Progresso',  'progress', 'semestre', null     ],
+      ['Progresso',  'progress', 'trimestre', null     ],
       ['Tabela',     'table',    null,        null     ],
       ['Kanban',     'kanban',   'status',    null     ],
       ['Calendário', 'calendar', null,        'data_fim'],
@@ -230,6 +232,147 @@ function ftsUpsert(pageId: number, projectId: number, title: string, body: strin
   )
 }
 
+// ── Helpers de fetch para metadados ───────────────────────────────────────────
+
+function fetchJson(url: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith('https') ? https : http
+    const req = lib.get(url, { headers: { 'User-Agent': 'OGMA/1.0 (metadata-fetcher)' } }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        fetchJson(res.headers.location).then(resolve).catch(reject)
+        return
+      }
+      let data = ''
+      res.on('data', (c: any) => { data += c })
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)) } catch { reject(new Error('JSON inválido')) }
+      })
+    })
+    req.on('error', reject)
+    req.setTimeout(8000, () => { req.destroy(); reject(new Error('Timeout')) })
+  })
+}
+
+function fetchHtml(url: string, depth = 0): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (depth > 3) { reject(new Error('Too many redirects')); return }
+    const lib = url.startsWith('https') ? https : http
+    const req = lib.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OGMA/1.0)' } }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        fetchHtml(res.headers.location, depth + 1).then(resolve).catch(reject)
+        return
+      }
+      let data = ''
+      res.on('data', (c: any) => { data += c })
+      res.on('end', () => resolve(data))
+    })
+    req.on('error', reject)
+    req.setTimeout(8000, () => { req.destroy(); reject(new Error('Timeout')) })
+  })
+}
+
+function parseOgTags(html: string): Record<string, string> {
+  const m: Record<string, string> = {}
+  const og = /<meta[^>]+property=["']og:([^"']+)["'][^>]+content=["']([^"']*)["'][^>]*>/gi
+  let r
+  while ((r = og.exec(html)) !== null) m[r[1]] = r[2]
+  const tw = /<meta[^>]+name=["']twitter:([^"']+)["'][^>]+content=["']([^"']*)["'][^>]*>/gi
+  while ((r = tw.exec(html)) !== null) if (!m[r[1]]) m[r[1]] = r[2]
+  const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+  if (titleM) m['page_title'] = titleM[1].trim()
+  const descM = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)
+  if (descM && !m['description']) m['description'] = descM[1]
+  return m
+}
+
+async function fetchMetadata(type: string, query: string, url?: string): Promise<Record<string, any>> {
+  try {
+    if (type === 'livro') {
+      const isISBN = /^[\d -]{9,17}$/.test(query)
+      const encoded = encodeURIComponent(query.replace(/[-\s]/g, ''))
+      if (isISBN) {
+        const data = await fetchJson(`https://openlibrary.org/isbn/${encoded}.json`)
+        if (data?.title) {
+          return {
+            title: data.title,
+            publisher: data.publishers?.join(', '),
+            year: data.publish_date ? parseInt(data.publish_date) || undefined : undefined,
+            pages: data.number_of_pages,
+            isbn: encoded,
+          }
+        }
+      }
+      const olFields = 'key,title,author_name,first_publish_year,number_of_pages_median,isbn,publisher,language,cover_i'
+      const data = await fetchJson(`https://openlibrary.org/search.json?title=${encodeURIComponent(query)}&limit=1&fields=${olFields}`)
+      const doc = data?.docs?.[0]
+      if (!doc) return {}
+      return {
+        title:       doc.title,
+        author:      doc.author_name?.join(', ') ?? null,
+        year:        doc.first_publish_year ?? null,
+        pages:       doc.number_of_pages_median ?? null,
+        isbn:        doc.isbn?.[0] ?? null,
+        publisher:   doc.publisher?.[0] ?? null,
+        language:    doc.language?.[0] ?? null,
+        cover_url:   doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
+        cover_url_m: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
+      }
+    }
+
+    if (type === 'artigo') {
+      const isDOI = /^10\.\d{4,}\//.test(query)
+      if (isDOI) {
+        const data = await fetchJson(`https://api.crossref.org/works/${encodeURIComponent(query)}`)
+        const w = data?.message
+        if (w) return {
+          title:   w.title?.[0],
+          authors: w.author?.map((a: any) => `${a.given ?? ''} ${a.family ?? ''}`.trim()).join(', '),
+          journal: w['container-title']?.[0],
+          year:    w.published?.['date-parts']?.[0]?.[0],
+          doi:     w.DOI,
+          volume:  w.volume,
+          issue:   w.issue,
+        }
+      }
+      const data = await fetchJson(`https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=1`)
+      const w = data?.message?.items?.[0]
+      if (!w) return {}
+      return {
+        title:   w.title?.[0],
+        authors: w.author?.map((a: any) => `${a.given ?? ''} ${a.family ?? ''}`.trim()).join(', '),
+        journal: w['container-title']?.[0],
+        year:    w.published?.['date-parts']?.[0]?.[0],
+        doi:     w.DOI,
+        volume:  w.volume,
+        issue:   w.issue,
+      }
+    }
+
+    if (type === 'video' && url) {
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        const data = await fetchJson(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`)
+        return { title: data.title, channel: data.author_name, thumbnail_url: data.thumbnail_url, platform: 'YouTube' }
+      }
+    }
+
+    if (url) {
+      const html = await fetchHtml(url)
+      const tags = parseOgTags(html)
+      let domain = ''
+      try { domain = new URL(url).hostname } catch {}
+      return {
+        title:       tags.title || tags.page_title,
+        description: tags.description || tags['description'],
+        thumbnail:   tags.image,
+        domain,
+      }
+    }
+  } catch (e: any) {
+    log.warn('fetchMetadata error', e?.message)
+  }
+  return {}
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 export function registerIpcHandlers(): void {
@@ -290,11 +433,12 @@ export function registerIpcHandlers(): void {
   api('projects:update', (data) => {
     dbRun(`
       UPDATE projects SET name=?, description=?, icon=?, color=?,
-        project_type=?, subcategory=?, status=?, date_start=?, date_end=?,
+        project_type=?, subcategory=?, semester=?, status=?, date_start=?, date_end=?,
         sort_order=?, updated_at=datetime('now')
       WHERE id=?`,
       data.name, data.description ?? null, data.icon ?? null,
       data.color ?? null, data.project_type, data.subcategory ?? null,
+      data.semester ?? null,
       data.status, data.date_start ?? null, data.date_end ?? null,
       data.sort_order ?? 0, data.id
     )
@@ -754,12 +898,12 @@ export function registerIpcHandlers(): void {
     const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
     const r = dbRun(`
       INSERT INTO readings
-        (workspace_id, title, reading_type, author, publisher, year, isbn, status, rating,
+        (workspace_id, resource_id, title, reading_type, author, publisher, year, isbn, status, rating,
          current_page, total_pages, date_start, date_end, review)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-      ws.id, d.title, d.reading_type ?? 'book', d.author ?? null, d.publisher ?? null,
-      d.year ?? null, d.isbn ?? null, d.status ?? 'want', d.rating ?? null,
+      ws.id, d.resource_id ?? null, d.title, d.reading_type ?? 'book', d.author ?? null,
+      d.publisher ?? null, d.year ?? null, d.isbn ?? null, d.status ?? 'want', d.rating ?? null,
       d.current_page ?? 0, d.total_pages ?? null, d.date_start ?? null,
       d.date_end ?? null, d.review ?? null
     )
@@ -769,14 +913,14 @@ export function registerIpcHandlers(): void {
   api('readings:update', (d) => {
     dbRun(`
       UPDATE readings SET
-        title = ?, reading_type = ?, author = ?, publisher = ?, year = ?,
+        resource_id = ?, title = ?, reading_type = ?, author = ?, publisher = ?, year = ?,
         isbn = ?, status = ?, rating = ?, current_page = ?, total_pages = ?,
         date_start = ?, date_end = ?, review = ?, updated_at = datetime('now')
       WHERE id = ?
     `,
-      d.title, d.reading_type, d.author ?? null, d.publisher ?? null, d.year ?? null,
-      d.isbn ?? null, d.status, d.rating ?? null, d.current_page ?? 0,
-      d.total_pages ?? null, d.date_start ?? null, d.date_end ?? null,
+      d.resource_id ?? null, d.title, d.reading_type ?? 'book', d.author ?? null,
+      d.publisher ?? null, d.year ?? null, d.isbn ?? null, d.status, d.rating ?? null,
+      d.current_page ?? 0, d.total_pages ?? null, d.date_start ?? null, d.date_end ?? null,
       d.review ?? null, d.id
     )
     return dbGet('SELECT * FROM readings WHERE id = ?', d.id)
@@ -786,36 +930,218 @@ export function registerIpcHandlers(): void {
     dbRun('DELETE FROM readings WHERE id = ?', id)
   )
 
+  // ── Sessões de leitura ─────────────────────────────────────────────────────
+  api('reading_sessions:list', ({ reading_id }) =>
+    dbAll(`SELECT * FROM reading_sessions WHERE reading_id = ? ORDER BY date DESC, id DESC`, reading_id)
+  )
+
+  api('reading_sessions:create', (d) => {
+    const r = dbRun(`
+      INSERT INTO reading_sessions (reading_id, date, page_start, page_end, duration_min, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, d.reading_id, d.date, d.page_start ?? 0, d.page_end ?? 0,
+       d.duration_min ?? null, d.notes?.trim() || null)
+    // Actualiza current_page e possivelmente status na leitura
+    const sess = dbGet('SELECT * FROM reading_sessions WHERE id = ?', r.lastInsertRowid)
+    const reading = dbGet('SELECT * FROM readings WHERE id = ?', d.reading_id)
+    if (reading && sess.page_end > reading.current_page) {
+      const newStatus = (reading.total_pages && sess.page_end >= reading.total_pages)
+        ? 'done' : reading.status === 'want' ? 'reading' : reading.status
+      const dateEnd = newStatus === 'done' ? d.date : reading.date_end
+      dbRun(`UPDATE readings SET current_page = ?, status = ?, date_end = ?, updated_at = datetime('now') WHERE id = ?`,
+        sess.page_end, newStatus, dateEnd, d.reading_id)
+    }
+    return sess
+  })
+
+  api('reading_sessions:delete', ({ id }) =>
+    dbRun('DELETE FROM reading_sessions WHERE id = ?', id)
+  )
+
+  // ── Notas de leitura ──────────────────────────────────────────────────────
+  api('reading_notes:list', ({ reading_id }) =>
+    dbAll(`SELECT * FROM reading_notes WHERE reading_id = ? ORDER BY created_at ASC`, reading_id)
+  )
+  api('reading_notes:create', (d) => {
+    const r = dbRun(`INSERT INTO reading_notes (reading_id, chapter, content) VALUES (?, ?, ?)`,
+      d.reading_id, d.chapter?.trim() || null, d.content)
+    return dbGet('SELECT * FROM reading_notes WHERE id = ?', r.lastInsertRowid)
+  })
+  api('reading_notes:delete', ({ id }) =>
+    dbRun('DELETE FROM reading_notes WHERE id = ?', id)
+  )
+
+  // ── Citações de leitura ───────────────────────────────────────────────────
+  api('reading_quotes:list', ({ reading_id }) =>
+    dbAll(`SELECT * FROM reading_quotes WHERE reading_id = ? ORDER BY created_at ASC`, reading_id)
+  )
+  api('reading_quotes:create', (d) => {
+    const r = dbRun(`INSERT INTO reading_quotes (reading_id, text, location) VALUES (?, ?, ?)`,
+      d.reading_id, d.text, d.location?.trim() || null)
+    return dbGet('SELECT * FROM reading_quotes WHERE id = ?', r.lastInsertRowid)
+  })
+  api('reading_quotes:delete', ({ id }) =>
+    dbRun('DELETE FROM reading_quotes WHERE id = ?', id)
+  )
+
+  // ── Vínculos de leitura ───────────────────────────────────────────────────
+  api('reading_links:list', ({ reading_id }) =>
+    dbAll(`
+      SELECT rl.reading_id, rl.page_id, p.title, p.project_id, pr.name AS project_name
+      FROM reading_links rl
+      JOIN pages p ON p.id = rl.page_id
+      JOIN projects pr ON pr.id = p.project_id
+      WHERE rl.reading_id = ?
+    `, reading_id)
+  )
+  api('reading_links:add', ({ reading_id, page_id }) => {
+    try { dbRun(`INSERT INTO reading_links (reading_id, page_id) VALUES (?, ?)`, reading_id, page_id) } catch {}
+    return { ok: true }
+  })
+  api('reading_links:remove', ({ reading_id, page_id }) =>
+    dbRun(`DELETE FROM reading_links WHERE reading_id = ? AND page_id = ?`, reading_id, page_id)
+  )
+  api('reading_links:listForProject', ({ project_id }) =>
+    dbAll(`
+      SELECT rd.id, rd.title, rd.cover_path, rd.status, rd.current_page, rd.total_pages,
+             rd.author, rd.reading_type,
+             p.id AS page_id, p.title AS page_title, p.icon AS page_icon,
+             res.metadata_json
+      FROM reading_links rl
+      JOIN pages p        ON p.id        = rl.page_id
+      JOIN readings rd    ON rd.id       = rl.reading_id
+      LEFT JOIN resources res ON res.id  = rd.resource_id
+      WHERE p.project_id = ?
+      ORDER BY rd.title
+    `, project_id)
+  )
+
   // ── Recursos ───────────────────────────────────────────────────────────────
   api('resources:list', () => {
     const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
-    return dbAll(`SELECT * FROM resources WHERE workspace_id = ? ORDER BY created_at DESC`, ws.id)
+    return dbAll(`
+      SELECT r.*,
+             rd.status        AS reading_status,
+             rd.current_page  AS reading_current_page,
+             rd.total_pages   AS reading_total_pages,
+             rd.rating        AS reading_rating
+      FROM resources r
+      LEFT JOIN (
+        SELECT resource_id, status, current_page, total_pages, rating,
+               ROW_NUMBER() OVER (
+                 PARTITION BY resource_id
+                 ORDER BY CASE status
+                   WHEN 'reading' THEN 1 WHEN 'paused' THEN 2
+                   WHEN 'want'    THEN 3 WHEN 'done'   THEN 4
+                 END, updated_at DESC
+               ) AS rn
+        FROM readings WHERE resource_id IS NOT NULL
+      ) rd ON rd.resource_id = r.id AND rd.rn = 1
+      WHERE r.workspace_id = ?
+      ORDER BY r.created_at DESC
+    `, ws.id)
   })
 
   api('resources:create', (d) => {
     const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
     const r = dbRun(`
-      INSERT INTO resources (workspace_id, title, resource_type, url, description, tags_json)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO resources (workspace_id, title, resource_type, url, description, tags_json, metadata_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
       ws.id, d.title, d.resource_type ?? null, d.url ?? null,
-      d.description ?? null, d.tags_json ?? null
+      d.description ?? null, d.tags_json ?? null, d.metadata_json ?? null
     )
     return dbGet('SELECT * FROM resources WHERE id = ?', r.lastInsertRowid)
   })
 
   api('resources:update', (d) => {
     dbRun(`
-      UPDATE resources SET title = ?, resource_type = ?, url = ?, description = ?, tags_json = ?
+      UPDATE resources SET title = ?, resource_type = ?, url = ?, description = ?, tags_json = ?, metadata_json = ?
       WHERE id = ?
     `,
       d.title, d.resource_type ?? null, d.url ?? null,
-      d.description ?? null, d.tags_json ?? null, d.id
+      d.description ?? null, d.tags_json ?? null, d.metadata_json ?? null, d.id
     )
     return dbGet('SELECT * FROM resources WHERE id = ?', d.id)
   })
 
+  ipcMain.handle('resources:fetchMeta', async (_e, { type, query, url }: { type: string; query: string; url?: string }) => {
+    const meta = await fetchMetadata(type, query, url)
+    return { ok: true, data: meta }
+  })
+
+  ipcMain.handle('resources:searchMeta', async (_e, { type, query }: { type: string; query: string }) => {
+    try {
+      if (type === 'livro') {
+        const fields = 'key,title,author_name,first_publish_year,number_of_pages_median,isbn,publisher,language,cover_i'
+        const data = await fetchJson(`https://openlibrary.org/search.json?title=${encodeURIComponent(query)}&limit=6&fields=${fields}`)
+        const results = (data?.docs ?? []).map((doc: any) => ({
+          title:     doc.title,
+          author:    doc.author_name?.join(', ') ?? '',
+          year:      doc.first_publish_year ?? null,
+          pages:     doc.number_of_pages_median ?? null,
+          isbn:      doc.isbn?.[0] ?? null,
+          publisher: doc.publisher?.[0] ?? null,
+          language:  doc.language?.[0] ?? null,
+          cover_url:   doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-S.jpg` : null,
+          cover_url_m: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
+        }))
+        return { ok: true, data: results }
+      }
+      if (type === 'artigo') {
+        const data = await fetchJson(`https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=6`)
+        const results = (data?.message?.items ?? []).map((w: any) => ({
+          title:   w.title?.[0] ?? '',
+          authors: w.author?.map((a: any) => `${a.given ?? ''} ${a.family ?? ''}`.trim()).join(', ') ?? '',
+          journal: w['container-title']?.[0] ?? null,
+          year:    w.published?.['date-parts']?.[0]?.[0] ?? null,
+          doi:     w.DOI ?? null,
+          volume:  w.volume ?? null,
+          issue:   w.issue ?? null,
+        }))
+        return { ok: true, data: results }
+      }
+    } catch (e: any) {
+      log.warn('searchMeta error', e?.message)
+    }
+    return { ok: true, data: [] }
+  })
+
   api('resources:delete', ({ id }) =>
     dbRun('DELETE FROM resources WHERE id = ?', id)
+  )
+
+  // ── Vínculos recurso ↔ página ──────────────────────────────────────────────
+  api('resource_pages:listForResource', ({ resource_id }) =>
+    dbAll(`
+      SELECT rp.resource_id, rp.page_id,
+             p.title AS page_title, p.project_id,
+             pr.name AS project_name
+      FROM resource_pages rp
+      JOIN pages    p  ON p.id  = rp.page_id
+      JOIN projects pr ON pr.id = p.project_id
+      WHERE rp.resource_id = ?
+      ORDER BY pr.name, p.title
+    `, resource_id)
+  )
+
+  api('resource_pages:listForPage', ({ page_id }) =>
+    dbAll(`
+      SELECT rp.resource_id, rp.page_id,
+             r.title, r.resource_type, r.url, r.description, r.metadata_json
+      FROM resource_pages rp
+      JOIN resources r ON r.id = rp.resource_id
+      WHERE rp.page_id = ?
+      ORDER BY r.title
+    `, page_id)
+  )
+
+  api('resource_pages:add', ({ resource_id, page_id }) => {
+    try { dbRun(`INSERT INTO resource_pages (resource_id, page_id) VALUES (?, ?)`, resource_id, page_id) } catch {}
+    return { ok: true }
+  })
+
+  api('resource_pages:remove', ({ resource_id, page_id }) =>
+    dbRun(`DELETE FROM resource_pages WHERE resource_id = ? AND page_id = ?`, resource_id, page_id)
   )
 }

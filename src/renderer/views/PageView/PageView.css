@@ -88,7 +88,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  animation: fadeIn 0.18s ease;
+  position: relative;
+  z-index: 2;
 }
 
 .page-prop-row {

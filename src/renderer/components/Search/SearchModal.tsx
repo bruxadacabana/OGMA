@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Page } from '../../types'
+import { fromIpc } from '../../types/errors'
 import './SearchModal.css'
 
 const db = () => (window as any).db
@@ -32,18 +32,16 @@ export function SearchModal({ dark, onClose, onOpen }: Props) {
 
   // Carregar recentes ao abrir
   useEffect(() => {
-    db().pages.listRecent(8).then((res: any) => {
-      if (res?.ok) setRecents(res.data ?? [])
-    })
+    fromIpc<SearchResult[]>(() => db().pages.listRecent(8), 'listRecent')
+      .then(r => r.match(data => setRecents(data), _e => {}))
     inputRef.current?.focus()
   }, [])
 
   // Busca em tempo real
   useEffect(() => {
     if (!query.trim()) { setResults([]); setActive(0); return }
-    db().pages.search(query.trim(), 20).then((res: any) => {
-      if (res?.ok) { setResults(res.data ?? []); setActive(0) }
-    })
+    fromIpc<SearchResult[]>(() => db().pages.search(query.trim(), 20), 'searchPages')
+      .then(r => r.match(data => { setResults(data); setActive(0) }, _e => {}))
   }, [query])
 
   const items = query.trim() ? results : recents

@@ -13,7 +13,7 @@ export const AcademicProgressView: React.FC<ViewRendererProps> = ({
 
   // Encontrar propriedades relevantes
   const statusProp   = properties.find(p => p.prop_key === 'status')
-  const semestreProp = properties.find(p => p.prop_key === 'semestre')
+  const trimestreProp = properties.find(p => p.prop_key === 'trimestre')
   const notaProp     = properties.find(p => p.prop_key === 'nota')
   const creditosProp = properties.find(p => p.prop_key === 'creditos')
 
@@ -22,32 +22,32 @@ export const AcademicProgressView: React.FC<ViewRendererProps> = ({
     return page.prop_values?.find(v => v.property_id === propId)
   }
 
-  // Agregar por semestre
-  const bySemester = useMemo(() => {
+  // Agregar por trimestre
+  const byTrimester = useMemo(() => {
     const map: Record<string, typeof pages> = {}
     const unsorted: typeof pages = []
 
     pages.forEach(page => {
-      const pv = semestreProp ? getPV(page, semestreProp.id) : undefined
-      const sem = pv?.value_text ?? ''
-      if (sem) {
-        if (!map[sem]) map[sem] = []
-        map[sem].push(page)
+      const pv  = trimestreProp ? getPV(page, trimestreProp.id) : undefined
+      const tri = pv?.value_text ?? ''
+      if (tri) {
+        if (!map[tri]) map[tri] = []
+        map[tri].push(page)
       } else {
         unsorted.push(page)
       }
     })
 
     const sortedKeys = Object.keys(map).sort()
-    const result: { semester: string; pages: typeof pages }[] = sortedKeys.map(k => ({
-      semester: k,
+    const result: { trimester: string; pages: typeof pages }[] = sortedKeys.map(k => ({
+      trimester: k,
       pages: map[k],
     }))
     if (unsorted.length > 0) {
-      result.push({ semester: '—', pages: unsorted })
+      result.push({ trimester: '—', pages: unsorted })
     }
     return result
-  }, [pages, semestreProp])
+  }, [pages, trimestreProp])
 
   // Estatísticas globais
   const stats = useMemo(() => {
@@ -165,19 +165,19 @@ export const AcademicProgressView: React.FC<ViewRendererProps> = ({
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {bySemester.map(({ semester, pages: semPages }) => {
-            const done    = semPages.filter(p => getStatus(p) === 'Concluída').length
-            const pct     = semPages.length > 0 ? Math.round((done / semPages.length) * 100) : 0
-            const semNota = semPages
+          {byTrimester.map(({ trimester, pages: triPages }) => {
+            const done    = triPages.filter(p => getStatus(p) === 'Concluída').length
+            const pct     = triPages.length > 0 ? Math.round((done / triPages.length) * 100) : 0
+            const triNota = triPages
               .map(p => getNota(p))
               .filter((n): n is number => n !== null)
-            const semAvg  = semNota.length > 0
-              ? (semNota.reduce((a, b) => a + b, 0) / semNota.length).toFixed(1)
+            const triAvg  = triNota.length > 0
+              ? (triNota.reduce((a, b) => a + b, 0) / triNota.length).toFixed(1)
               : null
 
             return (
-              <div key={semester}>
-                {/* Cabeçalho do semestre */}
+              <div key={trimester}>
+                {/* Cabeçalho do trimestre */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8,
                 }}>
@@ -185,16 +185,16 @@ export const AcademicProgressView: React.FC<ViewRendererProps> = ({
                     fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em',
                     color: color, fontWeight: 'bold',
                   }}>
-                    {semester === '—' ? 'SEM SEMESTRE' : semester}
+                    {trimester === '—' ? 'SEM TRIMESTRE' : trimester}
                   </div>
                   <div style={{ flex: 1, height: 1, background: border }} />
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
-                    {done}/{semPages.length}
-                    {semAvg && <> · média {semAvg}</>}
+                    {done}/{triPages.length}
+                    {triAvg && <> · média {triAvg}</>}
                   </div>
                 </div>
 
-                {/* Barra do semestre */}
+                {/* Barra do trimestre */}
                 <div style={{ height: 3, background: border, borderRadius: 2, marginBottom: 10 }}>
                   <div style={{
                     height: '100%', width: `${pct}%`,
@@ -208,7 +208,7 @@ export const AcademicProgressView: React.FC<ViewRendererProps> = ({
                   gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
                   gap: 8,
                 }}>
-                  {semPages.map(page => {
+                  {triPages.map(page => {
                     const status   = getStatus(page)
                     const nota     = getNota(page)
                     const creditos = getCreditos(page)

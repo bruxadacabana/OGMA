@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { fromIpc } from '../../types/errors'
 
 const db = () => (window as any).db
 
@@ -37,9 +38,8 @@ export function GlobalCalendarView({ dark, onPageOpen }: Props) {
   const bg     = dark ? '#1A1610' : '#F5F0E8'
 
   const load = useCallback(() => {
-    db().calendar.pagesForMonth(year, month).then((res: any) => {
-      if (res?.ok) setEntries(res.data ?? [])
-    })
+    fromIpc<CalPage[]>(() => db().calendar.pagesForMonth(year, month), 'calendarPagesForMonth')
+      .then(r => r.match(data => setEntries(data), _e => {}))
   }, [year, month])
 
   useEffect(() => { load() }, [load])
