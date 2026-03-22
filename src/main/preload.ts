@@ -123,4 +123,19 @@ contextBridge.exposeInMainWorld('db', {
   uploads: {
     saveImage: (d: any) => api('uploads:saveImage', d),
   },
+  events: {
+    listForMonth:   (year: number, month: number) => api('events:listForMonth',   { year, month }),
+    listForPage:    (page_id: number)              => api('events:listForPage',    { page_id }),
+    listForProject: (project_id: number)           => api('events:listForProject', { project_id }),
+    listUpcoming:   (days?: number)                => api('events:listUpcoming',   { days: days ?? 14 }),
+    create:         (d: any)                       => api('events:create',         d),
+    update:         (d: any)                       => api('events:update',         d),
+    delete:         (id: number)                   => api('events:delete',         { id }),
+  },
+  reminders: {
+    list:    (include_dismissed?: boolean) => api('reminders:list',    { include_dismissed: include_dismissed ?? false }),
+    create:  (d: any)                      => api('reminders:create',  d),
+    dismiss: (id: number)                  => api('reminders:dismiss', { id }),
+    delete:  (id: number)                  => api('reminders:delete',  { id }),
+  },
 })

@@ -219,6 +219,243 @@ function GlobalTagPanel({ pageId, dark }: { pageId: number; dark: boolean }) {
   )
 }
 
+// ── Eventos / Lembretes vinculados à página ───────────────────────────────────
+
+const EVENT_ICONS: Record<string, string> = {
+  prova: '📝', trabalho: '📋', seminario: '🎙', defesa: '🎓',
+  prazo: '⏰', reuniao: '👥', outro: '◦',
+}
+const EVENT_LABELS: Record<string, string> = {
+  prova: 'Prova', trabalho: 'Trabalho', seminario: 'Seminário',
+  defesa: 'Defesa', prazo: 'Prazo', reuniao: 'Reunião', outro: 'Outro',
+}
+const EVENT_COLORS: Record<string, string> = {
+  prova: '#8B3A2A', trabalho: '#2C5F8A', seminario: '#6B4F72',
+  defesa: '#b8860b', prazo: '#7A5C2E', reuniao: '#4A6741', outro: '#8B7355',
+}
+
+function PageEventsPanel({ page, project, dark }: { page: Page; project: Project; dark: boolean }) {
+  const { pushToast } = useAppStore()
+  const [events,   setEvents]   = useState<any[]>([])
+  const [expanded, setExpanded] = useState(false)
+  const [adding,   setAdding]   = useState(false)
+
+  const [form, setForm] = useState({
+    title: '', event_type: 'outro', start_dt: '', all_day: true,
+    time: '09:00', reminder_minutes: '' as string | number,
+  })
+
+  const bg     = dark ? '#1A1710' : '#F5F0E8'
+  const border = dark ? '#3A3020' : '#D4C9B4'
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  const load = () => {
+    fromIpc<any[]>(() => db().events.listForPage(page.id), 'eventsForPage')
+      .then(r => r.match(data => setEvents(data), _e => {}))
+  }
+
+  useEffect(() => { load() }, [page.id])
+
+  const handleAdd = async () => {
+    if (!form.title.trim() || !form.start_dt) return
+    const start_dt = form.all_day ? form.start_dt : `${form.start_dt}T${form.time}:00`
+    const rem = form.reminder_minutes !== '' ? Number(form.reminder_minutes) : undefined
+    const result = await fromIpc<any>(() => db().events.create({
+      title: form.title.trim(),
+      event_type: form.event_type,
+      start_dt,
+      all_day: form.all_day ? 1 : 0,
+      linked_page_id: page.id,
+      linked_project_id: project.id,
+      reminder_minutes: rem,
+    }), 'createPageEvent')
+    if (result.isErr()) {
+      pushToast({ kind: 'error', title: 'Erro ao criar evento', detail: result.error.message })
+      return
+    }
+    setAdding(false)
+    setForm({ title: '', event_type: 'outro', start_dt: '', all_day: true, time: '09:00', reminder_minutes: '' })
+    load()
+  }
+
+  const handleDelete = async (id: number) => {
+    await fromIpc<any>(() => db().events.delete(id), 'deletePageEvent')
+    load()
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+
+  if (events.length === 0 && !expanded) {
+    return (
+      <div style={{ padding: '4px 16px 0', background: bg, borderTop: `1px solid ${border}` }}>
+        <button onClick={() => { setExpanded(true); setAdding(true) }} style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em',
+          color: ink2, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0',
+        }}>
+          + Actividade / Lembrete
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '8px 16px 10px', background: bg, borderTop: `1px solid ${border}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', color: ink2 }}>
+          ACTIVIDADES & LEMBRETES
+        </span>
+        <button onClick={() => { setExpanded(true); setAdding(true) }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: accent, fontSize: 13, lineHeight: 1, padding: 0 }}>
+          +
+        </button>
+      </div>
+
+      {/* Lista de eventos */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: adding ? 10 : 0 }}>
+        {events.map((ev: any) => {
+          const dt    = ev.start_dt?.slice(0, 10) ?? ''
+          const past  = dt < today
+          const color = EVENT_COLORS[ev.event_type ?? 'outro'] ?? '#8B7355'
+          return (
+            <div key={ev.id} style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '4px 8px', borderRadius: 2,
+              border: `1px solid ${past ? border : color + '55'}`,
+              background: past ? 'transparent' : (color + '11'),
+              opacity: past ? 0.55 : 1,
+            }}>
+              <span title={EVENT_LABELS[ev.event_type ?? 'outro']}>
+                {EVENT_ICONS[ev.event_type ?? 'outro']}
+              </span>
+              <span style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 10, color: ink,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {ev.title}
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: past ? ink2 : color, flexShrink: 0 }}>
+                {dt ? new Date(dt + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : ''}
+                {ev.start_dt?.includes('T') && !ev.all_day
+                  ? ' ' + ev.start_dt.slice(11, 16)
+                  : ''}
+              </span>
+              <button onClick={() => handleDelete(ev.id)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: ink2, fontSize: 12, padding: 0, lineHeight: 1 }}>
+                ×
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Formulário inline */}
+      {adding && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5,
+          padding: '8px', border: `1px solid ${border}`, borderRadius: 2,
+          background: dark ? '#211D16' : '#EDE7D9' }}>
+
+          {/* Tipo */}
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {Object.entries(EVENT_ICONS).map(([type, icon]) => (
+              <button key={type}
+                onClick={() => setForm(f => ({ ...f, event_type: type }))}
+                title={EVENT_LABELS[type]}
+                style={{
+                  fontSize: 11, padding: '2px 7px', borderRadius: 2, cursor: 'pointer',
+                  border: `1px solid ${form.event_type === type ? EVENT_COLORS[type] : border}`,
+                  background: form.event_type === type ? EVENT_COLORS[type] + '22' : 'transparent',
+                  color: form.event_type === type ? EVENT_COLORS[type] : ink2,
+                  fontFamily: 'var(--font-mono)',
+                }}>
+                {icon} {EVENT_LABELS[type]}
+              </button>
+            ))}
+          </div>
+
+          {/* Título */}
+          <input
+            type="text" placeholder="Título da actividade…"
+            value={form.title}
+            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+            autoFocus
+            style={{
+              background: 'none', border: `1px solid ${border}`, borderRadius: 2,
+              padding: '4px 8px', fontSize: 11, color: ink, outline: 'none',
+              fontFamily: 'var(--font-mono)',
+            }}
+          />
+
+          {/* Data + hora */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input type="date" value={form.start_dt}
+              onChange={e => setForm(f => ({ ...f, start_dt: e.target.value }))}
+              style={{
+                background: 'none', border: `1px solid ${border}`, borderRadius: 2,
+                padding: '3px 6px', fontSize: 11, color: ink, outline: 'none',
+                colorScheme: dark ? 'dark' : 'light',
+              }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: ink2, fontFamily: 'var(--font-mono)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.all_day}
+                onChange={e => setForm(f => ({ ...f, all_day: e.target.checked }))} />
+              dia inteiro
+            </label>
+            {!form.all_day && (
+              <input type="time" value={form.time}
+                onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
+                style={{
+                  background: 'none', border: `1px solid ${border}`, borderRadius: 2,
+                  padding: '3px 6px', fontSize: 11, color: ink, outline: 'none',
+                  colorScheme: dark ? 'dark' : 'light',
+                }} />
+            )}
+          </div>
+
+          {/* Lembrete */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, letterSpacing: '0.08em' }}>
+              LEMBRETE
+            </span>
+            <select
+              value={form.reminder_minutes}
+              onChange={e => setForm(f => ({ ...f, reminder_minutes: e.target.value }))}
+              style={{
+                background: 'none', border: `1px solid ${border}`, borderRadius: 2,
+                padding: '2px 5px', fontSize: 10, color: ink, fontFamily: 'var(--font-mono)',
+              }}>
+              <option value="">Sem lembrete</option>
+              <option value={15}>15 min antes</option>
+              <option value={30}>30 min antes</option>
+              <option value={60}>1 hora antes</option>
+              <option value={1440}>1 dia antes</option>
+              <option value={2880}>2 dias antes</option>
+            </select>
+          </div>
+
+          {/* Acções */}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={handleAdd}
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em',
+                padding: '3px 12px', border: `1px solid ${accent}`, borderRadius: 2,
+                color: accent, background: 'none', cursor: 'pointer',
+              }}>
+              Guardar
+            </button>
+            <button onClick={() => { setAdding(false); if (events.length === 0) setExpanded(false) }}
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 10,
+                padding: '3px 10px', border: `1px solid ${border}`, borderRadius: 2,
+                color: ink2, background: 'none', cursor: 'pointer',
+              }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Pré-requisitos (projetos académicos) ──────────────────────────────────────
 
 function PrerequisitesPanel({ page, project, dark }: { page: Page; project: Project; dark: boolean }) {
@@ -1049,6 +1286,9 @@ export const PageView: React.FC<Props> = ({ page, project, dark, onBack }) => {
 
       {/* Recursos vinculados */}
       <PageResourcePanel pageId={page.id} dark={dark} />
+
+      {/* Actividades & Lembretes */}
+      <PageEventsPanel page={page} project={project} dark={dark} />
 
       {/* Tags Globais */}
       <GlobalTagPanel pageId={page.id} dark={dark} />

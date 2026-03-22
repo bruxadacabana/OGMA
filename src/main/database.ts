@@ -85,6 +85,10 @@ function initSchema(db: Database.Database): void {
     )
   `) } catch {}
 
+  // calendar_events: tipo de evento e projecto vinculado
+  try { db.exec(`ALTER TABLE calendar_events ADD COLUMN event_type TEXT DEFAULT 'outro'`) } catch {}
+  try { db.exec(`ALTER TABLE calendar_events ADD COLUMN linked_project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL`) } catch {}
+
   // Garante propriedade "Código" (PREFIX###) em projetos académicos existentes
   try {
     const academicProjects = db.prepare(

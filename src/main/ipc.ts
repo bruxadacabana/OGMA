@@ -1267,4 +1267,125 @@ export function registerIpcHandlers(): void {
   api('resource_pages:remove', ({ resource_id, page_id }) =>
     dbRun(`DELETE FROM resource_pages WHERE resource_id = ? AND page_id = ?`, resource_id, page_id)
   )
+
+  // ── Eventos de Calendário ─────────────────────────────────────────────────
+
+  api('events:listForMonth', ({ year, month }) => {
+    const y    = String(year)
+    const m    = String(month + 1).padStart(2, '0')
+    const start = `${y}-${m}-01`
+    const next  = month === 11
+      ? `${year + 1}-01-01`
+      : `${y}-${String(month + 2).padStart(2, '0')}-01`
+    return dbAll(`
+      SELECT ce.*, p.title AS page_title, pr.name AS project_name, pr.color AS project_color
+      FROM calendar_events ce
+      LEFT JOIN pages    p  ON p.id  = ce.linked_page_id
+      LEFT JOIN projects pr ON pr.id = ce.linked_project_id
+      WHERE ce.workspace_id = (SELECT id FROM workspaces LIMIT 1)
+        AND ce.start_dt >= ? AND ce.start_dt < ?
+      ORDER BY ce.start_dt
+    `, start, next)
+  })
+
+  api('events:listForPage', ({ page_id }) =>
+    dbAll(`SELECT * FROM calendar_events WHERE linked_page_id = ? ORDER BY start_dt`, page_id)
+  )
+
+  api('events:listForProject', ({ project_id }) =>
+    dbAll(`
+      SELECT ce.*, p.title AS page_title
+      FROM calendar_events ce
+      LEFT JOIN pages p ON p.id = ce.linked_page_id
+      WHERE ce.linked_project_id = ?
+      ORDER BY ce.start_dt
+    `, project_id)
+  )
+
+  api('events:listUpcoming', ({ days }) => {
+    const now    = new Date().toISOString().slice(0, 10)
+    const future = new Date(Date.now() + (days ?? 14) * 86_400_000).toISOString().slice(0, 10)
+    return dbAll(`
+      SELECT ce.*, p.title AS page_title, pr.name AS project_name, pr.color AS project_color
+      FROM calendar_events ce
+      LEFT JOIN pages    p  ON p.id  = ce.linked_page_id
+      LEFT JOIN projects pr ON pr.id = ce.linked_project_id
+      WHERE ce.workspace_id = (SELECT id FROM workspaces LIMIT 1)
+        AND date(ce.start_dt) >= ? AND date(ce.start_dt) <= ?
+      ORDER BY ce.start_dt
+    `, now, future)
+  })
+
+  api('events:create', (data) => {
+    const wsId = (dbGet(`SELECT id FROM workspaces LIMIT 1`) as any)?.id ?? 1
+    const r = dbRun(`
+      INSERT INTO calendar_events
+        (workspace_id, title, description, start_dt, end_dt, all_day, color, event_type, linked_page_id, linked_project_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      wsId, data.title, data.description ?? null,
+      data.start_dt, data.end_dt ?? null, data.all_day ? 1 : 0,
+      data.color ?? null, data.event_type ?? 'outro',
+      data.linked_page_id ?? null, data.linked_project_id ?? null
+    )
+    const eventId = Number(r.lastInsertRowid)
+
+    // Auto-criar lembrete se pedido
+    if (data.reminder_minutes != null) {
+      const base = data.start_dt.includes('T') ? data.start_dt : `${data.start_dt}T09:00:00`
+      const t = new Date(base)
+      t.setMinutes(t.getMinutes() - data.reminder_minutes)
+      dbRun(`
+        INSERT INTO reminders (title, trigger_at, offset_minutes, linked_event_id, linked_page_id)
+        VALUES (?, ?, ?, ?, ?)`,
+        data.title, t.toISOString().slice(0, 16),
+        data.reminder_minutes, eventId, data.linked_page_id ?? null
+      )
+    }
+
+    return dbGet(`SELECT * FROM calendar_events WHERE id = ?`, eventId)
+  })
+
+  api('events:update', (data) => {
+    const allowed = ['title','description','start_dt','end_dt','all_day','color','event_type','linked_page_id','linked_project_id']
+    const cols: string[] = [], vals: any[] = []
+    for (const key of allowed) {
+      if (data[key] !== undefined) { cols.push(`${key} = ?`); vals.push(data[key]) }
+    }
+    if (cols.length) dbRun(`UPDATE calendar_events SET ${cols.join(', ')} WHERE id = ?`, ...vals, data.id)
+    return dbGet(`SELECT * FROM calendar_events WHERE id = ?`, data.id)
+  })
+
+  api('events:delete', ({ id }) =>
+    dbRun(`DELETE FROM calendar_events WHERE id = ?`, id)
+  )
+
+  // ── Lembretes ─────────────────────────────────────────────────────────────
+
+  api('reminders:list', ({ include_dismissed } = {}) =>
+    dbAll(`
+      SELECT r.*, ce.event_type, ce.start_dt AS event_start
+      FROM reminders r
+      LEFT JOIN calendar_events ce ON ce.id = r.linked_event_id
+      ${include_dismissed ? '' : 'WHERE r.is_dismissed = 0'}
+      ORDER BY r.trigger_at
+    `)
+  )
+
+  api('reminders:create', (data) => {
+    const r = dbRun(`
+      INSERT INTO reminders (title, trigger_at, offset_minutes, linked_event_id, linked_page_id)
+      VALUES (?, ?, ?, ?, ?)`,
+      data.title, data.trigger_at, data.offset_minutes ?? null,
+      data.linked_event_id ?? null, data.linked_page_id ?? null
+    )
+    return dbGet(`SELECT * FROM reminders WHERE id = ?`, Number(r.lastInsertRowid))
+  })
+
+  api('reminders:dismiss', ({ id }) =>
+    dbRun(`UPDATE reminders SET is_dismissed = 1 WHERE id = ?`, id)
+  )
+
+  api('reminders:delete', ({ id }) =>
+    dbRun(`DELETE FROM reminders WHERE id = ?`, id)
+  )
 }

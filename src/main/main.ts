@@ -3,6 +3,7 @@ import path from 'path'
 import { ensureDirs } from './paths'
 import { getDb } from './database'
 import { registerIpcHandlers } from './ipc'
+import { startReminderScheduler } from './scheduler'
 import { createLogger, setupGlobalErrorHandlers } from './logger'
 
 const log = createLogger('main')
@@ -59,6 +60,9 @@ app.whenReady().then(() => {
 
   log.info('Registrando handlers IPC')
   registerIpcHandlers()
+
+  log.info('Iniciando scheduler de lembretes')
+  startReminderScheduler()
 
   log.info('Criando janela principal')
   createWindow()

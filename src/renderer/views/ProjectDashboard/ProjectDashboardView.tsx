@@ -83,6 +83,73 @@ function ProjectHeader({ project, dark, onEdit }: {
 
 // ── Leituras vinculadas ───────────────────────────────────────────────────────
 
+const EVENT_ICONS: Record<string, string> = {
+  prova: '📝', trabalho: '📋', seminario: '🎙', defesa: '🎓',
+  prazo: '⏰', reuniao: '👥', outro: '◦',
+}
+const EVENT_COLORS_MAP: Record<string, string> = {
+  prova: '#8B3A2A', trabalho: '#2C5F8A', seminario: '#6B4F72',
+  defesa: '#b8860b', prazo: '#7A5C2E', reuniao: '#4A6741', outro: '#8B7355',
+}
+
+function UpcomingEventsPanel({ projectId, dark, onPageOpen }: {
+  projectId: number; dark: boolean; onPageOpen: (page: any) => void
+}) {
+  const [events, setEvents] = useState<any[]>([])
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  useEffect(() => {
+    fromIpc<any[]>(() => (window as any).db.events.listForProject(projectId), 'eventsForProject')
+      .then(r => r.match(data => {
+        const today = new Date().toISOString().slice(0, 10)
+        setEvents(data.filter((e: any) => e.start_dt >= today).slice(0, 10))
+      }, _e => {}))
+  }, [projectId])
+
+  if (events.length === 0) return null
+
+  return (
+    <div style={{ padding: '8px 20px 4px', background: cardBg, borderBottom: `1px solid ${border}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.14em', color: ink2 }}>
+          PRÓXIMAS ACTIVIDADES
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {events.map((ev: any) => {
+          const color = EVENT_COLORS_MAP[ev.event_type ?? 'outro'] ?? '#8B7355'
+          const dt    = ev.start_dt?.slice(0, 10) ?? ''
+          const dtFmt = dt ? new Date(dt + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : ''
+          return (
+            <button key={ev.id}
+              onClick={() => ev.page_id && onPageOpen({ id: ev.linked_page_id, project_id: projectId })}
+              title={`${ev.title}${ev.page_title ? ' · ' + ev.page_title : ''}`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '3px 8px 3px 6px', border: `1px solid ${color}44`,
+                borderLeft: `3px solid ${color}`, borderRadius: 2,
+                background: color + '11', cursor: ev.linked_page_id ? 'pointer' : 'default',
+                fontFamily: 'var(--font-mono)', fontSize: 10, color: ink,
+                maxWidth: 220,
+              }}>
+              <span>{EVENT_ICONS[ev.event_type ?? 'outro']}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {ev.title}
+              </span>
+              <span style={{ fontSize: 9, color, flexShrink: 0 }}>{dtFmt}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 const STATUS_LABELS: Record<string, string> = {
   want: 'Quer ler', reading: 'Lendo', done: 'Lido', abandoned: 'Abandonado',
 }
@@ -233,6 +300,12 @@ export const ProjectDashboardView: React.FC<Props> = ({
           dark={dark}
           onPageOpen={onPageOpen}
           pages={pages}
+        />
+
+        <UpcomingEventsPanel
+          projectId={project.id}
+          dark={dark}
+          onPageOpen={onPageOpen}
         />
 
         <div className="view-tabs" style={{ borderColor: border }}>

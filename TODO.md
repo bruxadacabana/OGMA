@@ -63,8 +63,12 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 
 ## Fase 8 — Calendário, Lembretes e Analytics
 
-- [ ] Lembretes via Notification API do Electron
-- [ ] Analytics de tempo por página e projeto
+- [x] Lembretes via Notification API do Electron (scheduler.ts com polling de 60s)
+- [x] Actividades académicas: tipos Prova, Trabalho, Seminário, Defesa, Prazo, Reunião, Outro
+- [x] PageEventsPanel — criar actividades/lembretes dentro de cada página
+- [x] UpcomingEventsPanel — painel de próximas actividades no dashboard do projecto
+- [x] GlobalCalendarView — eventos no grid + aba Agenda (próximos 60 dias) + aba Lembretes
+- [ ] Analytics de tempo por página e projeto (requer Pomodoro/time_sessions)
 
 ---
 
