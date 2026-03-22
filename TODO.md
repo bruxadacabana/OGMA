@@ -29,6 +29,7 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Abas de leitura: Geral, Notas, Citações, Vínculos (detalhe de uma leitura)
 - [x] Recursos: vista em galeria + detalhe com metadados + conexões a páginas
 - [x] `reading_links`: vincular leitura ↔ página do OGMA
+- [x] Progresso de leitura por páginas ou porcentagem (escolha ao cadastrar)
 - [ ] Meta de leitura anual (tabela `reading_goals`)
 - [ ] Histórico de versões de página (tabela `page_versions` já existe no schema)
 - [ ] Backlinks: mostrar no PageView as páginas que referenciam a atual

@@ -85,6 +85,11 @@ function initSchema(db: Database.Database): void {
     )
   `) } catch {}
 
+  // Progresso de leitura por porcentagem
+  try { db.exec(`ALTER TABLE readings ADD COLUMN progress_type TEXT DEFAULT 'pages'`) } catch {}
+  try { db.exec(`ALTER TABLE readings ADD COLUMN progress_percent INTEGER DEFAULT 0`) } catch {}
+  try { db.exec(`ALTER TABLE reading_sessions ADD COLUMN percent_end INTEGER`) } catch {}
+
   // Garante propriedade "Semestre" em projetos acadêmicos existentes
   try {
     const year = new Date().getFullYear()

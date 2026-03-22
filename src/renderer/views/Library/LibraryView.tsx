@@ -8,23 +8,25 @@ const db = () => (window as any).db
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 interface Reading {
-  id:           number
-  resource_id:  number | null
-  title:        string
-  reading_type: string
-  author:       string | null
-  publisher:    string | null
-  year:         number | null
-  isbn:         string | null
-  status:       string
-  rating:       number | null
-  current_page: number
-  total_pages:  number | null
-  date_start:   string | null
-  date_end:     string | null
-  review:       string | null
-  created_at:   string
-  updated_at:   string
+  id:               number
+  resource_id:      number | null
+  title:            string
+  reading_type:     string
+  author:           string | null
+  publisher:        string | null
+  year:             number | null
+  isbn:             string | null
+  status:           string
+  rating:           number | null
+  current_page:     number
+  total_pages:      number | null
+  date_start:       string | null
+  date_end:         string | null
+  review:           string | null
+  progress_type:    'pages' | 'percent'
+  progress_percent: number
+  created_at:       string
+  updated_at:       string
 }
 
 interface Resource {
@@ -37,10 +39,12 @@ interface Resource {
   metadata_json: string | null
   created_at:    string
   // Leitura associada (LEFT JOIN)
-  reading_status:       string | null
-  reading_current_page: number | null
-  reading_total_pages:  number | null
-  reading_rating:       number | null
+  reading_status:           string | null
+  reading_current_page:     number | null
+  reading_total_pages:      number | null
+  reading_rating:           number | null
+  reading_progress_type:    string | null
+  reading_progress_percent: number | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -123,11 +127,20 @@ const META_FIELDS: Record<string, MetaField[]> = {
   ],
 }
 
+function calcProgress(r: Reading | { progress_type?: string | null; progress_percent?: number | null; current_page?: number | null; total_pages?: number | null; reading_progress_type?: string | null; reading_progress_percent?: number | null; reading_current_page?: number | null; reading_total_pages?: number | null }): number | null {
+  // Suporte a objecto Reading directo ou Resource com campos reading_*
+  const type    = (r as any).progress_type    ?? (r as any).reading_progress_type    ?? 'pages'
+  const pct     = (r as any).progress_percent ?? (r as any).reading_progress_percent ?? null
+  const cur     = (r as any).current_page     ?? (r as any).reading_current_page     ?? 0
+  const total   = (r as any).total_pages      ?? (r as any).reading_total_pages      ?? null
+  if (type === 'percent') return pct != null ? Math.min(100, Math.max(0, pct)) : null
+  return total && total > 0 ? Math.round((cur / total) * 100) : null
+}
+
 function ReadingProgress({ r, dark, compact = false }: { r: Resource; dark: boolean; compact?: boolean }) {
   if (!r.reading_status) return null
   const st      = READING_STATUS[r.reading_status] ?? READING_STATUS.want
-  const progress = r.reading_total_pages && r.reading_total_pages > 0
-    ? Math.round(((r.reading_current_page ?? 0) / r.reading_total_pages) * 100) : null
+  const progress = calcProgress(r)
   const border = dark ? '#3A3020' : '#C4B9A8'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 2 : 3,
@@ -161,15 +174,17 @@ function ReadingModal({ initial, dark, onSave, onClose }: {
   initial?: Reading | null; dark: boolean;
   onSave: (data: any) => void; onClose: () => void
 }) {
-  const [resourceId, setResourceId] = useState<number | null>(initial?.resource_id ?? null)
-  const [title,     setTitle]     = useState(initial?.title        ?? '')
-  const [status,    setStatus]    = useState(initial?.status       ?? 'reading')
-  const [curPage,   setCurPage]   = useState(String(initial?.current_page ?? ''))
-  const [totPages,  setTotPages]  = useState(String(initial?.total_pages  ?? ''))
-  const [dateStart, setDateStart] = useState(initial?.date_start   ?? '')
-  const [dateEnd,   setDateEnd]   = useState(initial?.date_end     ?? '')
-  const [rating,    setRating]    = useState(String(initial?.rating ?? ''))
-  const [review,    setReview]    = useState(initial?.review        ?? '')
+  const [resourceId,    setResourceId]    = useState<number | null>(initial?.resource_id ?? null)
+  const [title,         setTitle]         = useState(initial?.title           ?? '')
+  const [status,        setStatus]        = useState(initial?.status          ?? 'reading')
+  const [progressType,  setProgressType]  = useState<'pages' | 'percent'>(initial?.progress_type ?? 'pages')
+  const [curPage,       setCurPage]       = useState(String(initial?.current_page     ?? ''))
+  const [totPages,      setTotPages]      = useState(String(initial?.total_pages      ?? ''))
+  const [initPercent,   setInitPercent]   = useState(String(initial?.progress_percent ?? ''))
+  const [dateStart,     setDateStart]     = useState(initial?.date_start ?? '')
+  const [dateEnd,       setDateEnd]       = useState(initial?.date_end   ?? '')
+  const [rating,        setRating]        = useState(String(initial?.rating    ?? ''))
+  const [review,        setReview]        = useState(initial?.review           ?? '')
   const [resources, setResources] = useState<Resource[]>([])
   const [resQuery,  setResQuery]  = useState('')
 
@@ -204,14 +219,17 @@ function ReadingModal({ initial, dark, onSave, onClose }: {
     if (!title.trim()) return
     onSave({
       ...(initial ? { id: initial.id } : {}),
-      resource_id: resourceId,
-      title: title.trim(), status,
-      current_page: curPage ? parseInt(curPage) : 0,
-      total_pages:  totPages ? parseInt(totPages) : null,
-      date_start:   dateStart || null,
-      date_end:     dateEnd   || null,
-      rating:       rating ? parseInt(rating) : null,
-      review:       review.trim() || null,
+      resource_id:      resourceId,
+      title:            title.trim(),
+      status,
+      progress_type:    progressType,
+      progress_percent: progressType === 'percent' ? (initPercent ? parseInt(initPercent) : 0) : 0,
+      current_page:     progressType === 'pages' && curPage ? parseInt(curPage) : 0,
+      total_pages:      progressType === 'pages' && totPages ? parseInt(totPages) : null,
+      date_start:       dateStart || null,
+      date_end:         dateEnd   || null,
+      rating:           rating ? parseInt(rating) : null,
+      review:           review.trim() || null,
     })
   }
 
@@ -297,20 +315,58 @@ function ReadingModal({ initial, dark, onSave, onClose }: {
           </select>
         </div>
 
-        <div className="library-modal-row">
-          <div className="library-modal-field">
-            <label className="library-modal-label" style={{ color: ink2 }}>Página atual</label>
-            <input type="number" className="library-modal-input" value={curPage}
-              onChange={e => setCurPage(e.target.value)} placeholder="0"
-              style={{ background: dark ? '#2A2520' : undefined, color: ink, borderColor: border }} />
-          </div>
-          <div className="library-modal-field">
-            <label className="library-modal-label" style={{ color: ink2 }}>Total de páginas</label>
-            <input type="number" className="library-modal-input" value={totPages}
-              onChange={e => setTotPages(e.target.value)} placeholder="–"
-              style={{ background: dark ? '#2A2520' : undefined, color: ink, borderColor: border }} />
+        {/* Toggle: método de tracking */}
+        <div className="library-modal-field">
+          <label className="library-modal-label" style={{ color: ink2 }}>Acompanhar progresso por</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(['pages', 'percent'] as const).map(t => (
+              <button key={t} onClick={() => setProgressType(t)} style={{
+                flex: 1, padding: '6px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12,
+                border: `1px solid ${progressType === t ? 'var(--accent)' : border}`,
+                background: progressType === t ? 'var(--accent)18' : 'transparent',
+                color: progressType === t ? 'var(--accent)' : ink2,
+              }}>
+                {t === 'pages' ? '📖 Páginas' : '% Porcentagem'}
+              </button>
+            ))}
           </div>
         </div>
+
+        {progressType === 'pages' ? (
+          <div className="library-modal-row">
+            <div className="library-modal-field">
+              <label className="library-modal-label" style={{ color: ink2 }}>Página atual</label>
+              <input type="number" className="library-modal-input" value={curPage}
+                onChange={e => setCurPage(e.target.value)} placeholder="0"
+                style={{ background: dark ? '#2A2520' : undefined, color: ink, borderColor: border }} />
+            </div>
+            <div className="library-modal-field">
+              <label className="library-modal-label" style={{ color: ink2 }}>Total de páginas</label>
+              <input type="number" className="library-modal-input" value={totPages}
+                onChange={e => setTotPages(e.target.value)} placeholder="–"
+                style={{ background: dark ? '#2A2520' : undefined, color: ink, borderColor: border }} />
+            </div>
+          </div>
+        ) : (
+          <div className="library-modal-field">
+            <label className="library-modal-label" style={{ color: ink2 }}>Progresso atual (%)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input type="number" min={0} max={100} className="library-modal-input"
+                value={initPercent} onChange={e => setInitPercent(e.target.value)} placeholder="0"
+                style={{ background: dark ? '#2A2520' : undefined, color: ink, borderColor: border, width: 80 }} />
+              <div style={{ flex: 1, height: 6, background: border, borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 3, background: 'var(--accent)',
+                  width: `${Math.min(100, Math.max(0, parseInt(initPercent) || 0))}%`,
+                  transition: 'width 200ms',
+                }} />
+              </div>
+              <span style={{ fontSize: 11, color: ink2, flexShrink: 0 }}>
+                {Math.min(100, Math.max(0, parseInt(initPercent) || 0))}%
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="library-modal-row">
           <div className="library-modal-field">
@@ -655,28 +711,34 @@ function SessionModal({ reading, dark, onSave, onClose }: {
   reading: Reading; dark: boolean
   onSave: (data: any) => void; onClose: () => void
 }) {
-  const today = new Date().toISOString().slice(0, 10)
-  const [date,     setDate]     = useState(today)
-  const [pgStart,  setPgStart]  = useState(String(reading.current_page ?? 0))
-  const [pgEnd,    setPgEnd]    = useState(String(reading.current_page ?? 0))
-  const [duration, setDuration] = useState('')
-  const [notes,    setNotes]    = useState('')
+  const byPercent = reading.progress_type === 'percent'
+  const today     = new Date().toISOString().slice(0, 10)
+  const [date,       setDate]       = useState(today)
+  const [pgStart,    setPgStart]    = useState(String(reading.current_page ?? 0))
+  const [pgEnd,      setPgEnd]      = useState(String(reading.current_page ?? 0))
+  const [pctEnd,     setPctEnd]     = useState(String(reading.progress_percent ?? 0))
+  const [duration,   setDuration]   = useState('')
+  const [notes,      setNotes]      = useState('')
 
-  const ink    = dark ? '#E8DFC8' : '#2C2416'
-  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
-  const border = dark ? '#3A3020' : '#C4B9A8'
+  const ink     = dark ? '#E8DFC8' : '#2C2416'
+  const ink2    = dark ? '#8A7A62' : '#9C8E7A'
+  const border  = dark ? '#3A3020' : '#C4B9A8'
   const inputBg = dark ? '#2A2520' : undefined
 
-  const pagesRead = Math.max(0, (parseInt(pgEnd) || 0) - (parseInt(pgStart) || 0))
+  const pagesRead  = Math.max(0, (parseInt(pgEnd) || 0) - (parseInt(pgStart) || 0))
+  const pctEndNum  = Math.min(100, Math.max(0, parseInt(pctEnd) || 0))
+  const pctGain    = Math.max(0, pctEndNum - (reading.progress_percent ?? 0))
+
+  const canSave = byPercent ? pctEndNum > 0 : (parseInt(pgEnd) > 0)
 
   const handleSave = () => {
-    const end = parseInt(pgEnd)
-    if (!end) return
+    if (!canSave) return
     onSave({
       reading_id:   reading.id,
       date,
-      page_start:   parseInt(pgStart) || 0,
-      page_end:     end,
+      page_start:   byPercent ? 0 : (parseInt(pgStart) || 0),
+      page_end:     byPercent ? 0 : (parseInt(pgEnd) || 0),
+      percent_end:  byPercent ? pctEndNum : null,
       duration_min: duration ? parseInt(duration) : null,
       notes:        notes.trim() || null,
     })
@@ -700,26 +762,54 @@ function SessionModal({ reading, dark, onSave, onClose }: {
             style={{ background: inputBg, color: ink, borderColor: border }} />
         </div>
 
-        <div className="library-modal-row">
+        {byPercent ? (
+          /* ── Tracking por porcentagem ── */
           <div className="library-modal-field">
-            <label className="library-modal-label" style={{ color: ink2 }}>Página início</label>
-            <input type="number" className="library-modal-input" value={pgStart}
-              onChange={e => setPgStart(e.target.value)} min={0}
-              style={{ background: inputBg, color: ink, borderColor: border }} />
+            <label className="library-modal-label" style={{ color: ink2 }}>
+              Porcentagem actual *
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input type="number" min={0} max={100} className="library-modal-input" autoFocus
+                value={pctEnd} onChange={e => setPctEnd(e.target.value)}
+                style={{ background: inputBg, color: ink, borderColor: border, width: 72 }} />
+              <div style={{ flex: 1, height: 6, background: border, borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: 3, background: 'var(--accent)',
+                  width: `${pctEndNum}%`, transition: 'width 200ms' }} />
+              </div>
+              <span style={{ fontSize: 11, color: ink2, flexShrink: 0 }}>{pctEndNum}%</span>
+            </div>
+            {pctGain > 0 && (
+              <div style={{ fontSize: 11, color: ink2, marginTop: 4 }}>
+                +{pctGain}% nesta sessão
+              </div>
+            )}
           </div>
-          <div className="library-modal-field">
-            <label className="library-modal-label" style={{ color: ink2 }}>Página fim *</label>
-            <input type="number" className="library-modal-input" value={pgEnd}
-              onChange={e => setPgEnd(e.target.value)} min={0} autoFocus
-              style={{ background: inputBg, color: ink, borderColor: border }} />
-          </div>
-        </div>
-
-        {pagesRead > 0 && (
-          <div style={{ fontSize: 11, color: ink2, marginTop: -4, marginBottom: 8 }}>
-            {pagesRead} página{pagesRead !== 1 ? 's' : ''} lida{pagesRead !== 1 ? 's' : ''}
-            {reading.total_pages ? ` · ${Math.round(((parseInt(pgEnd)||0) / reading.total_pages) * 100)}% total` : ''}
-          </div>
+        ) : (
+          /* ── Tracking por páginas ── */
+          <>
+            <div className="library-modal-row">
+              <div className="library-modal-field">
+                <label className="library-modal-label" style={{ color: ink2 }}>Página início</label>
+                <input type="number" className="library-modal-input" value={pgStart}
+                  onChange={e => setPgStart(e.target.value)} min={0}
+                  style={{ background: inputBg, color: ink, borderColor: border }} />
+              </div>
+              <div className="library-modal-field">
+                <label className="library-modal-label" style={{ color: ink2 }}>Página fim *</label>
+                <input type="number" className="library-modal-input" value={pgEnd}
+                  onChange={e => setPgEnd(e.target.value)} min={0} autoFocus
+                  style={{ background: inputBg, color: ink, borderColor: border }} />
+              </div>
+            </div>
+            {pagesRead > 0 && (
+              <div style={{ fontSize: 11, color: ink2, marginTop: -4, marginBottom: 8 }}>
+                {pagesRead} página{pagesRead !== 1 ? 's' : ''} lida{pagesRead !== 1 ? 's' : ''}
+                {reading.total_pages
+                  ? ` · ${Math.round(((parseInt(pgEnd)||0) / reading.total_pages) * 100)}% total`
+                  : ''}
+              </div>
+            )}
+          </>
         )}
 
         <div className="library-modal-field">
@@ -743,7 +833,7 @@ function SessionModal({ reading, dark, onSave, onClose }: {
           </button>
           <button className="btn btn-sm" onClick={handleSave}
             style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
-            disabled={!pgEnd || parseInt(pgEnd) <= 0}>
+            disabled={!canSave}>
             Registar
           </button>
         </div>
@@ -817,8 +907,7 @@ function ReadingDetailView({ reading: initialReading, dark, onBack, onEdit, onSe
   }, [tab, reading.id])
 
   const st       = READING_STATUS[reading.status] ?? READING_STATUS.want
-  const progress = reading.total_pages && reading.total_pages > 0
-    ? Math.round((reading.current_page / reading.total_pages) * 100) : null
+  const progress = calcProgress(reading)
 
   const addNote = async () => {
     if (!noteContent.trim()) return
@@ -970,7 +1059,11 @@ function ReadingDetailView({ reading: initialReading, dark, onBack, onEdit, onSe
               {progress !== null && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: ink2 }}>{reading.current_page} / {reading.total_pages} págs</span>
+                    <span style={{ fontSize: 11, color: ink2 }}>
+                      {reading.progress_type === 'percent'
+                        ? `${reading.progress_percent ?? 0}% concluído`
+                        : `${reading.current_page} / ${reading.total_pages} págs`}
+                    </span>
                     <span style={{ fontSize: 11, color: ink2 }}>{progress}%</span>
                   </div>
                   <div style={{ height: 4, background: border, borderRadius: 2, overflow: 'hidden' }}>
@@ -1369,9 +1462,8 @@ function ReadingsView({ dark }: { dark: boolean }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '20px 28px' }}>
             {filtered.map(r => {
               const st       = READING_STATUS[r.status] ?? READING_STATUS.want
-              const progress = r.total_pages && r.total_pages > 0
-                ? Math.round((r.current_page / r.total_pages) * 100) : null
-              const days = daysReading(r)
+              const progress = calcProgress(r)
+              const days     = daysReading(r)
 
               return (
                 <div key={r.id} style={{
@@ -1427,10 +1519,11 @@ function ReadingsView({ dark }: { dark: boolean }) {
 
                   {progress !== null && (
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between',
-                        marginBottom: 3 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                         <span style={{ fontSize: 10, color: ink2 }}>
-                          {r.current_page} / {r.total_pages} págs
+                          {r.progress_type === 'percent'
+                            ? `${r.progress_percent ?? 0}%`
+                            : `${r.current_page} / ${r.total_pages} págs`}
                         </span>
                         <span style={{ fontSize: 10, color: ink2 }}>{progress}%</span>
                       </div>
@@ -2133,8 +2226,7 @@ function LibraryDashboard({ dark, onNavigate }: {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {currentlyReading.map(r => {
-                const progress = r.total_pages && r.total_pages > 0
-                  ? Math.round((r.current_page / r.total_pages) * 100) : null
+                const progress = calcProgress(r)
                 return (
                   <button key={r.id} onClick={() => onNavigate('readings')} style={{
                     display: 'flex', gap: 10, alignItems: 'center',
@@ -2161,7 +2253,9 @@ function LibraryDashboard({ dark, onNavigate }: {
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
                             color: ink2, marginTop: 2 }}>
-                            {r.current_page}/{r.total_pages} págs · {progress}%
+                            {r.progress_type === 'percent'
+                              ? `${r.progress_percent ?? 0}% concluído`
+                              : `${r.current_page}/${r.total_pages} págs · ${progress}%`}
                           </div>
                         </div>
                       )}

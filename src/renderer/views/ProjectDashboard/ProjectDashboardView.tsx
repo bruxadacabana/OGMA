@@ -123,7 +123,9 @@ function LinkedReadingsPanel({ projectId, dark, onPageOpen, pages }: {
         let meta: any = {}
         try { if (r.metadata_json) meta = JSON.parse(r.metadata_json) } catch {}
         const cover    = r.cover_path || meta.cover_url || meta.cover_url_m || meta.thumbnail_url
-        const progress = r.total_pages > 0 ? Math.round((r.current_page / r.total_pages) * 100) : null
+        const progress = r.progress_type === 'percent'
+          ? (r.progress_percent ?? null)
+          : (r.total_pages > 0 ? Math.round((r.current_page / r.total_pages) * 100) : null)
         const statusColor = STATUS_COLORS[r.status] ?? ink2
         const page = pages.find((p: any) => p.id === r.page_id)
 

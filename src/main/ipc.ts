@@ -899,13 +899,14 @@ export function registerIpcHandlers(): void {
     const r = dbRun(`
       INSERT INTO readings
         (workspace_id, resource_id, title, reading_type, author, publisher, year, isbn, status, rating,
-         current_page, total_pages, date_start, date_end, review)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         current_page, total_pages, date_start, date_end, review, progress_type, progress_percent)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       ws.id, d.resource_id ?? null, d.title, d.reading_type ?? 'book', d.author ?? null,
       d.publisher ?? null, d.year ?? null, d.isbn ?? null, d.status ?? 'want', d.rating ?? null,
       d.current_page ?? 0, d.total_pages ?? null, d.date_start ?? null,
-      d.date_end ?? null, d.review ?? null
+      d.date_end ?? null, d.review ?? null,
+      d.progress_type ?? 'pages', d.progress_percent ?? 0
     )
     return dbGet('SELECT * FROM readings WHERE id = ?', r.lastInsertRowid)
   })
@@ -915,13 +916,14 @@ export function registerIpcHandlers(): void {
       UPDATE readings SET
         resource_id = ?, title = ?, reading_type = ?, author = ?, publisher = ?, year = ?,
         isbn = ?, status = ?, rating = ?, current_page = ?, total_pages = ?,
-        date_start = ?, date_end = ?, review = ?, updated_at = datetime('now')
+        date_start = ?, date_end = ?, review = ?, progress_type = ?, progress_percent = ?,
+        updated_at = datetime('now')
       WHERE id = ?
     `,
       d.resource_id ?? null, d.title, d.reading_type ?? 'book', d.author ?? null,
       d.publisher ?? null, d.year ?? null, d.isbn ?? null, d.status, d.rating ?? null,
       d.current_page ?? 0, d.total_pages ?? null, d.date_start ?? null, d.date_end ?? null,
-      d.review ?? null, d.id
+      d.review ?? null, d.progress_type ?? 'pages', d.progress_percent ?? 0, d.id
     )
     return dbGet('SELECT * FROM readings WHERE id = ?', d.id)
   })
@@ -937,17 +939,27 @@ export function registerIpcHandlers(): void {
 
   api('reading_sessions:create', (d) => {
     const r = dbRun(`
-      INSERT INTO reading_sessions (reading_id, date, page_start, page_end, duration_min, notes)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO reading_sessions (reading_id, date, page_start, page_end, duration_min, notes, percent_end)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `, d.reading_id, d.date, d.page_start ?? 0, d.page_end ?? 0,
-       d.duration_min ?? null, d.notes?.trim() || null)
-    // Actualiza current_page e possivelmente status na leitura
-    const sess = dbGet('SELECT * FROM reading_sessions WHERE id = ?', r.lastInsertRowid)
+       d.duration_min ?? null, d.notes?.trim() || null, d.percent_end ?? null)
+    const sess    = dbGet('SELECT * FROM reading_sessions WHERE id = ?', r.lastInsertRowid)
     const reading = dbGet('SELECT * FROM readings WHERE id = ?', d.reading_id)
-    if (reading && sess.page_end > reading.current_page) {
+    if (!reading) return sess
+
+    if (reading.progress_type === 'percent' && d.percent_end != null) {
+      // Tracking por porcentagem
+      const pct       = Math.min(100, Math.max(0, d.percent_end))
+      const newStatus = pct >= 100
+        ? 'done' : reading.status === 'want' ? 'reading' : reading.status
+      const dateEnd   = newStatus === 'done' ? d.date : reading.date_end
+      dbRun(`UPDATE readings SET progress_percent = ?, status = ?, date_end = ?, updated_at = datetime('now') WHERE id = ?`,
+        pct, newStatus, dateEnd, d.reading_id)
+    } else if (sess.page_end > reading.current_page) {
+      // Tracking por páginas (comportamento original)
       const newStatus = (reading.total_pages && sess.page_end >= reading.total_pages)
         ? 'done' : reading.status === 'want' ? 'reading' : reading.status
-      const dateEnd = newStatus === 'done' ? d.date : reading.date_end
+      const dateEnd   = newStatus === 'done' ? d.date : reading.date_end
       dbRun(`UPDATE readings SET current_page = ?, status = ?, date_end = ?, updated_at = datetime('now') WHERE id = ?`,
         sess.page_end, newStatus, dateEnd, d.reading_id)
     }
@@ -1004,7 +1016,7 @@ export function registerIpcHandlers(): void {
   api('reading_links:listForProject', ({ project_id }) =>
     dbAll(`
       SELECT rd.id, rd.title, rd.cover_path, rd.status, rd.current_page, rd.total_pages,
-             rd.author, rd.reading_type,
+             rd.author, rd.reading_type, rd.progress_type, rd.progress_percent,
              p.id AS page_id, p.title AS page_title, p.icon AS page_icon,
              res.metadata_json
       FROM reading_links rl
