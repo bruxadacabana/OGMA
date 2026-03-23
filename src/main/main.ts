@@ -1,7 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron'
 import path from 'path'
 import { ensureDirs } from './paths'
-import { getDb, closeDb } from './database'
+import { getClient, closeClient, syncClient } from './database'
 import { registerIpcHandlers } from './ipc'
 import { startReminderScheduler } from './scheduler'
 import { createLogger, setupGlobalErrorHandlers } from './logger'
@@ -60,11 +60,19 @@ app.whenReady().then(async () => {
   ensureDirs()
   log.info('OGMA iniciando', { version: '0.1.0', platform: process.platform })
 
+  // Carregar variáveis de ambiente (credenciais Turso)
+  try {
+    const dotenv = await import('dotenv')
+    const path   = await import('path')
+    const { DATA_DIR } = await import('./paths')
+    dotenv.config({ path: path.join(DATA_DIR, '.env') })
+  } catch { /* dotenv opcional */ }
+
   log.info('Carregando settings')
   initSettings()
 
   log.info('Inicializando banco de dados')
-  getDb()
+  await getClient()
 
   log.info('Registrando handlers IPC')
   registerIpcHandlers()
@@ -80,9 +88,10 @@ app.whenReady().then(async () => {
   })
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
   log.info('OGMA encerrando')
-  closeDb()
+  await syncClient().catch(() => {})
+  closeClient()
 })
 
 app.on('window-all-closed', () => {

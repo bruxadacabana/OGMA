@@ -10,10 +10,8 @@
     "build": "npm run build:vite && npm run build:electron",
     "build:vite": "vite build",
     "build:electron": "tsc -p tsconfig.main.json",
-    "postinstall": "electron-rebuild -f -w better-sqlite3-multiple-ciphers",
     "dist:linux": "npm run build && electron-builder --linux",
     "dist:win": "npm run build && electron-builder --win",
-    "rebuild": "electron-rebuild -f -w better-sqlite3-multiple-ciphers",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -28,7 +26,7 @@
     "@editorjs/marker": "^1.4.0",
     "@editorjs/quote": "^2.7.3",
     "@editorjs/table": "^2.4.3",
-    "better-sqlite3-multiple-ciphers": "^11.9.1",
+    "@libsql/client": "^0.17.2",
     "editorjs-drag-drop": "^1.1.16",
     "editorjs-toggle-block": "^0.3.16",
     "electron-store": "^8.1.0",

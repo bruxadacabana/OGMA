@@ -25,10 +25,10 @@ export function startReminderScheduler(): void {
   setInterval(checkAndFire, 60_000)
 }
 
-function checkAndFire(): void {
+async function checkAndFire(): Promise<void> {
   try {
     const now = new Date().toISOString().slice(0, 16) // YYYY-MM-DDTHH:MM
-    const due = dbAll(
+    const due = await dbAll(
       `SELECT r.*, ce.event_type, ce.start_dt AS event_start
        FROM reminders r
        LEFT JOIN calendar_events ce ON ce.id = r.linked_event_id
@@ -48,7 +48,7 @@ function checkAndFire(): void {
       } catch (e) {
         log.warn('Falha ao disparar notificação', { id: r.id, error: String(e) })
       }
-      dbRun(`UPDATE reminders SET is_dismissed = 1 WHERE id = ?`, r.id)
+      await dbRun(`UPDATE reminders SET is_dismissed = 1 WHERE id = ?`, r.id)
     }
 
     if (due.length > 0) log.info(`Disparou ${due.length} lembrete(s)`)

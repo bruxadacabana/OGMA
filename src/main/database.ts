@@ -1,10 +1,15 @@
 /**
- * OGMA Database — v2
- * Schema: Projetos como Databases (modelo Notion)
- * Usa better-sqlite3-multiple-ciphers — API 100% síncrona, sem rebuild.
+ * OGMA Database — v3 (libsql / Turso)
+ *
+ * Embedded replica: leitura local (offline-first), escrita sincroniza com Turso Cloud.
+ * Se TURSO_URL não estiver definido, funciona em modo local puro (ficheiro SQLite).
+ *
+ * Variáveis de ambiente (carregar de data/.env antes de chamar getClient):
+ *   TURSO_URL   — libsql://ogma-<nome>.turso.io
+ *   TURSO_TOKEN — token de autenticação Turso
  */
 
-import Database from 'better-sqlite3-multiple-ciphers'
+import { createClient, Client, InArgs } from '@libsql/client'
 import { DB_PATH } from './paths'
 import { createLogger } from './logger'
 
@@ -12,211 +17,132 @@ const log = createLogger('database')
 
 const SCHEMA_VERSION = 2
 
-let _db: Database.Database | null = null
+let _client: Client | null = null
 
-export function getDb(): Database.Database {
-  if (!_db) {
-    _db = new Database(DB_PATH)
-    _db.pragma('journal_mode = WAL')
-    _db.pragma('foreign_keys = ON')
-    log.info('Banco aberto', { path: DB_PATH })
-    initSchema(_db)
-    seedDefaults(_db)
+function toFileUrl(p: string): string {
+  return p.startsWith('file:') ? p : `file:${p}`
+}
+
+// ── Ciclo de vida ──────────────────────────────────────────────────────────────
+
+export async function getClient(): Promise<Client> {
+  if (!_client) {
+    const url       = toFileUrl(DB_PATH)
+    const syncUrl   = process.env.TURSO_URL
+    const authToken = process.env.TURSO_TOKEN
+
+    _client = createClient(
+      syncUrl
+        ? { url, syncUrl, authToken }
+        : { url }
+    )
+
+    log.info('Cliente libsql aberto', { local: DB_PATH, sync: syncUrl ?? 'local-only' })
+
+    // Sync inicial: trazer dados do remoto antes de inicializar o schema local
+    if (syncUrl) {
+      try {
+        await _client.sync()
+        log.info('Sync inicial concluído')
+      } catch (e: any) {
+        log.warn('Sync inicial falhou — continuando em modo local', e?.message)
+      }
+    }
+
+    await _client.execute('PRAGMA foreign_keys = ON')
+    await initSchema(_client)
+    await seedDefaults(_client)
+
     log.info('Banco pronto')
   }
-  return _db
+  return _client
 }
 
-export function closeDb(): void {
-  if (_db) {
-    _db.close()
-    _db = null
-    log.info('Banco fechado')
+export function closeClient(): void {
+  if (_client) {
+    _client.close()
+    _client = null
+    log.info('Cliente fechado')
   }
 }
 
-// ── Helpers síncronos ─────────────────────────────────────────────────────────
-
-export function dbGet(sql: string, ...params: any[]): any {
-  return getDb().prepare(sql).get(...params) ?? null
+export async function syncClient(): Promise<void> {
+  if (_client && process.env.TURSO_URL) {
+    await _client.sync()
+    log.info('Sync concluído')
+  }
 }
 
-export function dbAll(sql: string, ...params: any[]): any[] {
-  return getDb().prepare(sql).all(...params) as any[]
+// ── Helpers assíncronos ────────────────────────────────────────────────────────
+
+export type DbRunResult = { lastInsertRowid: number; rowsAffected: number }
+
+export async function dbGet<T = any>(sql: string, ...args: any[]): Promise<T | null> {
+  const c = await getClient()
+  const r = await c.execute({ sql, args: args as InArgs })
+  return (r.rows[0] as unknown as T) ?? null
 }
 
-export function dbRun(sql: string, ...params: any[]): Database.RunResult {
-  return getDb().prepare(sql).run(...params)
+export async function dbAll<T = any>(sql: string, ...args: any[]): Promise<T[]> {
+  const c = await getClient()
+  const r = await c.execute({ sql, args: args as InArgs })
+  return r.rows as unknown as T[]
 }
 
-// ── Schema ────────────────────────────────────────────────────────────────────
+export async function dbRun(sql: string, ...args: any[]): Promise<DbRunResult> {
+  const c = await getClient()
+  const r = await c.execute({ sql, args: args as InArgs })
+  return {
+    lastInsertRowid: Number(r.lastInsertRowid ?? 0),
+    rowsAffected:   r.rowsAffected,
+  }
+}
 
-function initSchema(db: Database.Database): void {
-  const version = db.pragma('user_version', { simple: true }) as number
+// ── Schema ─────────────────────────────────────────────────────────────────────
+
+async function initSchema(client: Client): Promise<void> {
+  const vResult = await client.execute('PRAGMA user_version')
+  const version = Number(vResult.rows[0]?.[0] ?? 0)
 
   if (version < SCHEMA_VERSION) {
     log.info(`Migrando schema: v${version} → v${SCHEMA_VERSION} (slate limpo)`)
-    runMigration(db)
+    await runMigration(client)
   }
 
-  createTables(db)
-
-  // Migrações incrementais (seguras — só adicionam colunas)
-  try { db.exec(`ALTER TABLE readings ADD COLUMN resource_id INTEGER REFERENCES resources(id) ON DELETE SET NULL`) } catch {}
-  try { db.exec(`ALTER TABLE resources ADD COLUMN metadata_json TEXT`) } catch {}
-  try { db.exec(`ALTER TABLE projects ADD COLUMN semester TEXT`) } catch {}
-  try { db.exec(`
-    CREATE TABLE IF NOT EXISTS resource_pages (
-      resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-      page_id     INTEGER NOT NULL REFERENCES pages(id)     ON DELETE CASCADE,
-      PRIMARY KEY (resource_id, page_id)
-    )
-  `) } catch {}
-  try { db.exec(`
-    CREATE TABLE IF NOT EXISTS reading_sessions (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      reading_id  INTEGER NOT NULL REFERENCES readings(id) ON DELETE CASCADE,
-      date        TEXT NOT NULL DEFAULT (date('now')),
-      page_start  INTEGER NOT NULL DEFAULT 0,
-      page_end    INTEGER NOT NULL DEFAULT 0,
-      duration_min INTEGER,
-      notes       TEXT,
-      created_at  TEXT DEFAULT (datetime('now'))
-    )
-  `) } catch {}
-
-  // calendar_events: tipo de evento e projecto vinculado
-  try { db.exec(`ALTER TABLE calendar_events ADD COLUMN event_type TEXT DEFAULT 'outro'`) } catch {}
-  try { db.exec(`ALTER TABLE calendar_events ADD COLUMN linked_project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL`) } catch {}
-
-  // Garante propriedade "Código" (PREFIX###) em projetos académicos existentes
-  try {
-    const academicProjects = db.prepare(
-      `SELECT id FROM projects WHERE project_type = 'academic'`
-    ).all() as { id: number }[]
-    const checkCodigo = db.prepare(
-      `SELECT id FROM project_properties WHERE project_id = ? AND prop_key = 'codigo'`
-    )
-    const insertCodigo = db.prepare(
-      `INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order)
-       VALUES (?, 'Código', 'codigo', 'text', 1, 0)`
-    )
-    for (const { id } of academicProjects) {
-      if (!checkCodigo.get(id)) insertCodigo.run(id)
-    }
-  } catch {}
-
-  // Pré-requisitos entre páginas (projetos académicos)
-  try { db.exec(`
-    CREATE TABLE IF NOT EXISTS page_prerequisites (
-      page_id         INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
-      prerequisite_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
-      PRIMARY KEY (page_id, prerequisite_id)
-    )
-  `) } catch {}
-
-  // Progresso de leitura por porcentagem
-  try { db.exec(`ALTER TABLE readings ADD COLUMN progress_type TEXT DEFAULT 'pages'`) } catch {}
-  try { db.exec(`ALTER TABLE readings ADD COLUMN progress_percent INTEGER DEFAULT 0`) } catch {}
-  try { db.exec(`ALTER TABLE reading_sessions ADD COLUMN percent_end INTEGER`) } catch {}
-
-  // Planejador académico
-  try { db.exec(`
-    CREATE TABLE IF NOT EXISTS planned_tasks (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      project_id      INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      page_id         INTEGER REFERENCES pages(id) ON DELETE SET NULL,
-      title           TEXT NOT NULL,
-      task_type       TEXT DEFAULT 'atividade',
-      due_date        TEXT NOT NULL,
-      estimated_hours REAL NOT NULL DEFAULT 1,
-      status          TEXT DEFAULT 'pending',
-      created_at      TEXT DEFAULT (datetime('now')),
-      updated_at      TEXT DEFAULT (datetime('now'))
-    )
-  `) } catch {}
-  try { db.exec(`
-    CREATE TABLE IF NOT EXISTS work_blocks (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      task_id       INTEGER NOT NULL REFERENCES planned_tasks(id) ON DELETE CASCADE,
-      date          TEXT NOT NULL,
-      planned_hours REAL NOT NULL DEFAULT 1,
-      logged_hours  REAL DEFAULT 0,
-      status        TEXT DEFAULT 'scheduled',
-      created_at    TEXT DEFAULT (datetime('now'))
-    )
-  `) } catch {}
-
-  // Sessões de tempo: coluna tags
-  try { db.exec(`ALTER TABLE time_sessions ADD COLUMN tags TEXT`) } catch {}
-
-  // Garante propriedade "Semestre" em projetos acadêmicos existentes
-  try {
-    const year = new Date().getFullYear()
-    const academicProjects = db.prepare(
-      `SELECT id FROM projects WHERE project_type = 'academic'`
-    ).all() as { id: number }[]
-    const checkProp   = db.prepare(
-      `SELECT id FROM project_properties WHERE project_id = ? AND prop_key = 'trimestre'`
-    )
-    const insertProp  = db.prepare(
-      `INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order) VALUES (?, 'Trimestre', 'trimestre', 'select', 1, 1)`
-    )
-    const insertOption = db.prepare(
-      `INSERT INTO prop_options (property_id, label, color, sort_order) VALUES (?, ?, null, ?)`
-    )
-    for (const { id } of academicProjects) {
-      if (!checkProp.get(id)) {
-        const r      = insertProp.run(id)
-        const propId = Number(r.lastInsertRowid)
-        const labels = [
-          `${year - 1}.1`, `${year - 1}.2`, `${year - 1}.3`, `${year - 1}.4`,
-          `${year}.1`,     `${year}.2`,     `${year}.3`,     `${year}.4`,
-          `${year + 1}.1`, `${year + 1}.2`, `${year + 1}.3`, `${year + 1}.4`,
-        ]
-        labels.forEach((label, i) => insertOption.run(propId, label, i))
-      }
-    }
-  } catch {}
+  await createTables(client)
+  await runIncrementalMigrations(client)
 }
 
-function runMigration(db: Database.Database): void {
-  // Abordagem nuclear: apaga tudo e recria do zero.
-  // Seguro em desenvolvimento — schema v1 é incompatível com v2.
-  db.pragma('foreign_keys = OFF')
+async function runMigration(client: Client): Promise<void> {
+  await client.execute('PRAGMA foreign_keys = OFF')
+  await client.execute('DROP TABLE IF EXISTS search_index')
 
-  // Dropar tabela FTS5 primeiro (auto-remove shadow tables)
-  db.exec(`DROP TABLE IF EXISTS search_index;`)
-
-  // Dropar todas as demais tabelas
-  const tables = db.prepare(
+  const tablesResult = await client.execute(
     `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`
-  ).all() as { name: string }[]
-
-  for (const { name } of tables) {
-    db.prepare(`DROP TABLE IF EXISTS "${name}"`).run()
+  )
+  for (const row of tablesResult.rows) {
+    await client.execute(`DROP TABLE IF EXISTS "${row[0]}"`)
   }
 
-  db.exec(`PRAGMA user_version = ${SCHEMA_VERSION};`)
-  db.pragma('foreign_keys = ON')
-  log.info('Migração concluída — schema v2 pronto para criação')
+  await client.execute(`PRAGMA user_version = ${SCHEMA_VERSION}`)
+  await client.execute('PRAGMA foreign_keys = ON')
+  log.info('Migração concluída')
 }
 
-function createTables(db: Database.Database): void {
-  db.exec(`
-
-    -- ── Core ──────────────────────────────────────────────────────────────────
-
-    CREATE TABLE IF NOT EXISTS workspaces (
+async function createTables(client: Client): Promise<void> {
+  // Executar cada CREATE TABLE individualmente — batch DDL pode falhar em algumas
+  // implementações libsql com FTS5 virtual tables
+  const statements = [
+    // ── Core ────────────────────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS workspaces (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       name         TEXT NOT NULL DEFAULT 'Meu Workspace',
       icon         TEXT DEFAULT '✦',
       accent_color TEXT DEFAULT '#b8860b',
       created_at   TEXT DEFAULT (datetime('now')),
       updated_at   TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS projects (
+    )`,
+    `CREATE TABLE IF NOT EXISTS projects (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
       name         TEXT NOT NULL,
@@ -231,9 +157,8 @@ function createTables(db: Database.Database): void {
       sort_order   INTEGER DEFAULT 0,
       created_at   TEXT DEFAULT (datetime('now')),
       updated_at   TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS pages (
+    )`,
+    `CREATE TABLE IF NOT EXISTS pages (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id  INTEGER REFERENCES projects(id) ON DELETE CASCADE,
       parent_id   INTEGER REFERENCES pages(id) ON DELETE CASCADE,
@@ -246,11 +171,9 @@ function createTables(db: Database.Database): void {
       is_deleted  INTEGER DEFAULT 0,
       created_at  TEXT DEFAULT (datetime('now')),
       updated_at  TEXT DEFAULT (datetime('now'))
-    );
-
-    -- ── Propriedades de Projeto ───────────────────────────────────────────────
-
-    CREATE TABLE IF NOT EXISTS project_properties (
+    )`,
+    // ── Propriedades de Projeto ──────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS project_properties (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       name        TEXT NOT NULL,
@@ -261,17 +184,15 @@ function createTables(db: Database.Database): void {
       sort_order  INTEGER DEFAULT 0,
       created_at  TEXT DEFAULT (datetime('now')),
       UNIQUE (project_id, prop_key)
-    );
-
-    CREATE TABLE IF NOT EXISTS prop_options (
+    )`,
+    `CREATE TABLE IF NOT EXISTS prop_options (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       property_id INTEGER NOT NULL REFERENCES project_properties(id) ON DELETE CASCADE,
       label       TEXT NOT NULL,
       color       TEXT,
       sort_order  INTEGER DEFAULT 0
-    );
-
-    CREATE TABLE IF NOT EXISTS page_prop_values (
+    )`,
+    `CREATE TABLE IF NOT EXISTS page_prop_values (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       page_id     INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
       property_id INTEGER NOT NULL REFERENCES project_properties(id) ON DELETE CASCADE,
@@ -282,11 +203,9 @@ function createTables(db: Database.Database): void {
       value_date2 TEXT,
       value_json  TEXT,
       UNIQUE (page_id, property_id)
-    );
-
-    -- ── Views de Projeto ──────────────────────────────────────────────────────
-
-    CREATE TABLE IF NOT EXISTS project_views (
+    )`,
+    // ── Views de Projeto ─────────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS project_views (
       id                   INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id           INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       name                 TEXT NOT NULL,
@@ -299,41 +218,33 @@ function createTables(db: Database.Database): void {
       include_subpages     INTEGER DEFAULT 0,
       is_default           INTEGER DEFAULT 0,
       sort_order           INTEGER DEFAULT 0
-    );
-
-    -- ── Tags globais ──────────────────────────────────────────────────────────
-
-    CREATE TABLE IF NOT EXISTS tags (
+    )`,
+    // ── Tags globais ─────────────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS tags (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
       name         TEXT NOT NULL,
       color        TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS page_tags (
+    )`,
+    `CREATE TABLE IF NOT EXISTS page_tags (
       page_id INTEGER REFERENCES pages(id) ON DELETE CASCADE,
       tag_id  INTEGER REFERENCES tags(id) ON DELETE CASCADE,
       PRIMARY KEY (page_id, tag_id)
-    );
-
-    -- ── Versionamento e backlinks ─────────────────────────────────────────────
-
-    CREATE TABLE IF NOT EXISTS page_backlinks (
+    )`,
+    // ── Versionamento e backlinks ────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS page_backlinks (
       source_page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
       target_page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
       PRIMARY KEY (source_page_id, target_page_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS page_versions (
+    )`,
+    `CREATE TABLE IF NOT EXISTS page_versions (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       page_id    INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
       body_json  TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    -- ── Calendário global ─────────────────────────────────────────────────────
-
-    CREATE TABLE IF NOT EXISTS calendar_events (
+    )`,
+    // ── Calendário global ────────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS calendar_events (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
       workspace_id   INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
       title          TEXT NOT NULL,
@@ -344,9 +255,8 @@ function createTables(db: Database.Database): void {
       color          TEXT,
       linked_page_id INTEGER REFERENCES pages(id) ON DELETE SET NULL,
       created_at     TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS reminders (
+    )`,
+    `CREATE TABLE IF NOT EXISTS reminders (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
       title           TEXT NOT NULL,
       trigger_at      TEXT NOT NULL,
@@ -355,11 +265,9 @@ function createTables(db: Database.Database): void {
       linked_page_id  INTEGER REFERENCES pages(id) ON DELETE SET NULL,
       is_dismissed    INTEGER DEFAULT 0,
       created_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    -- ── Recursos e leituras ───────────────────────────────────────────────────
-
-    CREATE TABLE IF NOT EXISTS resources (
+    )`,
+    // ── Recursos e leituras ──────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS resources (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       workspace_id  INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
       project_id    INTEGER REFERENCES projects(id) ON DELETE SET NULL,
@@ -369,9 +277,8 @@ function createTables(db: Database.Database): void {
       description   TEXT,
       tags_json     TEXT,
       created_at    TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS readings (
+    )`,
+    `CREATE TABLE IF NOT EXISTS readings (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
       resource_id  INTEGER REFERENCES resources(id) ON DELETE SET NULL,
@@ -393,46 +300,39 @@ function createTables(db: Database.Database): void {
       api_id       TEXT,
       created_at   TEXT DEFAULT (datetime('now')),
       updated_at   TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS reading_tags (
+    )`,
+    `CREATE TABLE IF NOT EXISTS reading_tags (
       reading_id INTEGER REFERENCES readings(id) ON DELETE CASCADE,
       tag_id     INTEGER REFERENCES tags(id) ON DELETE CASCADE,
       PRIMARY KEY (reading_id, tag_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS reading_notes (
+    )`,
+    `CREATE TABLE IF NOT EXISTS reading_notes (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       reading_id INTEGER NOT NULL REFERENCES readings(id) ON DELETE CASCADE,
       chapter    TEXT,
       content    TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS reading_quotes (
+    )`,
+    `CREATE TABLE IF NOT EXISTS reading_quotes (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       reading_id INTEGER NOT NULL REFERENCES readings(id) ON DELETE CASCADE,
       text       TEXT NOT NULL,
       location   TEXT,
       created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS reading_links (
+    )`,
+    `CREATE TABLE IF NOT EXISTS reading_links (
       reading_id INTEGER NOT NULL REFERENCES readings(id) ON DELETE CASCADE,
       page_id    INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
       PRIMARY KEY (reading_id, page_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS reading_goals (
+    )`,
+    `CREATE TABLE IF NOT EXISTS reading_goals (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
       year         INTEGER NOT NULL,
       target       INTEGER NOT NULL
-    );
-
-    -- ── Sessões de tempo ──────────────────────────────────────────────────────
-
-    CREATE TABLE IF NOT EXISTS time_sessions (
+    )`,
+    // ── Sessões de tempo ─────────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS time_sessions (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
       page_id      INTEGER REFERENCES pages(id) ON DELETE SET NULL,
@@ -442,32 +342,140 @@ function createTables(db: Database.Database): void {
       notes        TEXT,
       started_at   TEXT NOT NULL,
       ended_at     TEXT
-    );
-
-    -- ── Configurações ─────────────────────────────────────────────────────────
-
-    CREATE TABLE IF NOT EXISTS settings (
+    )`,
+    // ── Configurações ────────────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
       value TEXT
-    );
-
-    -- ── Busca full-text ───────────────────────────────────────────────────────
-
-    CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+    )`,
+    // ── Busca full-text ──────────────────────────────────────────────────────
+    `CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
       entity_type, entity_id, project_id, title, body
-    );
+    )`,
+  ]
 
-  `)
+  for (const sql of statements) {
+    await client.execute(sql)
+  }
 }
 
-// ── Seed padrão ───────────────────────────────────────────────────────────────
+async function runIncrementalMigrations(client: Client): Promise<void> {
+  // Cada migration é idempotente — falha silenciosa se já existir
+  const migrations = [
+    `ALTER TABLE readings ADD COLUMN resource_id INTEGER REFERENCES resources(id) ON DELETE SET NULL`,
+    `ALTER TABLE resources ADD COLUMN metadata_json TEXT`,
+    `ALTER TABLE projects ADD COLUMN semester TEXT`,
+    `CREATE TABLE IF NOT EXISTS resource_pages (
+      resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+      page_id     INTEGER NOT NULL REFERENCES pages(id)     ON DELETE CASCADE,
+      PRIMARY KEY (resource_id, page_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS reading_sessions (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      reading_id   INTEGER NOT NULL REFERENCES readings(id) ON DELETE CASCADE,
+      date         TEXT NOT NULL DEFAULT (date('now')),
+      page_start   INTEGER NOT NULL DEFAULT 0,
+      page_end     INTEGER NOT NULL DEFAULT 0,
+      duration_min INTEGER,
+      notes        TEXT,
+      created_at   TEXT DEFAULT (datetime('now'))
+    )`,
+    `ALTER TABLE calendar_events ADD COLUMN event_type TEXT DEFAULT 'outro'`,
+    `ALTER TABLE calendar_events ADD COLUMN linked_project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL`,
+    `CREATE TABLE IF NOT EXISTS page_prerequisites (
+      page_id         INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+      prerequisite_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+      PRIMARY KEY (page_id, prerequisite_id)
+    )`,
+    `ALTER TABLE readings ADD COLUMN progress_type TEXT DEFAULT 'pages'`,
+    `ALTER TABLE readings ADD COLUMN progress_percent INTEGER DEFAULT 0`,
+    `ALTER TABLE reading_sessions ADD COLUMN percent_end INTEGER`,
+    `CREATE TABLE IF NOT EXISTS planned_tasks (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id      INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      page_id         INTEGER REFERENCES pages(id) ON DELETE SET NULL,
+      title           TEXT NOT NULL,
+      task_type       TEXT DEFAULT 'atividade',
+      due_date        TEXT NOT NULL,
+      estimated_hours REAL NOT NULL DEFAULT 1,
+      status          TEXT DEFAULT 'pending',
+      created_at      TEXT DEFAULT (datetime('now')),
+      updated_at      TEXT DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS work_blocks (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id       INTEGER NOT NULL REFERENCES planned_tasks(id) ON DELETE CASCADE,
+      date          TEXT NOT NULL,
+      planned_hours REAL NOT NULL DEFAULT 1,
+      logged_hours  REAL DEFAULT 0,
+      status        TEXT DEFAULT 'scheduled',
+      created_at    TEXT DEFAULT (datetime('now'))
+    )`,
+    `ALTER TABLE time_sessions ADD COLUMN tags TEXT`,
+  ]
 
-function seedDefaults(db: Database.Database): void {
-  const ws = db.prepare('SELECT id FROM workspaces LIMIT 1').get()
-  if (ws) return
+  for (const sql of migrations) {
+    try { await client.execute(sql) } catch { /* já existe */ }
+  }
+
+  await ensureAcademicProperties(client)
+}
+
+async function ensureAcademicProperties(client: Client): Promise<void> {
+  try {
+    const result = await client.execute(
+      `SELECT id FROM projects WHERE project_type = 'academic'`
+    )
+    for (const row of result.rows) {
+      const pid = Number(row[0])
+
+      // Propriedade "Código"
+      const hasCodigo = await client.execute({
+        sql:  `SELECT id FROM project_properties WHERE project_id = ? AND prop_key = 'codigo'`,
+        args: [pid],
+      })
+      if (hasCodigo.rows.length === 0) {
+        await client.execute({
+          sql:  `INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order) VALUES (?, 'Código', 'codigo', 'text', 1, 0)`,
+          args: [pid],
+        })
+      }
+
+      // Propriedade "Trimestre"
+      const hasTrimestre = await client.execute({
+        sql:  `SELECT id FROM project_properties WHERE project_id = ? AND prop_key = 'trimestre'`,
+        args: [pid],
+      })
+      if (hasTrimestre.rows.length === 0) {
+        const year = new Date().getFullYear()
+        const r = await client.execute({
+          sql:  `INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order) VALUES (?, 'Trimestre', 'trimestre', 'select', 1, 1)`,
+          args: [pid],
+        })
+        const propId = Number(r.lastInsertRowid)
+        const labels = [
+          `${year - 1}.1`, `${year - 1}.2`, `${year - 1}.3`, `${year - 1}.4`,
+          `${year}.1`,     `${year}.2`,     `${year}.3`,     `${year}.4`,
+          `${year + 1}.1`, `${year + 1}.2`, `${year + 1}.3`, `${year + 1}.4`,
+        ]
+        for (let i = 0; i < labels.length; i++) {
+          await client.execute({
+            sql:  `INSERT INTO prop_options (property_id, label, color, sort_order) VALUES (?, ?, null, ?)`,
+            args: [propId, labels[i], i],
+          })
+        }
+      }
+    }
+  } catch { /* falha silenciosa */ }
+}
+
+async function seedDefaults(client: Client): Promise<void> {
+  const result = await client.execute('SELECT id FROM workspaces LIMIT 1')
+  if (result.rows.length > 0) return
 
   log.info('Criando workspace padrão')
-  db.prepare(
-    "INSERT INTO workspaces (name, icon, accent_color) VALUES ('Meu Workspace', '✦', '#b8860b')"
-  ).run()
+  await client.execute({
+    sql:  `INSERT INTO workspaces (name, icon, accent_color) VALUES ('Meu Workspace', '✦', '#b8860b')`,
+    args: [],
+  })
 }

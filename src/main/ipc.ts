@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import https from 'https'
 import http from 'http'
-import { dbGet, dbAll, dbRun, getDb } from './database'
+import { dbGet, dbAll, dbRun, getClient } from './database'
 import { createLogger, RENDERER_LOG_CHANNEL } from './logger'
 import { getSetting, setSetting, getAllSettings, AppSettings } from './settings'
 
@@ -27,10 +27,10 @@ function classifyError(err: Error): ErrorCode {
 
 // ── Wrapper IPC ────────────────────────────────────────────────────────────────
 
-const api = (channel: string, handler: (data: any) => any) => {
-  ipcMain.handle(channel, (_event, data) => {
+const api = (channel: string, handler: (data: any) => Promise<any> | any) => {
+  ipcMain.handle(channel, async (_event, data) => {
     try {
-      return { ok: true, data: handler(data) }
+      return { ok: true, data: await handler(data) }
     } catch (err: any) {
       const errorCode = classifyError(err)
       log.error(`handler:${channel}`, { error: err.message, errorCode, data })
@@ -41,147 +41,138 @@ const api = (channel: string, handler: (data: any) => any) => {
 
 // ── Seed interno: propriedades e views padrão por tipo de projeto ──────────────
 
-function seedProjectProperties(projectId: number, projectType: string): Map<string, number> {
-  const db = getDb()
-
-  const insertProp = db.prepare(`
-    INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order)
-    VALUES (?, ?, ?, ?, 1, ?)
-  `)
-  const insertOption = db.prepare(`
-    INSERT INTO prop_options (property_id, label, color, sort_order)
-    VALUES (?, ?, ?, ?)
-  `)
-
+async function seedProjectProperties(projectId: number, projectType: string): Promise<Map<string, number>> {
   const propIds = new Map<string, number>()
   let order = 0
 
-  const addProp = (name: string, key: string, type: string, options?: [string, string | null][]) => {
-    const r     = insertProp.run(projectId, name, key, type, order++)
-    const propId = Number(r.lastInsertRowid)
+  const addProp = async (name: string, key: string, type: string, options?: [string, string | null][]) => {
+    const r = await dbRun(
+      `INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order)
+       VALUES (?, ?, ?, ?, 1, ?)`,
+      projectId, name, key, type, order++
+    )
+    const propId = r.lastInsertRowid
     propIds.set(key, propId)
     if (options) {
-      options.forEach(([label, color], i) => insertOption.run(propId, label, color ?? null, i))
+      for (let i = 0; i < options.length; i++) {
+        await dbRun(
+          `INSERT INTO prop_options (property_id, label, color, sort_order) VALUES (?, ?, ?, ?)`,
+          propId, options[i][0], options[i][1] ?? null, i
+        )
+      }
     }
   }
 
-  const schemas: Record<string, () => void> = {
-    academic: () => {
-      addProp('Status', 'status', 'select', [
+  const year = new Date().getFullYear()
+
+  const schemas: Record<string, () => Promise<void>> = {
+    academic: async () => {
+      await addProp('Status', 'status', 'select', [
         ['Pendente', '#8B7355'], ['Cursando', '#b8860b'],
         ['Concluída', '#4A6741'], ['Trancada', '#8B3A2A'],
       ])
-      const year = new Date().getFullYear()
-      addProp('Trimestre', 'trimestre', 'select', [
+      await addProp('Trimestre', 'trimestre', 'select', [
         [`${year - 1}.1`, null], [`${year - 1}.2`, null], [`${year - 1}.3`, null], [`${year - 1}.4`, null],
         [`${year}.1`,     null], [`${year}.2`,     null], [`${year}.3`,     null], [`${year}.4`,     null],
         [`${year + 1}.1`, null], [`${year + 1}.2`, null], [`${year + 1}.3`, null], [`${year + 1}.4`, null],
       ])
-      addProp('Área', 'area', 'multi_select', [
+      await addProp('Área', 'area', 'multi_select', [
         ['Humanas', '#7A5C2E'], ['Exatas', '#2C5F8A'], ['Biológicas', '#4A6741'],
         ['Computação', '#4A3A7A'], ['Linguagens', '#6A4A2E'], ['Artes', '#8A2A5A'],
       ])
-      addProp('Nota',          'nota',         'number')
-      addProp('Créditos',      'creditos',     'number')
-      addProp('Carga Horária', 'carga_horaria','number')
-      addProp('Professor',     'professor',    'text')
-      addProp('Código',        'codigo',       'text')
-      addProp('Data Início',   'data_inicio',  'date')
-      addProp('Data Fim',      'data_fim',     'date')
+      await addProp('Nota',          'nota',         'number')
+      await addProp('Créditos',      'creditos',     'number')
+      await addProp('Carga Horária', 'carga_horaria','number')
+      await addProp('Professor',     'professor',    'text')
+      await addProp('Código',        'codigo',       'text')
+      await addProp('Data Início',   'data_inicio',  'date')
+      await addProp('Data Fim',      'data_fim',     'date')
     },
-    software: () => {
-      addProp('Status', 'status', 'select', [
+    software: async () => {
+      await addProp('Status', 'status', 'select', [
         ['Backlog', '#8B7355'], ['A Fazer', '#7A5C2E'],
         ['Em Andamento', '#b8860b'], ['Em Revisão', '#2C5F8A'],
         ['Concluído', '#4A6741'],
       ])
-      addProp('Prioridade', 'prioridade', 'select', [
+      await addProp('Prioridade', 'prioridade', 'select', [
         ['Baixa', '#4A6741'], ['Média', '#7A5C2E'],
         ['Alta', '#b8860b'], ['Urgente', '#8B3A2A'],
       ])
-      addProp('Tags',        'tags',        'multi_select')
-      addProp('Sprint',      'sprint',      'select')
-      addProp('Data Limite', 'data_limite', 'date')
-      addProp('Estimativa',  'estimativa',  'number')
+      await addProp('Tags',        'tags',        'multi_select')
+      await addProp('Sprint',      'sprint',      'select')
+      await addProp('Data Limite', 'data_limite', 'date')
+      await addProp('Estimativa',  'estimativa',  'number')
     },
-    health: () => {
-      addProp('Status', 'status', 'select', [
+    health: async () => {
+      await addProp('Status', 'status', 'select', [
         ['Não Iniciado', '#8B7355'], ['Em Andamento', '#b8860b'],
         ['Concluído', '#4A6741'], ['Abandonado', '#8B3A2A'],
       ])
-      addProp('Frequência', 'frequencia', 'select', [
+      await addProp('Frequência', 'frequencia', 'select', [
         ['Diário', null], ['Semanal', null], ['Mensal', null], ['Pontual', null],
       ])
-      addProp('Data Início', 'data_inicio', 'date')
-      addProp('Meta',        'meta',        'text')
-      addProp('Progresso',   'progresso',   'number')
-      addProp('Tags',        'tags',        'multi_select')
+      await addProp('Data Início', 'data_inicio', 'date')
+      await addProp('Meta',        'meta',        'text')
+      await addProp('Progresso',   'progresso',   'number')
+      await addProp('Tags',        'tags',        'multi_select')
     },
-    creative: () => {
-      addProp('Status', 'status', 'select', [
+    creative: async () => {
+      await addProp('Status', 'status', 'select', [
         ['Ideia', '#8B7355'], ['Em Progresso', '#b8860b'],
         ['Pausado', '#7A5C2E'], ['Concluído', '#4A6741'], ['Publicado', '#2C5F8A'],
       ])
-      addProp('Tags',        'tags',        'multi_select')
-      addProp('Data Limite', 'data_limite', 'date')
-      addProp('Prioridade', 'prioridade', 'select', [
+      await addProp('Tags',        'tags',        'multi_select')
+      await addProp('Data Limite', 'data_limite', 'date')
+      await addProp('Prioridade', 'prioridade', 'select', [
         ['Baixa', '#4A6741'], ['Média', '#7A5C2E'], ['Alta', '#b8860b'],
       ])
     },
-    research: () => {
-      addProp('Status', 'status', 'select', [
+    research: async () => {
+      await addProp('Status', 'status', 'select', [
         ['A Pesquisar', '#8B7355'], ['Em Andamento', '#b8860b'],
         ['Rascunho', '#7A5C2E'], ['Revisão', '#2C5F8A'], ['Concluído', '#4A6741'],
       ])
-      addProp('Fonte', 'fonte', 'text')
-      addProp('Data',  'data',  'date')
-      addProp('Tags',  'tags',  'multi_select')
-      addProp('Área',  'area',  'multi_select')
+      await addProp('Fonte', 'fonte', 'text')
+      await addProp('Data',  'data',  'date')
+      await addProp('Tags',  'tags',  'multi_select')
+      await addProp('Área',  'area',  'multi_select')
     },
-    custom: () => {
-      addProp('Status', 'status', 'select', [
+    custom: async () => {
+      await addProp('Status', 'status', 'select', [
         ['A Fazer', '#8B7355'], ['Em Andamento', '#b8860b'], ['Concluído', '#4A6741'],
       ])
-      addProp('Tags', 'tags', 'multi_select')
-      addProp('Data', 'data', 'date')
+      await addProp('Tags', 'tags', 'multi_select')
+      await addProp('Data', 'data', 'date')
     },
   }
 
-  ;(schemas[projectType] ?? schemas.custom)()
+  await (schemas[projectType] ?? schemas.custom)()
   return propIds
 }
 
-function seedProjectViews(
+async function seedProjectViews(
   projectId: number,
   projectType: string,
   propIds: Map<string, number>
-): void {
-  const db = getDb()
-
-  const insertView = db.prepare(`
-    INSERT INTO project_views
-      (project_id, name, view_type, group_by_property_id, date_property_id, is_default, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `)
-
+): Promise<void> {
   type ViewDef = [string, string, string | null, string | null]
 
   const viewConfigs: Record<string, ViewDef[]> = {
     academic: [
-      ['Progresso',  'progress', 'trimestre', null     ],
-      ['Tabela',     'table',    null,        null     ],
-      ['Kanban',     'kanban',   'status',    null     ],
+      ['Progresso',  'progress', 'trimestre', null      ],
+      ['Tabela',     'table',    null,        null      ],
+      ['Kanban',     'kanban',   'status',    null      ],
       ['Calendário', 'calendar', null,        'data_fim'],
     ],
     software: [
-      ['Kanban',     'kanban',   'status', null          ],
-      ['Tabela',     'table',    null,     null          ],
-      ['Calendário', 'calendar', null,     'data_limite' ],
+      ['Kanban',     'kanban',   'status', null         ],
+      ['Tabela',     'table',    null,     null         ],
+      ['Calendário', 'calendar', null,     'data_limite'],
     ],
     health: [
-      ['Lista',      'list',     null,     null          ],
-      ['Calendário', 'calendar', null,     'data_inicio' ],
-      ['Tabela',     'table',    null,     null          ],
+      ['Lista',      'list',     null,     null         ],
+      ['Calendário', 'calendar', null,     'data_inicio'],
+      ['Tabela',     'table',    null,     null         ],
     ],
     creative: [
       ['Kanban', 'kanban', 'status', null],
@@ -199,12 +190,18 @@ function seedProjectViews(
 
   const configs: ViewDef[] = viewConfigs[projectType] ?? viewConfigs.custom
 
-  configs.forEach(([name, type, groupByKey, dateKey], i) => {
+  for (let i = 0; i < configs.length; i++) {
+    const [name, type, groupByKey, dateKey] = configs[i]
     const groupByPropId = groupByKey ? (propIds.get(groupByKey) ?? null) : null
     const datePropId    = dateKey    ? (propIds.get(dateKey)    ?? null) : null
     const isDefault     = i === 0 ? 1 : 0
-    insertView.run(projectId, name, type, groupByPropId, datePropId, isDefault, i)
-  })
+    await dbRun(
+      `INSERT INTO project_views
+        (project_id, name, view_type, group_by_property_id, date_property_id, is_default, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      projectId, name, type, groupByPropId, datePropId, isDefault, i
+    )
+  }
 }
 
 // ── FTS5: extração de texto do body_json do Editor.js ────────────────────────
@@ -225,9 +222,9 @@ function extractBodyText(bodyJson: string | null | undefined): string {
   } catch { return '' }
 }
 
-function ftsUpsert(pageId: number, projectId: number, title: string, body: string) {
-  dbRun(`DELETE FROM search_index WHERE entity_type = 'page' AND entity_id = ?`, pageId)
-  dbRun(
+async function ftsUpsert(pageId: number, projectId: number, title: string, body: string) {
+  await dbRun(`DELETE FROM search_index WHERE entity_type = 'page' AND entity_id = ?`, pageId)
+  await dbRun(
     `INSERT INTO search_index (entity_type, entity_id, project_id, title, body) VALUES ('page', ?, ?, ?, ?)`,
     pageId, projectId, title, body
   )
@@ -295,11 +292,11 @@ async function fetchMetadata(type: string, query: string, url?: string): Promise
         const data = await fetchJson(`https://openlibrary.org/isbn/${encoded}.json`)
         if (data?.title) {
           return {
-            title: data.title,
+            title:     data.title,
             publisher: data.publishers?.join(', '),
-            year: data.publish_date ? parseInt(data.publish_date) || undefined : undefined,
-            pages: data.number_of_pages,
-            isbn: encoded,
+            year:      data.publish_date ? parseInt(data.publish_date) || undefined : undefined,
+            pages:     data.number_of_pages,
+            isbn:      encoded,
           }
         }
       }
@@ -374,6 +371,116 @@ async function fetchMetadata(type: string, query: string, url?: string): Promise
   return {}
 }
 
+// ── Planejador: funções auxiliares ────────────────────────────────────────────
+
+async function getDailyCapacity(): Promise<number> {
+  const row = await dbGet(`SELECT value FROM settings WHERE key = 'planner_daily_hours'`)
+  return row ? parseFloat(row.value) || 4 : 4
+}
+
+async function scheduleTasks(projectId: number): Promise<void> {
+  const dailyCap = await getDailyCapacity()
+  const today    = new Date().toISOString().slice(0, 10)
+
+  const tasks = await dbAll(`
+    SELECT pt.*,
+      COALESCE((
+        SELECT SUM(wb.logged_hours) FROM work_blocks wb
+        WHERE wb.task_id = pt.id AND wb.status = 'done'
+      ), 0) AS done_hours
+    FROM planned_tasks pt
+    WHERE pt.project_id = ? AND pt.status IN ('pending','in_progress')
+    ORDER BY pt.due_date ASC
+  `, projectId)
+
+  if (tasks.length === 0) return
+
+  const taskIds    = tasks.map((t: any) => t.id)
+  const c          = await getClient()
+  const placeholders = taskIds.map(() => '?').join(',')
+  await c.execute({
+    sql:  `DELETE FROM work_blocks WHERE task_id IN (${placeholders}) AND date >= ? AND status = 'scheduled'`,
+    args: [...taskIds, today],
+  })
+
+  const otherBlocks = await dbAll(`
+    SELECT wb.date, SUM(wb.planned_hours) as total
+    FROM work_blocks wb
+    JOIN planned_tasks pt ON pt.id = wb.task_id
+    WHERE pt.project_id != ? AND wb.date >= ? AND wb.status = 'scheduled'
+    GROUP BY wb.date
+  `, projectId, today)
+
+  const loadMap = new Map<string, number>()
+  for (const b of otherBlocks) loadMap.set(b.date, b.total)
+
+  const inserts: { sql: string; args: any[] }[] = []
+
+  for (const task of tasks) {
+    const remaining = Math.max(0, task.estimated_hours - task.done_hours)
+    if (remaining <= 0) continue
+
+    const due   = task.due_date.slice(0, 10)
+    const dates: string[] = []
+    let cur = new Date(today + 'T12:00:00')
+    const dueDate = new Date(due + 'T12:00:00')
+    while (cur <= dueDate) {
+      dates.push(cur.toISOString().slice(0, 10))
+      cur = new Date(cur.getTime() + 86400000)
+    }
+
+    if (dates.length === 0) {
+      inserts.push({
+        sql:  `INSERT INTO work_blocks (task_id, date, planned_hours, logged_hours, status) VALUES (?, ?, ?, 0, 'scheduled')`,
+        args: [task.id, today, Math.round(remaining * 100) / 100],
+      })
+      loadMap.set(today, (loadMap.get(today) ?? 0) + remaining)
+      continue
+    }
+
+    let hoursLeft = remaining
+    for (const date of dates) {
+      if (hoursLeft <= 0) break
+      const load      = loadMap.get(date) ?? 0
+      const available = Math.max(0, dailyCap - load)
+      if (available <= 0) continue
+      const h = Math.min(hoursLeft, available)
+      inserts.push({
+        sql:  `INSERT INTO work_blocks (task_id, date, planned_hours, logged_hours, status) VALUES (?, ?, ?, 0, 'scheduled')`,
+        args: [task.id, date, Math.round(h * 100) / 100],
+      })
+      loadMap.set(date, load + h)
+      hoursLeft -= h
+    }
+    if (hoursLeft > 0.01) {
+      const lastDate = dates[dates.length - 1]
+      inserts.push({
+        sql:  `INSERT INTO work_blocks (task_id, date, planned_hours, logged_hours, status) VALUES (?, ?, ?, 0, 'scheduled')`,
+        args: [task.id, lastDate, Math.round(hoursLeft * 100) / 100],
+      })
+      loadMap.set(lastDate, (loadMap.get(lastDate) ?? 0) + hoursLeft)
+    }
+  }
+
+  if (inserts.length > 0) {
+    await c.batch(inserts, 'write')
+  }
+}
+
+async function updateTaskStatus(taskId: number): Promise<void> {
+  const task = await dbGet(`SELECT * FROM planned_tasks WHERE id = ?`, taskId)
+  if (!task) return
+  const row = await dbGet(
+    `SELECT COALESCE(SUM(logged_hours),0) AS h FROM work_blocks WHERE task_id = ? AND status = 'done'`,
+    taskId
+  )
+  const doneHours = row?.h ?? 0
+  let newStatus = task.status
+  if (doneHours >= task.estimated_hours)  newStatus = 'completed'
+  else if (doneHours > 0)                 newStatus = 'in_progress'
+  await dbRun(`UPDATE planned_tasks SET status = ?, updated_at = datetime('now') WHERE id = ?`, newStatus, taskId)
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 export function registerIpcHandlers(): void {
@@ -386,12 +493,12 @@ export function registerIpcHandlers(): void {
   })
 
   // ── Workspace ────────────────────────────────────────────────────────────
-  api('workspace:get', () =>
+  api('workspace:get', async () =>
     dbGet('SELECT * FROM workspaces LIMIT 1')
   )
 
-  api('workspace:update', (data) => {
-    dbRun(
+  api('workspace:update', async (data) => {
+    await dbRun(
       "UPDATE workspaces SET name=?, icon=?, accent_color=?, updated_at=datetime('now') WHERE id=?",
       data.name, data.icon, data.accent_color, data.id
     )
@@ -399,40 +506,34 @@ export function registerIpcHandlers(): void {
   })
 
   // ── Projetos ─────────────────────────────────────────────────────────────
-  api('projects:list', () =>
+  api('projects:list', async () =>
     dbAll("SELECT * FROM projects WHERE status != 'archived' ORDER BY sort_order, name")
   )
 
-  api('projects:create', (data) => {
-    const db = getDb()
+  api('projects:create', async (data) => {
+    const r = await dbRun(`
+      INSERT INTO projects
+        (workspace_id, name, description, icon, color, project_type,
+         subcategory, status, date_start, date_end, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+      data.workspace_id, data.name, data.description ?? null,
+      data.icon ?? null, data.color ?? null, data.project_type ?? 'custom',
+      data.subcategory ?? null, data.status ?? 'active',
+      data.date_start ?? null, data.date_end ?? null,
+      data.sort_order ?? 0
+    )
 
-    const project = db.transaction(() => {
-      const r = db.prepare(`
-        INSERT INTO projects
-          (workspace_id, name, description, icon, color, project_type,
-           subcategory, status, date_start, date_end, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        data.workspace_id, data.name, data.description ?? null,
-        data.icon ?? null, data.color ?? null, data.project_type ?? 'custom',
-        data.subcategory ?? null, data.status ?? 'active',
-        data.date_start ?? null, data.date_end ?? null,
-        data.sort_order ?? 0
-      )
+    const projectId = r.lastInsertRowid
+    const propIds   = await seedProjectProperties(projectId, data.project_type ?? 'custom')
+    await seedProjectViews(projectId, data.project_type ?? 'custom', propIds)
 
-      const projectId = Number(r.lastInsertRowid)
-      const propIds   = seedProjectProperties(projectId, data.project_type ?? 'custom')
-      seedProjectViews(projectId, data.project_type ?? 'custom', propIds)
-
-      return db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId)
-    })()
-
-    dbLog.info('projects:create', { id: (project as any)?.id, name: data.name })
-    return project
+    dbLog.info('projects:create', { id: projectId, name: data.name })
+    return dbGet('SELECT * FROM projects WHERE id = ?', projectId)
   })
 
-  api('projects:update', (data) => {
-    dbRun(`
+  api('projects:update', async (data) => {
+    await dbRun(`
       UPDATE projects SET name=?, description=?, icon=?, color=?,
         project_type=?, subcategory=?, semester=?, status=?, date_start=?, date_end=?,
         sort_order=?, updated_at=datetime('now')
@@ -447,21 +548,20 @@ export function registerIpcHandlers(): void {
     return dbGet('SELECT * FROM projects WHERE id = ?', data.id)
   })
 
-  api('projects:delete', ({ id }) => {
+  api('projects:delete', async ({ id }) => {
     dbLog.info('projects:delete', { id })
-    // Apagar eventos de calendário ligados ao projecto (linked_project_id usa ON DELETE SET NULL)
-    dbRun('DELETE FROM calendar_events WHERE linked_project_id = ?', id)
+    await dbRun('DELETE FROM calendar_events WHERE linked_project_id = ?', id)
     return dbRun('DELETE FROM projects WHERE id = ?', id)
   })
 
-  api('projects:getProperties', ({ id }) =>
+  api('projects:getProperties', async ({ id }) =>
     dbAll(
       'SELECT * FROM project_properties WHERE project_id = ? ORDER BY sort_order, id',
       id
     )
   )
 
-  api('projects:getViews', ({ id }) =>
+  api('projects:getViews', async ({ id }) =>
     dbAll(
       'SELECT * FROM project_views WHERE project_id = ? ORDER BY sort_order, id',
       id
@@ -469,16 +569,16 @@ export function registerIpcHandlers(): void {
   )
 
   // ── Páginas ──────────────────────────────────────────────────────────────
-  api('pages:list', ({ project_id }) => {
-    const pages = dbAll(
+  api('pages:list', async ({ project_id }) => {
+    const pages = await dbAll(
       'SELECT * FROM pages WHERE project_id = ? AND is_deleted = 0 ORDER BY sort_order, title',
       project_id
     )
     if (pages.length === 0) return []
 
-    const pageIds     = pages.map((p: any) => p.id)
+    const pageIds      = pages.map((p: any) => p.id)
     const placeholders = pageIds.map(() => '?').join(',')
-    const propValues  = dbAll(
+    const propValues   = await dbAll(
       `SELECT ppv.*, pp.prop_key, pp.prop_type, pp.name AS prop_name
        FROM page_prop_values ppv
        JOIN project_properties pp ON pp.id = ppv.property_id
@@ -498,11 +598,11 @@ export function registerIpcHandlers(): void {
     }))
   })
 
-  api('pages:get', ({ id }) => {
-    const page = dbGet('SELECT * FROM pages WHERE id = ? AND is_deleted = 0', id)
+  api('pages:get', async ({ id }) => {
+    const page = await dbGet('SELECT * FROM pages WHERE id = ? AND is_deleted = 0', id)
     if (!page) return null
 
-    const propValues = dbAll(
+    const propValues = await dbAll(
       `SELECT ppv.*, pp.prop_key, pp.prop_type, pp.name AS prop_name
        FROM page_prop_values ppv
        JOIN project_properties pp ON pp.id = ppv.property_id
@@ -512,31 +612,31 @@ export function registerIpcHandlers(): void {
     return { ...page, prop_values: propValues }
   })
 
-  api('pages:create', (data) => {
-    const r = dbRun(`
+  api('pages:create', async (data) => {
+    const r = await dbRun(`
       INSERT INTO pages (project_id, parent_id, title, icon, cover, cover_color, body_json, sort_order)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       data.project_id, data.parent_id ?? null, data.title ?? 'Sem título',
       data.icon ?? null, data.cover ?? null, data.cover_color ?? null,
       data.body_json ?? null, data.sort_order ?? 0
     )
-    const pageId = Number(r.lastInsertRowid)
-    ftsUpsert(pageId, data.project_id, data.title ?? 'Sem título', extractBodyText(data.body_json))
+    const pageId = r.lastInsertRowid
+    await ftsUpsert(pageId, data.project_id, data.title ?? 'Sem título', extractBodyText(data.body_json))
 
     // Auto-gerar código PREFIX### para projetos académicos
     if (data.project_id) {
       try {
-        const project = dbGet(`SELECT project_type FROM projects WHERE id = ?`, data.project_id)
+        const project = await dbGet(`SELECT project_type FROM projects WHERE id = ?`, data.project_id)
         if (project?.project_type === 'academic') {
-          const codigoProp = dbGet(
+          const codigoProp = await dbGet(
             `SELECT id FROM project_properties WHERE project_id = ? AND prop_key = 'codigo'`,
             data.project_id
           )
           if (codigoProp) {
-            const existingCodes = dbAll(
+            const existingCodes = (await dbAll(
               `SELECT ppv.value_text FROM page_prop_values ppv WHERE ppv.property_id = ? AND ppv.value_text IS NOT NULL`,
               codigoProp.id
-            ).map((row: any) => row.value_text as string)
+            )).map((row: any) => row.value_text as string)
 
             const title  = data.title ?? 'Sem título'
             const prefix = title
@@ -546,10 +646,10 @@ export function registerIpcHandlers(): void {
             const nums = existingCodes
               .map(c => c?.match(pattern)?.[1])
               .filter(Boolean).map(Number)
-            const next = nums.length > 0 ? Math.max(...nums) + 1 : 1
+            const next   = nums.length > 0 ? Math.max(...nums) + 1 : 1
             const codigo = `${prefix}${String(next).padStart(3, '0')}`
 
-            dbRun(
+            await dbRun(
               `INSERT INTO page_prop_values (page_id, property_id, value_text)
                VALUES (?, ?, ?)
                ON CONFLICT(page_id, property_id) DO UPDATE SET value_text = excluded.value_text`,
@@ -563,7 +663,7 @@ export function registerIpcHandlers(): void {
     return dbGet('SELECT * FROM pages WHERE id = ?', pageId)
   })
 
-  api('pages:update', (data) => {
+  api('pages:update', async (data) => {
     const cols: string[] = ["updated_at = datetime('now')"]
     const params: any[]  = []
     if (data.title       !== undefined) { cols.push('title = ?');       params.push(data.title) }
@@ -573,30 +673,32 @@ export function registerIpcHandlers(): void {
     if (data.body_json   !== undefined) { cols.push('body_json = ?');   params.push(data.body_json ?? null) }
     if (data.sort_order  !== undefined) { cols.push('sort_order = ?');  params.push(data.sort_order) }
     params.push(data.id)
-    dbRun(`UPDATE pages SET ${cols.join(', ')} WHERE id = ?`, ...params)
-    // Atualizar índice FTS5
+    await dbRun(`UPDATE pages SET ${cols.join(', ')} WHERE id = ?`, ...params)
     if (data.title !== undefined || data.body_json !== undefined) {
-      const page = dbGet('SELECT project_id, title, body_json FROM pages WHERE id = ?', data.id)
-      if (page) ftsUpsert(data.id, page.project_id, page.title, extractBodyText(page.body_json))
+      const page = await dbGet('SELECT project_id, title, body_json FROM pages WHERE id = ?', data.id)
+      if (page) await ftsUpsert(data.id, page.project_id, page.title, extractBodyText(page.body_json))
     }
     return dbGet('SELECT * FROM pages WHERE id = ?', data.id)
   })
 
-  api('pages:delete', ({ id }) => {
-    dbRun(`DELETE FROM search_index WHERE entity_type = 'page' AND entity_id = ?`, id)
+  api('pages:delete', async ({ id }) => {
+    await dbRun(`DELETE FROM search_index WHERE entity_type = 'page' AND entity_id = ?`, id)
     return dbRun("UPDATE pages SET is_deleted=1, updated_at=datetime('now') WHERE id=?", id)
   })
 
-  api('pages:reorder', (items: { id: number; sort_order: number }[]) => {
-    const db   = getDb()
-    const stmt = db.prepare('UPDATE pages SET sort_order=? WHERE id=?')
-    db.transaction(() => {
-      for (const { id, sort_order } of items) stmt.run(sort_order, id)
-    })()
+  api('pages:reorder', async (items: { id: number; sort_order: number }[]) => {
+    const c = await getClient()
+    await c.batch(
+      items.map(({ id, sort_order }) => ({
+        sql:  'UPDATE pages SET sort_order=? WHERE id=?',
+        args: [sort_order, id],
+      })),
+      'write'
+    )
     return { ok: true }
   })
 
-  api('calendar:pagesForMonth', ({ year, month }) => {
+  api('calendar:pagesForMonth', async ({ year, month }) => {
     const start = `${year}-${String(month + 1).padStart(2, '0')}-01`
     const d     = new Date(year, month + 1, 0)
     const end   = `${year}-${String(month + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -617,8 +719,8 @@ export function registerIpcHandlers(): void {
     `, start, end)
   })
 
-  api('dashboard:stats', () => {
-    const totals = dbGet(`
+  api('dashboard:stats', async () => {
+    const totals = await dbGet(`
       SELECT
         (SELECT COUNT(*) FROM pages    WHERE is_deleted = 0)                                    AS total_pages,
         (SELECT COUNT(*) FROM pages    WHERE is_deleted = 0
@@ -626,7 +728,7 @@ export function registerIpcHandlers(): void {
         (SELECT COUNT(*) FROM projects WHERE status = 'active')                                 AS active_projects,
         (SELECT COUNT(*) FROM projects)                                                         AS total_projects
     `)
-    const pageCounts = dbAll(`
+    const pageCounts = await dbAll(`
       SELECT project_id, COUNT(*) AS count
       FROM pages WHERE is_deleted = 0
       GROUP BY project_id
@@ -634,13 +736,12 @@ export function registerIpcHandlers(): void {
     return { ...(totals ?? {}), page_counts: pageCounts }
   })
 
-  api('pages:search', ({ query, limit }) => {
+  api('pages:search', async ({ query, limit }) => {
     const n = limit ?? 20
     const q = (query ?? '').trim()
     if (!q) return []
-    // Tentar FTS5 primeiro; fallback para LIKE se falhar (ex: caracteres especiais)
     try {
-      return dbAll(`
+      return await dbAll(`
         SELECT p.id, p.title, p.icon, p.project_id, p.updated_at,
                pr.name AS project_name, pr.color AS project_color, pr.icon AS project_icon
         FROM pages p
@@ -668,16 +769,16 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  api('pages:reindexAll', () => {
-    const pages = dbAll(`SELECT id, project_id, title, body_json FROM pages WHERE is_deleted = 0`)
-    dbRun(`DELETE FROM search_index WHERE entity_type = 'page'`)
+  api('pages:reindexAll', async () => {
+    const pages = await dbAll(`SELECT id, project_id, title, body_json FROM pages WHERE is_deleted = 0`)
+    await dbRun(`DELETE FROM search_index WHERE entity_type = 'page'`)
     for (const p of pages) {
-      ftsUpsert(p.id, p.project_id, p.title, extractBodyText(p.body_json))
+      await ftsUpsert(p.id, p.project_id, p.title, extractBodyText(p.body_json))
     }
     return { indexed: pages.length }
   })
 
-  api('pages:listRecent', ({ limit }) => {
+  api('pages:listRecent', async ({ limit }) => {
     const n = limit ?? 8
     return dbAll(`
       SELECT p.id, p.title, p.icon, p.project_id, p.updated_at, p.created_at,
@@ -690,7 +791,7 @@ export function registerIpcHandlers(): void {
     `, n)
   })
 
-  api('pages:listUpcoming', ({ days }) => {
+  api('pages:listUpcoming', async ({ days }) => {
     const d       = days ?? 14
     const endDate = new Date()
     endDate.setDate(endDate.getDate() + d)
@@ -713,8 +814,8 @@ export function registerIpcHandlers(): void {
     `, endStr)
   })
 
-  api('pages:setPropValue', (data) => {
-    dbRun(`
+  api('pages:setPropValue', async (data) => {
+    await dbRun(`
       INSERT INTO page_prop_values
         (page_id, property_id, value_text, value_num, value_bool, value_date, value_date2, value_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -735,12 +836,12 @@ export function registerIpcHandlers(): void {
   })
 
   // ── Propriedades ─────────────────────────────────────────────────────────
-  api('properties:create', (data) => {
-    const max = dbGet(
+  api('properties:create', async (data) => {
+    const max = (await dbGet(
       'SELECT COALESCE(MAX(sort_order), -1) AS m FROM project_properties WHERE project_id = ?',
       data.project_id
-    )?.m ?? -1
-    const r = dbRun(`
+    ))?.m ?? -1
+    const r = await dbRun(`
       INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_required, sort_order)
       VALUES (?, ?, ?, ?, ?, ?)`,
       data.project_id, data.name, data.prop_key, data.prop_type,
@@ -749,38 +850,41 @@ export function registerIpcHandlers(): void {
     return dbGet('SELECT * FROM project_properties WHERE id = ?', r.lastInsertRowid)
   })
 
-  api('properties:update', (data) => {
-    dbRun(
+  api('properties:update', async (data) => {
+    await dbRun(
       'UPDATE project_properties SET name=?, prop_type=?, is_required=? WHERE id=?',
       data.name, data.prop_type, data.is_required ?? 0, data.id
     )
     return dbGet('SELECT * FROM project_properties WHERE id = ?', data.id)
   })
 
-  api('properties:delete', ({ id }) => {
-    dbRun('DELETE FROM project_properties WHERE id = ?', id)
+  api('properties:delete', async ({ id }) => {
+    await dbRun('DELETE FROM project_properties WHERE id = ?', id)
     return { ok: true }
   })
 
-  api('properties:reorder', (items: { id: number; sort_order: number }[]) => {
-    const db   = getDb()
-    const stmt = db.prepare('UPDATE project_properties SET sort_order=? WHERE id=?')
-    db.transaction(() => {
-      for (const { id, sort_order } of items) stmt.run(sort_order, id)
-    })()
+  api('properties:reorder', async (items: { id: number; sort_order: number }[]) => {
+    const c = await getClient()
+    await c.batch(
+      items.map(({ id, sort_order }) => ({
+        sql:  'UPDATE project_properties SET sort_order=? WHERE id=?',
+        args: [sort_order, id],
+      })),
+      'write'
+    )
     return { ok: true }
   })
 
-  api('properties:getOptions', ({ id }) =>
+  api('properties:getOptions', async ({ id }) =>
     dbAll('SELECT * FROM prop_options WHERE property_id = ? ORDER BY sort_order, id', id)
   )
 
-  api('properties:createOption', (data) => {
-    const max = dbGet(
+  api('properties:createOption', async (data) => {
+    const max = (await dbGet(
       'SELECT COALESCE(MAX(sort_order), -1) AS m FROM prop_options WHERE property_id = ?',
       data.property_id
-    )?.m ?? -1
-    const r = dbRun(
+    ))?.m ?? -1
+    const r = await dbRun(
       'INSERT INTO prop_options (property_id, label, color, sort_order) VALUES (?, ?, ?, ?)',
       data.property_id, data.label, data.color ?? null,
       data.sort_order ?? (max + 1)
@@ -788,35 +892,38 @@ export function registerIpcHandlers(): void {
     return dbGet('SELECT * FROM prop_options WHERE id = ?', r.lastInsertRowid)
   })
 
-  api('properties:updateOption', (data) => {
-    dbRun(
+  api('properties:updateOption', async (data) => {
+    await dbRun(
       'UPDATE prop_options SET label=?, color=? WHERE id=?',
       data.label, data.color ?? null, data.id
     )
     return dbGet('SELECT * FROM prop_options WHERE id = ?', data.id)
   })
 
-  api('properties:deleteOption', ({ id }) => {
-    dbRun('DELETE FROM prop_options WHERE id = ?', id)
+  api('properties:deleteOption', async ({ id }) => {
+    await dbRun('DELETE FROM prop_options WHERE id = ?', id)
     return { ok: true }
   })
 
-  api('properties:reorderOptions', (items: { id: number; sort_order: number }[]) => {
-    const db   = getDb()
-    const stmt = db.prepare('UPDATE prop_options SET sort_order=? WHERE id=?')
-    db.transaction(() => {
-      for (const { id, sort_order } of items) stmt.run(sort_order, id)
-    })()
+  api('properties:reorderOptions', async (items: { id: number; sort_order: number }[]) => {
+    const c = await getClient()
+    await c.batch(
+      items.map(({ id, sort_order }) => ({
+        sql:  'UPDATE prop_options SET sort_order=? WHERE id=?',
+        args: [sort_order, id],
+      })),
+      'write'
+    )
     return { ok: true }
   })
 
   // ── Views ─────────────────────────────────────────────────────────────────
-  api('views:create', (data) => {
-    const max = dbGet(
+  api('views:create', async (data) => {
+    const max = (await dbGet(
       'SELECT COALESCE(MAX(sort_order), -1) AS m FROM project_views WHERE project_id = ?',
       data.project_id
-    )?.m ?? -1
-    const r = dbRun(`
+    ))?.m ?? -1
+    const r = await dbRun(`
       INSERT INTO project_views
         (project_id, name, view_type, group_by_property_id, date_property_id,
          visible_props_json, is_default, sort_order)
@@ -829,8 +936,8 @@ export function registerIpcHandlers(): void {
     return dbGet('SELECT * FROM project_views WHERE id = ?', r.lastInsertRowid)
   })
 
-  api('views:update', (data) => {
-    dbRun(`
+  api('views:update', async (data) => {
+    await dbRun(`
       UPDATE project_views SET name=?, view_type=?, group_by_property_id=?,
         date_property_id=?, visible_props_json=?, filter_json=?, sort_json=?,
         include_subpages=?
@@ -843,19 +950,16 @@ export function registerIpcHandlers(): void {
     return dbGet('SELECT * FROM project_views WHERE id = ?', data.id)
   })
 
-  api('views:delete', ({ id }) => {
-    dbRun('DELETE FROM project_views WHERE id = ?', id)
+  api('views:delete', async ({ id }) => {
+    await dbRun('DELETE FROM project_views WHERE id = ?', id)
     return { ok: true }
   })
 
-  api('views:setDefault', ({ id }) => {
-    const view = dbGet('SELECT project_id FROM project_views WHERE id = ?', id)
+  api('views:setDefault', async ({ id }) => {
+    const view = await dbGet('SELECT project_id FROM project_views WHERE id = ?', id)
     if (!view) throw new Error('View não encontrada')
-    const db = getDb()
-    db.transaction(() => {
-      db.prepare('UPDATE project_views SET is_default=0 WHERE project_id=?').run(view.project_id)
-      db.prepare('UPDATE project_views SET is_default=1 WHERE id=?').run(id)
-    })()
+    await dbRun('UPDATE project_views SET is_default=0 WHERE project_id=?', view.project_id)
+    await dbRun('UPDATE project_views SET is_default=1 WHERE id=?', id)
     return { ok: true }
   })
 
@@ -881,38 +985,38 @@ export function registerIpcHandlers(): void {
   })
 
   // ── Configurações ─────────────────────────────────────────────────────────
-  api('config:get', ({ key }) => {
-    const row = dbGet('SELECT value FROM settings WHERE key = ?', key)
+  api('config:get', async ({ key }) => {
+    const row = await dbGet('SELECT value FROM settings WHERE key = ?', key)
     return row?.value ?? null
   })
 
-  api('config:set', ({ key, value }) =>
+  api('config:set', async ({ key, value }) =>
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', key, value)
   )
 
-  api('config:getAll', () => {
-    const rows = dbAll('SELECT key, value FROM settings')
+  api('config:getAll', async () => {
+    const rows = await dbAll('SELECT key, value FROM settings')
     return Object.fromEntries(rows.map((r: any) => [r.key, r.value]))
   })
 
   // ── Tags globais ──────────────────────────────────────────────────────────
-  api('tags:list', () => {
-    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
+  api('tags:list', async () => {
+    const ws = await dbGet('SELECT id FROM workspaces LIMIT 1')
     return dbAll('SELECT * FROM tags WHERE workspace_id = ? ORDER BY name', ws.id)
   })
 
-  api('tags:create', ({ name, color }) => {
-    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
-    const r  = dbRun('INSERT OR IGNORE INTO tags (workspace_id, name, color) VALUES (?, ?, ?)',
+  api('tags:create', async ({ name, color }) => {
+    const ws = await dbGet('SELECT id FROM workspaces LIMIT 1')
+    const r  = await dbRun('INSERT OR IGNORE INTO tags (workspace_id, name, color) VALUES (?, ?, ?)',
       ws.id, name, color ?? null)
     return dbGet('SELECT * FROM tags WHERE id = ?', r.lastInsertRowid)
   })
 
-  api('tags:delete', ({ id }) =>
+  api('tags:delete', async ({ id }) =>
     dbRun('DELETE FROM tags WHERE id = ?', id)
   )
 
-  api('tags:listForPage', ({ page_id }) =>
+  api('tags:listForPage', async ({ page_id }) =>
     dbAll(`
       SELECT t.* FROM tags t
       JOIN page_tags pt ON pt.tag_id = t.id
@@ -921,16 +1025,16 @@ export function registerIpcHandlers(): void {
     `, page_id)
   )
 
-  api('tags:assign', ({ page_id, tag_id }) =>
+  api('tags:assign', async ({ page_id, tag_id }) =>
     dbRun('INSERT OR IGNORE INTO page_tags (page_id, tag_id) VALUES (?, ?)', page_id, tag_id)
   )
 
-  api('tags:remove', ({ page_id, tag_id }) =>
+  api('tags:remove', async ({ page_id, tag_id }) =>
     dbRun('DELETE FROM page_tags WHERE page_id = ? AND tag_id = ?', page_id, tag_id)
   )
 
   // ── Pré-requisitos entre páginas ──────────────────────────────────────────
-  api('prerequisites:list', ({ page_id }) =>
+  api('prerequisites:list', async ({ page_id }) =>
     dbAll(`
       SELECT pp.prerequisite_id AS id, p.title, p.icon, p.project_id,
              pv.value_text AS status_value
@@ -946,7 +1050,7 @@ export function registerIpcHandlers(): void {
     `, page_id)
   )
 
-  api('prerequisites:listDependents', ({ page_id }) =>
+  api('prerequisites:listDependents', async ({ page_id }) =>
     dbAll(`
       SELECT pp.page_id AS id, p.title, p.icon
       FROM page_prerequisites pp
@@ -956,21 +1060,20 @@ export function registerIpcHandlers(): void {
     `, page_id)
   )
 
-  api('prerequisites:add', ({ page_id, prerequisite_id }) => {
+  api('prerequisites:add', async ({ page_id, prerequisite_id }) => {
     if (page_id === prerequisite_id) return { ok: false, error: 'Uma página não pode ser pré-requisito de si mesma.' }
-    // Verificação simples de ciclo: se prerequisite_id já requer page_id, não permitir
-    const cycle = dbGet(`SELECT 1 FROM page_prerequisites WHERE page_id = ? AND prerequisite_id = ?`, prerequisite_id, page_id)
+    const cycle = await dbGet(`SELECT 1 FROM page_prerequisites WHERE page_id = ? AND prerequisite_id = ?`, prerequisite_id, page_id)
     if (cycle) return { ok: false, error: 'Isso criaria uma dependência circular.' }
-    try { dbRun(`INSERT OR IGNORE INTO page_prerequisites (page_id, prerequisite_id) VALUES (?, ?)`, page_id, prerequisite_id) } catch {}
+    try { await dbRun(`INSERT OR IGNORE INTO page_prerequisites (page_id, prerequisite_id) VALUES (?, ?)`, page_id, prerequisite_id) } catch {}
     return { ok: true }
   })
 
-  api('prerequisites:remove', ({ page_id, prerequisite_id }) =>
+  api('prerequisites:remove', async ({ page_id, prerequisite_id }) =>
     dbRun(`DELETE FROM page_prerequisites WHERE page_id = ? AND prerequisite_id = ?`, page_id, prerequisite_id)
   )
 
   // ── Backlinks ─────────────────────────────────────────────────────────────
-  api('backlinks:list', ({ page_id }) =>
+  api('backlinks:list', async ({ page_id }) =>
     dbAll(`
       SELECT pb.source_page_id AS id, p.title, p.icon, p.project_id, pr.name AS project_name
       FROM page_backlinks pb
@@ -981,7 +1084,7 @@ export function registerIpcHandlers(): void {
     `, page_id)
   )
 
-  api('backlinks:listOutgoing', ({ page_id }) =>
+  api('backlinks:listOutgoing', async ({ page_id }) =>
     dbAll(`
       SELECT pb.target_page_id AS id, p.title, p.icon, p.project_id, pr.name AS project_name
       FROM page_backlinks pb
@@ -992,25 +1095,25 @@ export function registerIpcHandlers(): void {
     `, page_id)
   )
 
-  api('backlinks:add', ({ source_page_id, target_page_id }) => {
+  api('backlinks:add', async ({ source_page_id, target_page_id }) => {
     if (source_page_id === target_page_id) return { ok: true }
-    try { dbRun(`INSERT OR IGNORE INTO page_backlinks (source_page_id, target_page_id) VALUES (?, ?)`, source_page_id, target_page_id) } catch {}
+    try { await dbRun(`INSERT OR IGNORE INTO page_backlinks (source_page_id, target_page_id) VALUES (?, ?)`, source_page_id, target_page_id) } catch {}
     return { ok: true }
   })
 
-  api('backlinks:remove', ({ source_page_id, target_page_id }) =>
+  api('backlinks:remove', async ({ source_page_id, target_page_id }) =>
     dbRun(`DELETE FROM page_backlinks WHERE source_page_id = ? AND target_page_id = ?`, source_page_id, target_page_id)
   )
 
   // ── Leituras ───────────────────────────────────────────────────────────────
-  api('readings:list', () => {
-    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
+  api('readings:list', async () => {
+    const ws = await dbGet('SELECT id FROM workspaces LIMIT 1')
     return dbAll(`SELECT * FROM readings WHERE workspace_id = ? ORDER BY updated_at DESC`, ws.id)
   })
 
-  api('readings:create', (d) => {
-    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
-    const r = dbRun(`
+  api('readings:create', async (d) => {
+    const ws = await dbGet('SELECT id FROM workspaces LIMIT 1')
+    const r = await dbRun(`
       INSERT INTO readings
         (workspace_id, resource_id, title, reading_type, author, publisher, year, isbn, status, rating,
          current_page, total_pages, date_start, date_end, review, progress_type, progress_percent)
@@ -1025,8 +1128,8 @@ export function registerIpcHandlers(): void {
     return dbGet('SELECT * FROM readings WHERE id = ?', r.lastInsertRowid)
   })
 
-  api('readings:update', (d) => {
-    dbRun(`
+  api('readings:update', async (d) => {
+    await dbRun(`
       UPDATE readings SET
         resource_id = ?, title = ?, reading_type = ?, author = ?, publisher = ?, year = ?,
         isbn = ?, status = ?, rating = ?, current_page = ?, total_pages = ?,
@@ -1042,76 +1145,74 @@ export function registerIpcHandlers(): void {
     return dbGet('SELECT * FROM readings WHERE id = ?', d.id)
   })
 
-  api('readings:delete', ({ id }) =>
+  api('readings:delete', async ({ id }) =>
     dbRun('DELETE FROM readings WHERE id = ?', id)
   )
 
   // ── Sessões de leitura ─────────────────────────────────────────────────────
-  api('reading_sessions:list', ({ reading_id }) =>
+  api('reading_sessions:list', async ({ reading_id }) =>
     dbAll(`SELECT * FROM reading_sessions WHERE reading_id = ? ORDER BY date DESC, id DESC`, reading_id)
   )
 
-  api('reading_sessions:create', (d) => {
-    const r = dbRun(`
+  api('reading_sessions:create', async (d) => {
+    const r = await dbRun(`
       INSERT INTO reading_sessions (reading_id, date, page_start, page_end, duration_min, notes, percent_end)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `, d.reading_id, d.date, d.page_start ?? 0, d.page_end ?? 0,
        d.duration_min ?? null, d.notes?.trim() || null, d.percent_end ?? null)
-    const sess    = dbGet('SELECT * FROM reading_sessions WHERE id = ?', r.lastInsertRowid)
-    const reading = dbGet('SELECT * FROM readings WHERE id = ?', d.reading_id)
+    const sess    = await dbGet('SELECT * FROM reading_sessions WHERE id = ?', r.lastInsertRowid)
+    const reading = await dbGet('SELECT * FROM readings WHERE id = ?', d.reading_id)
     if (!reading) return sess
 
     if (reading.progress_type === 'percent' && d.percent_end != null) {
-      // Tracking por porcentagem
       const pct       = Math.min(100, Math.max(0, d.percent_end))
       const newStatus = pct >= 100
         ? 'done' : reading.status === 'want' ? 'reading' : reading.status
       const dateEnd   = newStatus === 'done' ? d.date : reading.date_end
-      dbRun(`UPDATE readings SET progress_percent = ?, status = ?, date_end = ?, updated_at = datetime('now') WHERE id = ?`,
+      await dbRun(`UPDATE readings SET progress_percent = ?, status = ?, date_end = ?, updated_at = datetime('now') WHERE id = ?`,
         pct, newStatus, dateEnd, d.reading_id)
     } else if (sess.page_end > reading.current_page) {
-      // Tracking por páginas (comportamento original)
       const newStatus = (reading.total_pages && sess.page_end >= reading.total_pages)
         ? 'done' : reading.status === 'want' ? 'reading' : reading.status
       const dateEnd   = newStatus === 'done' ? d.date : reading.date_end
-      dbRun(`UPDATE readings SET current_page = ?, status = ?, date_end = ?, updated_at = datetime('now') WHERE id = ?`,
+      await dbRun(`UPDATE readings SET current_page = ?, status = ?, date_end = ?, updated_at = datetime('now') WHERE id = ?`,
         sess.page_end, newStatus, dateEnd, d.reading_id)
     }
     return sess
   })
 
-  api('reading_sessions:delete', ({ id }) =>
+  api('reading_sessions:delete', async ({ id }) =>
     dbRun('DELETE FROM reading_sessions WHERE id = ?', id)
   )
 
   // ── Notas de leitura ──────────────────────────────────────────────────────
-  api('reading_notes:list', ({ reading_id }) =>
+  api('reading_notes:list', async ({ reading_id }) =>
     dbAll(`SELECT * FROM reading_notes WHERE reading_id = ? ORDER BY created_at ASC`, reading_id)
   )
-  api('reading_notes:create', (d) => {
-    const r = dbRun(`INSERT INTO reading_notes (reading_id, chapter, content) VALUES (?, ?, ?)`,
+  api('reading_notes:create', async (d) => {
+    const r = await dbRun(`INSERT INTO reading_notes (reading_id, chapter, content) VALUES (?, ?, ?)`,
       d.reading_id, d.chapter?.trim() || null, d.content)
     return dbGet('SELECT * FROM reading_notes WHERE id = ?', r.lastInsertRowid)
   })
-  api('reading_notes:delete', ({ id }) =>
+  api('reading_notes:delete', async ({ id }) =>
     dbRun('DELETE FROM reading_notes WHERE id = ?', id)
   )
 
   // ── Citações de leitura ───────────────────────────────────────────────────
-  api('reading_quotes:list', ({ reading_id }) =>
+  api('reading_quotes:list', async ({ reading_id }) =>
     dbAll(`SELECT * FROM reading_quotes WHERE reading_id = ? ORDER BY created_at ASC`, reading_id)
   )
-  api('reading_quotes:create', (d) => {
-    const r = dbRun(`INSERT INTO reading_quotes (reading_id, text, location) VALUES (?, ?, ?)`,
+  api('reading_quotes:create', async (d) => {
+    const r = await dbRun(`INSERT INTO reading_quotes (reading_id, text, location) VALUES (?, ?, ?)`,
       d.reading_id, d.text, d.location?.trim() || null)
     return dbGet('SELECT * FROM reading_quotes WHERE id = ?', r.lastInsertRowid)
   })
-  api('reading_quotes:delete', ({ id }) =>
+  api('reading_quotes:delete', async ({ id }) =>
     dbRun('DELETE FROM reading_quotes WHERE id = ?', id)
   )
 
   // ── Vínculos de leitura ───────────────────────────────────────────────────
-  api('reading_links:list', ({ reading_id }) =>
+  api('reading_links:list', async ({ reading_id }) =>
     dbAll(`
       SELECT rl.reading_id, rl.page_id, p.title, p.project_id, pr.name AS project_name
       FROM reading_links rl
@@ -1120,14 +1221,14 @@ export function registerIpcHandlers(): void {
       WHERE rl.reading_id = ?
     `, reading_id)
   )
-  api('reading_links:add', ({ reading_id, page_id }) => {
-    try { dbRun(`INSERT INTO reading_links (reading_id, page_id) VALUES (?, ?)`, reading_id, page_id) } catch {}
+  api('reading_links:add', async ({ reading_id, page_id }) => {
+    try { await dbRun(`INSERT INTO reading_links (reading_id, page_id) VALUES (?, ?)`, reading_id, page_id) } catch {}
     return { ok: true }
   })
-  api('reading_links:remove', ({ reading_id, page_id }) =>
+  api('reading_links:remove', async ({ reading_id, page_id }) =>
     dbRun(`DELETE FROM reading_links WHERE reading_id = ? AND page_id = ?`, reading_id, page_id)
   )
-  api('reading_links:listForProject', ({ project_id }) =>
+  api('reading_links:listForProject', async ({ project_id }) =>
     dbAll(`
       SELECT rd.id, rd.title, rd.cover_path, rd.status, rd.current_page, rd.total_pages,
              rd.author, rd.reading_type, rd.progress_type, rd.progress_percent,
@@ -1143,8 +1244,8 @@ export function registerIpcHandlers(): void {
   )
 
   // ── Recursos ───────────────────────────────────────────────────────────────
-  api('resources:list', () => {
-    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
+  api('resources:list', async () => {
+    const ws = await dbGet('SELECT id FROM workspaces LIMIT 1')
     return dbAll(`
       SELECT r.*,
              rd.status        AS reading_status,
@@ -1168,9 +1269,9 @@ export function registerIpcHandlers(): void {
     `, ws.id)
   })
 
-  api('resources:create', (d) => {
-    const ws = dbGet('SELECT id FROM workspaces LIMIT 1')
-    const r = dbRun(`
+  api('resources:create', async (d) => {
+    const ws = await dbGet('SELECT id FROM workspaces LIMIT 1')
+    const r = await dbRun(`
       INSERT INTO resources (workspace_id, title, resource_type, url, description, tags_json, metadata_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
@@ -1180,8 +1281,8 @@ export function registerIpcHandlers(): void {
     return dbGet('SELECT * FROM resources WHERE id = ?', r.lastInsertRowid)
   })
 
-  api('resources:update', (d) => {
-    dbRun(`
+  api('resources:update', async (d) => {
+    await dbRun(`
       UPDATE resources SET title = ?, resource_type = ?, url = ?, description = ?, tags_json = ?, metadata_json = ?
       WHERE id = ?
     `,
@@ -1233,12 +1334,12 @@ export function registerIpcHandlers(): void {
     return { ok: true, data: [] }
   })
 
-  api('resources:delete', ({ id }) =>
+  api('resources:delete', async ({ id }) =>
     dbRun('DELETE FROM resources WHERE id = ?', id)
   )
 
   // ── Vínculos recurso ↔ página ──────────────────────────────────────────────
-  api('resource_pages:listForResource', ({ resource_id }) =>
+  api('resource_pages:listForResource', async ({ resource_id }) =>
     dbAll(`
       SELECT rp.resource_id, rp.page_id,
              p.title AS page_title, p.project_id,
@@ -1251,7 +1352,7 @@ export function registerIpcHandlers(): void {
     `, resource_id)
   )
 
-  api('resource_pages:listForPage', ({ page_id }) =>
+  api('resource_pages:listForPage', async ({ page_id }) =>
     dbAll(`
       SELECT rp.resource_id, rp.page_id,
              r.title, r.resource_type, r.url, r.description, r.metadata_json
@@ -1262,20 +1363,20 @@ export function registerIpcHandlers(): void {
     `, page_id)
   )
 
-  api('resource_pages:add', ({ resource_id, page_id }) => {
-    try { dbRun(`INSERT INTO resource_pages (resource_id, page_id) VALUES (?, ?)`, resource_id, page_id) } catch {}
+  api('resource_pages:add', async ({ resource_id, page_id }) => {
+    try { await dbRun(`INSERT INTO resource_pages (resource_id, page_id) VALUES (?, ?)`, resource_id, page_id) } catch {}
     return { ok: true }
   })
 
-  api('resource_pages:remove', ({ resource_id, page_id }) =>
+  api('resource_pages:remove', async ({ resource_id, page_id }) =>
     dbRun(`DELETE FROM resource_pages WHERE resource_id = ? AND page_id = ?`, resource_id, page_id)
   )
 
   // ── Eventos de Calendário ─────────────────────────────────────────────────
 
-  api('events:listForMonth', ({ year, month }) => {
-    const y    = String(year)
-    const m    = String(month + 1).padStart(2, '0')
+  api('events:listForMonth', async ({ year, month }) => {
+    const y     = String(year)
+    const m     = String(month + 1).padStart(2, '0')
     const start = `${y}-${m}-01`
     const next  = month === 11
       ? `${year + 1}-01-01`
@@ -1310,11 +1411,11 @@ export function registerIpcHandlers(): void {
     `, start, next, start, next)
   })
 
-  api('events:listForPage', ({ page_id }) =>
+  api('events:listForPage', async ({ page_id }) =>
     dbAll(`SELECT * FROM calendar_events WHERE linked_page_id = ? ORDER BY start_dt`, page_id)
   )
 
-  api('events:listForProject', ({ project_id }) =>
+  api('events:listForProject', async ({ project_id }) =>
     dbAll(`
       SELECT ce.*, p.title AS page_title
       FROM calendar_events ce
@@ -1324,7 +1425,7 @@ export function registerIpcHandlers(): void {
     `, project_id)
   )
 
-  api('events:listUpcoming', ({ days }) => {
+  api('events:listUpcoming', async ({ days }) => {
     const now    = new Date().toISOString().slice(0, 10)
     const future = new Date(Date.now() + (days ?? 14) * 86_400_000).toISOString().slice(0, 10)
     return dbAll(`
@@ -1357,9 +1458,9 @@ export function registerIpcHandlers(): void {
     `, now, future, now, future)
   })
 
-  api('events:create', (data) => {
-    const wsId = (dbGet(`SELECT id FROM workspaces LIMIT 1`) as any)?.id ?? 1
-    const r = dbRun(`
+  api('events:create', async (data) => {
+    const wsId = ((await dbGet(`SELECT id FROM workspaces LIMIT 1`)) as any)?.id ?? 1
+    const r = await dbRun(`
       INSERT INTO calendar_events
         (workspace_id, title, description, start_dt, end_dt, all_day, color, event_type, linked_page_id, linked_project_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1368,14 +1469,13 @@ export function registerIpcHandlers(): void {
       data.color ?? null, data.event_type ?? 'outro',
       data.linked_page_id ?? null, data.linked_project_id ?? null
     )
-    const eventId = Number(r.lastInsertRowid)
+    const eventId = r.lastInsertRowid
 
-    // Auto-criar lembrete se pedido
     if (data.reminder_minutes != null) {
       const base = data.start_dt.includes('T') ? data.start_dt : `${data.start_dt}T09:00:00`
       const t = new Date(base)
       t.setMinutes(t.getMinutes() - data.reminder_minutes)
-      dbRun(`
+      await dbRun(`
         INSERT INTO reminders (title, trigger_at, offset_minutes, linked_event_id, linked_page_id)
         VALUES (?, ?, ?, ?, ?)`,
         data.title, t.toISOString().slice(0, 16),
@@ -1386,23 +1486,23 @@ export function registerIpcHandlers(): void {
     return dbGet(`SELECT * FROM calendar_events WHERE id = ?`, eventId)
   })
 
-  api('events:update', (data) => {
+  api('events:update', async (data) => {
     const allowed = ['title','description','start_dt','end_dt','all_day','color','event_type','linked_page_id','linked_project_id']
     const cols: string[] = [], vals: any[] = []
     for (const key of allowed) {
       if (data[key] !== undefined) { cols.push(`${key} = ?`); vals.push(data[key]) }
     }
-    if (cols.length) dbRun(`UPDATE calendar_events SET ${cols.join(', ')} WHERE id = ?`, ...vals, data.id)
+    if (cols.length) await dbRun(`UPDATE calendar_events SET ${cols.join(', ')} WHERE id = ?`, ...vals, data.id)
     return dbGet(`SELECT * FROM calendar_events WHERE id = ?`, data.id)
   })
 
-  api('events:delete', ({ id }) =>
+  api('events:delete', async ({ id }) =>
     dbRun(`DELETE FROM calendar_events WHERE id = ?`, id)
   )
 
   // ── Lembretes ─────────────────────────────────────────────────────────────
 
-  api('reminders:list', ({ include_dismissed } = {}) =>
+  api('reminders:list', async ({ include_dismissed } = {}) =>
     dbAll(`
       SELECT r.*, ce.event_type, ce.start_dt AS event_start
       FROM reminders r
@@ -1412,127 +1512,27 @@ export function registerIpcHandlers(): void {
     `)
   )
 
-  api('reminders:create', (data) => {
-    const r = dbRun(`
+  api('reminders:create', async (data) => {
+    const r = await dbRun(`
       INSERT INTO reminders (title, trigger_at, offset_minutes, linked_event_id, linked_page_id)
       VALUES (?, ?, ?, ?, ?)`,
       data.title, data.trigger_at, data.offset_minutes ?? null,
       data.linked_event_id ?? null, data.linked_page_id ?? null
     )
-    return dbGet(`SELECT * FROM reminders WHERE id = ?`, Number(r.lastInsertRowid))
+    return dbGet(`SELECT * FROM reminders WHERE id = ?`, r.lastInsertRowid)
   })
 
-  api('reminders:dismiss', ({ id }) =>
+  api('reminders:dismiss', async ({ id }) =>
     dbRun(`UPDATE reminders SET is_dismissed = 1 WHERE id = ?`, id)
   )
 
-  api('reminders:delete', ({ id }) =>
+  api('reminders:delete', async ({ id }) =>
     dbRun(`DELETE FROM reminders WHERE id = ?`, id)
   )
 
   // ── Planejador académico ───────────────────────────────────────────────────
 
-  function getDailyCapacity(): number {
-    const row = dbGet(`SELECT value FROM settings WHERE key = 'planner_daily_hours'`)
-    return row ? parseFloat(row.value) || 4 : 4
-  }
-
-  function scheduleTasks(projectId: number): void {
-    const db        = getDb()
-    const dailyCap  = getDailyCapacity()
-    const today     = new Date().toISOString().slice(0, 10)
-
-    const tasks = dbAll(`
-      SELECT pt.*,
-        COALESCE((
-          SELECT SUM(wb.logged_hours) FROM work_blocks wb
-          WHERE wb.task_id = pt.id AND wb.status = 'done'
-        ), 0) AS done_hours
-      FROM planned_tasks pt
-      WHERE pt.project_id = ? AND pt.status IN ('pending','in_progress')
-      ORDER BY pt.due_date ASC
-    `, projectId)
-
-    if (tasks.length === 0) return
-
-    const taskIds = tasks.map((t: any) => t.id)
-    db.prepare(
-      `DELETE FROM work_blocks WHERE task_id IN (${taskIds.map(() => '?').join(',')})
-       AND date >= ? AND status = 'scheduled'`
-    ).run(...taskIds, today)
-
-    // Carga já comprometida de outros projetos
-    const otherBlocks = dbAll(`
-      SELECT wb.date, SUM(wb.planned_hours) as total
-      FROM work_blocks wb
-      JOIN planned_tasks pt ON pt.id = wb.task_id
-      WHERE pt.project_id != ? AND wb.date >= ? AND wb.status = 'scheduled'
-      GROUP BY wb.date
-    `, projectId, today)
-    const loadMap = new Map<string, number>()
-    for (const b of otherBlocks) loadMap.set(b.date, b.total)
-
-    const insertBlock = db.prepare(
-      `INSERT INTO work_blocks (task_id, date, planned_hours, logged_hours, status)
-       VALUES (?, ?, ?, 0, 'scheduled')`
-    )
-
-    for (const task of tasks) {
-      const remaining = Math.max(0, task.estimated_hours - task.done_hours)
-      if (remaining <= 0) continue
-
-      const due     = task.due_date.slice(0, 10)
-      const dates: string[] = []
-      let cur = new Date(today + 'T12:00:00')
-      const dueDate = new Date(due + 'T12:00:00')
-      while (cur <= dueDate) {
-        dates.push(cur.toISOString().slice(0, 10))
-        cur = new Date(cur.getTime() + 86400000)
-      }
-      if (dates.length === 0) {
-        // Prazo já passou — agenda tudo hoje
-        insertBlock.run(task.id, today, Math.round(remaining * 100) / 100)
-        loadMap.set(today, (loadMap.get(today) ?? 0) + remaining)
-        continue
-      }
-
-      let hoursLeft = remaining
-      for (const date of dates) {
-        if (hoursLeft <= 0) break
-        const load      = loadMap.get(date) ?? 0
-        const available = Math.max(0, dailyCap - load)
-        if (available <= 0) continue
-        const h = Math.min(hoursLeft, available)
-        insertBlock.run(task.id, date, Math.round(h * 100) / 100)
-        loadMap.set(date, load + h)
-        hoursLeft -= h
-      }
-      // Se ainda sobrar horas (todos os dias estavam cheios), adiciona ao dia do prazo
-      if (hoursLeft > 0.01) {
-        const lastDate = dates[dates.length - 1]
-        insertBlock.run(task.id, lastDate, Math.round(hoursLeft * 100) / 100)
-        loadMap.set(lastDate, (loadMap.get(lastDate) ?? 0) + hoursLeft)
-      }
-    }
-  }
-
-  function updateTaskStatus(taskId: number): void {
-    const task = dbGet(`SELECT * FROM planned_tasks WHERE id = ?`, taskId)
-    if (!task) return
-    const doneHours = dbGet(
-      `SELECT COALESCE(SUM(logged_hours),0) AS h FROM work_blocks WHERE task_id = ? AND status = 'done'`,
-      taskId
-    )?.h ?? 0
-    let newStatus = task.status
-    if (doneHours >= task.estimated_hours) {
-      newStatus = 'completed'
-    } else if (doneHours > 0) {
-      newStatus = 'in_progress'
-    }
-    dbRun(`UPDATE planned_tasks SET status = ?, updated_at = datetime('now') WHERE id = ?`, newStatus, taskId)
-  }
-
-  api('planner:listTasks', ({ project_id }) =>
+  api('planner:listTasks', async ({ project_id }) =>
     dbAll(`
       SELECT pt.*,
         COALESCE((SELECT SUM(wb.logged_hours) FROM work_blocks wb WHERE wb.task_id = pt.id AND wb.status = 'done'), 0) AS done_hours,
@@ -1544,14 +1544,14 @@ export function registerIpcHandlers(): void {
     `, project_id)
   )
 
-  api('planner:createTask', (data) => {
-    const r = dbRun(`
+  api('planner:createTask', async (data) => {
+    const r = await dbRun(`
       INSERT INTO planned_tasks (project_id, page_id, title, task_type, due_date, estimated_hours, status)
       VALUES (?, ?, ?, ?, ?, ?, 'pending')
     `, data.project_id, data.page_id ?? null, data.title, data.task_type ?? 'atividade',
        data.due_date, data.estimated_hours ?? 1)
-    const taskId = Number(r.lastInsertRowid)
-    scheduleTasks(data.project_id)
+    const taskId = r.lastInsertRowid
+    await scheduleTasks(data.project_id)
     return dbGet(`
       SELECT pt.*,
         COALESCE((SELECT SUM(wb.logged_hours) FROM work_blocks wb WHERE wb.task_id = pt.id AND wb.status = 'done'), 0) AS done_hours,
@@ -1560,7 +1560,7 @@ export function registerIpcHandlers(): void {
     `, taskId)
   })
 
-  api('planner:updateTask', (data) => {
+  api('planner:updateTask', async (data) => {
     const allowed = ['title','task_type','due_date','estimated_hours','page_id','status']
     const cols: string[] = [], vals: any[] = []
     for (const key of allowed) {
@@ -1568,10 +1568,10 @@ export function registerIpcHandlers(): void {
     }
     if (cols.length) {
       cols.push(`updated_at = datetime('now')`)
-      dbRun(`UPDATE planned_tasks SET ${cols.join(', ')} WHERE id = ?`, ...vals, data.id)
+      await dbRun(`UPDATE planned_tasks SET ${cols.join(', ')} WHERE id = ?`, ...vals, data.id)
     }
-    const task = dbGet(`SELECT * FROM planned_tasks WHERE id = ?`, data.id)
-    if (task) scheduleTasks(task.project_id)
+    const task = await dbGet(`SELECT * FROM planned_tasks WHERE id = ?`, data.id)
+    if (task) await scheduleTasks(task.project_id)
     return dbGet(`
       SELECT pt.*,
         COALESCE((SELECT SUM(wb.logged_hours) FROM work_blocks wb WHERE wb.task_id = pt.id AND wb.status = 'done'), 0) AS done_hours,
@@ -1580,50 +1580,47 @@ export function registerIpcHandlers(): void {
     `, data.id)
   })
 
-  api('planner:deleteTask', ({ id }) =>
+  api('planner:deleteTask', async ({ id }) =>
     dbRun(`DELETE FROM planned_tasks WHERE id = ?`, id)
   )
 
-  api('planner:listBlocks', ({ task_id }) =>
+  api('planner:listBlocks', async ({ task_id }) =>
     dbAll(`SELECT * FROM work_blocks WHERE task_id = ? ORDER BY date ASC`, task_id)
   )
 
-  api('planner:logBlock', ({ id, logged_hours }) => {
-    const block = dbGet(`SELECT * FROM work_blocks WHERE id = ?`, id)
+  api('planner:logBlock', async ({ id, logged_hours }) => {
+    const block = await dbGet(`SELECT * FROM work_blocks WHERE id = ?`, id)
     if (!block) throw new Error('Bloco não encontrado')
     const capped = Math.min(logged_hours, block.planned_hours)
     const status = capped >= block.planned_hours ? 'done' : 'scheduled'
-    dbRun(`UPDATE work_blocks SET logged_hours = ?, status = ? WHERE id = ?`, capped, status, id)
-    updateTaskStatus(block.task_id)
+    await dbRun(`UPDATE work_blocks SET logged_hours = ?, status = ? WHERE id = ?`, capped, status, id)
+    await updateTaskStatus(block.task_id)
     return dbGet(`SELECT * FROM work_blocks WHERE id = ?`, id)
   })
 
-  api('planner:schedule', ({ project_id }) => {
-    scheduleTasks(project_id)
+  api('planner:schedule', async ({ project_id }) => {
+    await scheduleTasks(project_id)
     return { ok: true }
   })
 
-  api('planner:rescheduleAll', () => {
+  api('planner:rescheduleAll', async () => {
     const today = new Date().toISOString().slice(0, 10)
-    // Blocos passados não concluídos → missed
-    dbRun(
+    await dbRun(
       `UPDATE work_blocks SET status = 'missed' WHERE date < ? AND status = 'scheduled'`,
       today
     )
-    // Atualiza status de tarefas cujo prazo passou e não estão completas
-    dbRun(`
+    await dbRun(`
       UPDATE planned_tasks SET status = 'overdue', updated_at = datetime('now')
       WHERE due_date < ? AND status IN ('pending','in_progress')
     `, today)
-    // Reagenda todos os projetos com tarefas ativas
-    const projects = dbAll(
+    const projects = await dbAll(
       `SELECT DISTINCT project_id FROM planned_tasks WHERE status IN ('pending','in_progress')`
     )
-    for (const { project_id } of projects) scheduleTasks(project_id)
+    for (const { project_id } of projects) await scheduleTasks(project_id)
     return { ok: true }
   })
 
-  api('planner:listAllTasks', ({ include_completed }: { include_completed?: boolean }) => {
+  api('planner:listAllTasks', async ({ include_completed }: { include_completed?: boolean }) => {
     const where = include_completed ? '' : `WHERE pt.status != 'completed'`
     return dbAll(`
       SELECT pt.*,
@@ -1639,7 +1636,7 @@ export function registerIpcHandlers(): void {
     `)
   })
 
-  api('planner:todayBlocks', () => {
+  api('planner:todayBlocks', async () => {
     const today = new Date().toISOString().slice(0, 10)
     return dbAll(`
       SELECT wb.*,
@@ -1655,7 +1652,7 @@ export function registerIpcHandlers(): void {
 
   // ── Widgets extras ────────────────────────────────────────────────────────
 
-  api('dashboard:projectsProgress', () =>
+  api('dashboard:projectsProgress', async () =>
     dbAll(`
       SELECT
         p.id, p.name, p.color, p.icon, p.project_type,
@@ -1677,7 +1674,7 @@ export function registerIpcHandlers(): void {
     `)
   )
 
-  api('dashboard:randomQuote', () =>
+  api('dashboard:randomQuote', async () =>
     dbGet(`
       SELECT rq.id, rq.text, rq.location,
              r.title AS reading_title, r.author
@@ -1690,7 +1687,7 @@ export function registerIpcHandlers(): void {
 
   // ── Sessões de tempo ──────────────────────────────────────────────────────────
 
-  api('time:list', ({ project_id }: { project_id: number }) =>
+  api('time:list', async ({ project_id }: { project_id: number }) =>
     dbAll(`
       SELECT ts.*, p.title AS page_title, p.icon AS page_icon
       FROM   time_sessions ts
@@ -1700,7 +1697,7 @@ export function registerIpcHandlers(): void {
     `, project_id)
   )
 
-  api('time:create', (d: {
+  api('time:create', async (d: {
     project_id:   number
     workspace_id: number
     page_id?:     number | null
@@ -1711,7 +1708,7 @@ export function registerIpcHandlers(): void {
     started_at:   string
     ended_at?:    string | null
   }) => {
-    const r = dbRun(`
+    const r = await dbRun(`
       INSERT INTO time_sessions
         (workspace_id, project_id, page_id, duration_min, session_type, notes, tags, started_at, ended_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1729,7 +1726,7 @@ export function registerIpcHandlers(): void {
     `, r.lastInsertRowid)
   })
 
-  api('time:delete', ({ id }: { id: number }) =>
+  api('time:delete', async ({ id }: { id: number }) =>
     dbRun('DELETE FROM time_sessions WHERE id = ?', id)
   )
 
@@ -1743,6 +1740,18 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('appSettings:set', (_e, { key, value }: { key: keyof AppSettings; value: AppSettings[keyof AppSettings] }) => {
     setSetting(key, value as any)
+  })
+
+  // ── Sincronização manual ──────────────────────────────────────────────────────
+
+  ipcMain.handle('db:sync', async () => {
+    const { syncClient } = await import('./database')
+    try {
+      await syncClient()
+      return { ok: true }
+    } catch (err: any) {
+      return { ok: false, error: err.message }
+    }
   })
 
 }

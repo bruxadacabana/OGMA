@@ -16,6 +16,7 @@ data/logs/
 data/uploads/
 data/exports/
 data/settings.json
+data/.env
 
 # ── Ambiente ──────────────────────────────────────────────────────────────────
 .env

@@ -138,11 +138,83 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 
 ---
 
-## Sincronização entre dispositivos
+## Sincronização entre dispositivos — Turso / libsql
+
+Migração de `better-sqlite3-multiple-ciphers` → `@libsql/client` com embedded replica.
+A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arrancar.
 
 - [x] `data/settings.json` — preferências do utilizador separadas do banco (`electron-store` substituído por JSON direto via `src/main/settings.ts`)
 - [x] Migrar `localStorage` (tema, localização, dashboard_order, widget_sizes, hidden_widgets) → `data/settings.json` via IPC `appSettings:*`
-- ~~rclone + Proton Drive~~ — removido (v0.1); incompatibilidade com a API do Proton Drive (erro 422 persistente ao actualizar ficheiros). Ver alternativas em `# IDEIAS → ## Sincronização`
+- ~~rclone + Proton Drive~~ — removido (v0.1); incompatibilidade com a API do Proton Drive (erro 422 persistente ao actualizar ficheiros).
+
+### Passo 1 — Conta Turso e credenciais
+
+- [ ] Criar conta em turso.tech (plano free: 500 DBs, 1 GB)
+- [ ] Instalar CLI Turso: `curl -sSfL https://get.tur.so/install.sh | bash`
+- [ ] `turso auth login`
+- [ ] `turso db create ogma` — criar a BD remota
+- [ ] `turso db show ogma` — copiar URL (`libsql://ogma-....turso.io`)
+- [ ] `turso db tokens create ogma` — gerar auth token
+- [ ] Guardar em `data/.env` (já no `.gitignore`):
+  ```
+  TURSO_URL=libsql://ogma-....turso.io
+  TURSO_TOKEN=ey...
+  ```
+
+### Passo 2 — Instalar dependências
+
+- [ ] `npm install @libsql/client`
+- [ ] `npm uninstall better-sqlite3-multiple-ciphers`
+- [ ] Remover tipos associados se houver (`@types/better-sqlite3`)
+- [ ] Verificar se `@libsql/client` tem binários pré-compilados para CachyOS/Linux x64 (evitar problema GCC 15)
+
+### Passo 3 — Reescrever `src/main/database.ts` ✅
+
+- [x] Substituir import: `import { createClient, Client } from '@libsql/client'`
+- [x] `getClient(): Promise<Client>` — lazy init async; lê TURSO_URL/TURSO_TOKEN de process.env
+- [x] `dbGet/dbAll/dbRun` → async com mesma assinatura variádica
+- [x] `initSchema()` → async; `createTables()` com loop de `client.execute()`; migrações incrementais com try/catch
+- [x] `seedDefaults()` → async
+- [x] `closeClient()` + `syncClient()` exportados
+- [x] PRAGMA foreign_keys via `client.execute()`
+
+### Passo 4 — Atualizar `src/main/ipc.ts` e ficheiros dependentes ✅
+
+- [x] Wrapper `api()` → async handler
+- [x] `seedProjectProperties()` + `seedProjectViews()` → async
+- [x] `scheduleTasks()`, `updateTaskStatus()`, `getDailyCapacity()` → async
+- [x] `ftsUpsert()` → async
+- [x] Todos os handlers com `await` em dbGet/dbAll/dbRun
+- [x] `db.transaction()` / `db.prepare()` → `client.batch()` ou awaits sequenciais
+- [x] `scheduler.ts` → `checkAndFire()` async
+- [x] `main.ts` → `await getClient()`, load dotenv de `data/.env`, sync no before-quit
+- [x] IPC `db:sync` adicionado para sync manual do renderer
+- [x] `tsc --noEmit` sem erros em `src/main/`
+
+### Passo 5 — Verificar compatibilidade
+
+- [ ] `PRAGMA user_version` — libsql suporta; manter lógica de migração de schema
+- [ ] FTS5 (`search_index`) — verificar se Turso suporta `fts5` (suporta desde 2024); testar queries de busca
+- [ ] Transações (se houver `db.transaction()` no código) — substituir por `client.transaction()` async
+- [ ] `tsc --noEmit` sem erros em todos os ficheiros da aplicação
+
+### Passo 6 — Migrar dados existentes
+
+- [ ] Exportar BD atual: `sqlite3 data/ogma.db .dump > data/ogma_dump.sql`
+- [ ] Importar para Turso: `turso db shell ogma < data/ogma_dump.sql`
+- [ ] Verificar integridade: `turso db shell ogma "SELECT COUNT(*) FROM projects"`
+
+### Passo 7 — Sync no ciclo de vida do app
+
+- [ ] `main.ts` — chamar `await syncDb()` antes de `createWindow()` (sync inicial)
+- [ ] `main.ts` — chamar `await syncDb()` no evento `app.on('before-quit')` (flush de saída)
+- [ ] Opcional: IPC `db:sync` para sync manual a partir do renderer (botão nas Settings)
+
+### Passo 8 — Testes e validação
+
+- [ ] Testar CRUD básico (criar/editar/apagar projeto, página, leitura)
+- [ ] Testar funcionamento offline (sem internet) — leituras e escritas locais devem funcionar
+- [ ] Testar sync entre dois dispositivos — escrever em A, sync, abrir em B
 
 ## Ícone da aplicação
 
