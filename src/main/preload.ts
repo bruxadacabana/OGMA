@@ -156,6 +156,10 @@ contextBridge.exposeInMainWorld('db', {
   },
 })
 
+contextBridge.exposeInMainWorld('sync', {
+  now: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('sync:now'),
+})
+
 contextBridge.exposeInMainWorld('appSettings', {
   getAll: ():                                          Promise<AppSettings>    => ipcRenderer.invoke('appSettings:getAll'),
   get:    <K extends keyof AppSettings>(key: K):       Promise<AppSettings[K]> => ipcRenderer.invoke('appSettings:get', { key }),

@@ -98,6 +98,8 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
   const [syncRemote,  setSyncRemote]  = useState('')
   const [syncEnabled, setSyncEnabled] = useState(false)
   const [syncSaved,   setSyncSaved]   = useState(false)
+  const [syncing,     setSyncing]     = useState(false)
+  const [syncResult,  setSyncResult]  = useState<'ok' | 'error' | null>(null)
 
   useEffect(() => {
     appSettings().get('sync_remote').then(v  => setSyncRemote(v  ?? ''))
@@ -109,6 +111,21 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
     await appSettings().set('sync_enabled', syncEnabled)
     setSyncSaved(true)
     setTimeout(() => setSyncSaved(false), 2000)
+  }
+
+  const handleSyncNow = async () => {
+    if (syncing) return
+    setSyncing(true)
+    setSyncResult(null)
+    const res = await (window as any).sync.now() as { ok: boolean; error?: string }
+    setSyncing(false)
+    if (res.ok) {
+      setSyncResult('ok')
+      setTimeout(() => setSyncResult(null), 3000)
+    } else {
+      setSyncResult('error')
+      pushToast({ kind: 'error', title: 'Sync falhou', detail: res.error })
+    }
   }
 
   // Sincronizar com store
@@ -355,10 +372,18 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
             </div>
           </div>
 
-          <div className="settings-save-row" style={{ marginTop: 10 }}>
-            {syncSaved && <span className="settings-saved-msg" style={{ marginRight: 12 }}>✓ Guardado</span>}
+          <div className="settings-save-row" style={{ marginTop: 10, gap: 8 }}>
+            {syncSaved && <span className="settings-saved-msg" style={{ marginRight: 4 }}>✓ Guardado</span>}
             <button className="btn btn-sm" onClick={saveSyncSettings}>
               Guardar
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={handleSyncNow}
+              disabled={syncing || !syncRemote.trim()}
+              style={{ marginLeft: 8 }}
+            >
+              {syncing ? 'A sincronizar…' : syncResult === 'ok' ? '✓ Sincronizado' : '↑ Sincronizar agora'}
             </button>
           </div>
 

@@ -134,6 +134,7 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [x] `src/main/sync.ts` — rclone pull/push com WAL checkpoint antes do push
 - [x] Integrar sync no ciclo de vida: pull antes de `getDb()`, push no `before-quit`
 - [x] UI de sync em Ajustes → Sincronização (remote configurável, enable/disable, status)
+- [x] Botão "Sincronizar agora" em Ajustes → Sincronização (push imediato com feedback)
 - [ ] Testar com Proton Drive (`proton:backup/programFiles/OGMA`)
 
 ---
