@@ -12,6 +12,10 @@ const log = createLogger('main')
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
+const ICON_PATH = app.isPackaged
+  ? path.join(path.dirname(app.getPath('exe')), 'assets', 'ogma.ico')
+  : path.resolve(__dirname, '..', '..', 'assets', 'ogma.ico')
+
 let mainWindow: BrowserWindow | null = null
 let quitting = false
 
@@ -22,6 +26,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    icon: ICON_PATH,
     backgroundColor: '#F5F0E8',
     titleBarStyle: 'default',
     webPreferences: {

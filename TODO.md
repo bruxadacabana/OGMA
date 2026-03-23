@@ -1,6 +1,6 @@
 # OGMA — TODO
 
-> Atualizado: 2026-03-22
+> Atualizado: 2026-03-23
 > Sequência de desenvolvimento pós-Fases 1–3. Executar em ordem, fase a fase.
 
 ---
@@ -139,11 +139,19 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [x] Indicador de status de sync na sidebar (bolinha verde/vermelha/cinza no rodapé)
 - [ ] Testar com Proton Drive (`proton:backup/programFiles/OGMA`)
 
+## Ícone da aplicação
+
+- [x] Ícone temporário criado (`assets/ogma.ico`) — design: fundo castanho escuro, símbolo ✦ dourado, estrelas cosmos, texto "OGMA"
+- [x] Ícone aplicado ao `BrowserWindow` (`icon: ICON_PATH` em `src/main/main.ts`)
+- [x] Ícone configurado no `electron-builder` (`build.win.icon`)
+- [x] Atalhos Windows atualizados com `IconLocation` para o `.ico`
+
 ---
 
 ## Fase 10 — Polimento
 
-- [ ] Decoração cósmica completa, animações, ícone do app
+- [x] Ícone do app (temporário) — ver secção "Ícone da aplicação" acima
+- [ ] Decoração cósmica completa, animações, ícone final definitivo
 
 ---
 

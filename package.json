@@ -79,6 +79,7 @@
       "category": "Office"
     },
     "win": {
+      "icon": "assets/ogma.ico",
       "target": [
         {
           "target": "nsis",
