@@ -1,3 +1,33 @@
+// ── App Settings (data/settings.json) ─────────────────────────────────────────
+
+export interface StoredLocation {
+  city:         string
+  admin1:       string
+  country:      string
+  country_code: string
+  latitude:     number
+  longitude:    number
+  hemisphere:   'north' | 'south'
+  timezone:     string
+}
+
+export interface AppSettings {
+  theme?:           'dark' | 'day'
+  location?:        StoredLocation | null
+  dashboard_order?: string[]
+  widget_sizes?:    Record<string, string>
+  hidden_widgets?:  string[]
+  sync_remote?:     string
+  sync_enabled?:    boolean
+}
+
+/** Helper tipado para aceder ao bridge window.appSettings */
+export const appSettings = () => (window as any).appSettings as {
+  getAll: ()                                                      => Promise<AppSettings>
+  get:    <K extends keyof AppSettings>(key: K)                   => Promise<AppSettings[K]>
+  set:    <K extends keyof AppSettings>(key: K, v: AppSettings[K]) => Promise<void>
+}
+
 // ── Projeto ───────────────────────────────────────────────────────────────────
 
 export type ProjectType =

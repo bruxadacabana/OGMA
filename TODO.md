@@ -127,6 +127,17 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 
 ---
 
+## Sincronização entre dispositivos
+
+- [x] `data/settings.json` — preferências do utilizador separadas do banco (`electron-store` substituído por JSON direto via `src/main/settings.ts`)
+- [x] Migrar `localStorage` (tema, localização, dashboard_order, widget_sizes, hidden_widgets) → `data/settings.json` via IPC `appSettings:*`
+- [x] `src/main/sync.ts` — rclone pull/push com WAL checkpoint antes do push
+- [x] Integrar sync no ciclo de vida: pull antes de `getDb()`, push no `before-quit`
+- [x] UI de sync em Ajustes → Sincronização (remote configurável, enable/disable, status)
+- [ ] Testar com Proton Drive (`proton:backup/programFiles/OGMA`)
+
+---
+
 ## Fase 10 — Polimento
 
 - [ ] Decoração cósmica completa, animações, ícone do app

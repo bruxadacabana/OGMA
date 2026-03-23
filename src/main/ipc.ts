@@ -3,6 +3,7 @@ import https from 'https'
 import http from 'http'
 import { dbGet, dbAll, dbRun, getDb } from './database'
 import { createLogger, RENDERER_LOG_CHANNEL } from './logger'
+import { getSetting, setSetting, getAllSettings, AppSettings } from './settings'
 
 const log   = createLogger('ipc')
 const dbLog = createLogger('db')
@@ -1626,4 +1627,16 @@ export function registerIpcHandlers(): void {
       LIMIT 1
     `)
   )
+
+  // ── App Settings (data/settings.json) ────────────────────────────────────────
+
+  ipcMain.handle('appSettings:getAll', () => getAllSettings())
+
+  ipcMain.handle('appSettings:get', (_e, { key }: { key: keyof AppSettings }) =>
+    getSetting(key) ?? null
+  )
+
+  ipcMain.handle('appSettings:set', (_e, { key, value }: { key: keyof AppSettings; value: AppSettings[keyof AppSettings] }) => {
+    setSetting(key, value as any)
+  })
 }

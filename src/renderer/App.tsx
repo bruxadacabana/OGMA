@@ -15,7 +15,7 @@ import { SettingsView } from './views/Settings/SettingsView'
 import { LibraryView } from './views/Library/LibraryView'
 import { GlobalCalendarView } from './views/GlobalCalendar/GlobalCalendarView'
 import { useAppStore } from './store/useAppStore'
-import { Project, Page, PROJECT_TYPE_ICONS } from './types'
+import { Project, Page, PROJECT_TYPE_ICONS, AppSettings, appSettings } from './types'
 
 type View = Section | 'project' | 'page'
 
@@ -40,6 +40,7 @@ function PlaceholderView({ title, dark }: { title: string; dark: boolean }) {
 
 export default function App() {
   const [splashDone,      setSplashDone]      = useState(false)
+  const [initialSettings, setInitialSettings] = useState<AppSettings | null>(null)
   const [view,            setView]            = useState<View>('dashboard')
   const [section,         setSection]         = useState<Section>('dashboard')
   const [activeSub,       setActiveSub]       = useState<SubSection | undefined>()
@@ -55,6 +56,17 @@ export default function App() {
     activeProject, selectProject, loadPages, pages,
   } = useAppStore()
 
+  // Carregar settings ao iniciar (antes do splash terminar)
+  useEffect(() => {
+    appSettings().getAll().then(s => {
+      setInitialSettings(s)
+      if (s.theme === 'dark') {
+        setDark(true)
+        document.documentElement.classList.add('dark')
+      }
+    })
+  }, [setDark])
+
   // Manter activePage sincronizado quando o store recarrega as páginas
   useEffect(() => {
     if (activePage) {
@@ -62,11 +74,6 @@ export default function App() {
       if (updated) setActivePage(updated)
     }
   }, [pages])
-
-  useEffect(() => {
-    const saved = localStorage.getItem('ogma_theme')
-    if (saved === 'dark') { setDark(true); document.documentElement.classList.add('dark') }
-  }, [setDark])
 
   useEffect(() => {
     if (!splashDone) return
@@ -90,7 +97,7 @@ export default function App() {
     const next = !dark
     setDark(next)
     document.documentElement.classList.toggle('dark', next)
-    localStorage.setItem('ogma_theme', next ? 'dark' : 'day')
+    appSettings().set('theme', next ? 'dark' : 'day')
   }, [dark, setDark])
 
   const handleNavigate = (s: Section) => {
@@ -229,7 +236,9 @@ export default function App() {
         </header>
 
         {/* Conteúdo */}
-        {view === 'dashboard' && <DashboardView dark={dark} onProjectOpen={handleProjectSelect} onPageOpen={handleSearchOpen} />}
+        {view === 'dashboard' && initialSettings && (
+          <DashboardView dark={dark} onProjectOpen={handleProjectSelect} onPageOpen={handleSearchOpen} initialSettings={initialSettings} />
+        )}
 
         {view === 'project' && activeProject && (
           <ProjectDashboardView

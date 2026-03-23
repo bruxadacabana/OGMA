@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { useAppStore } from '../../store/useAppStore'
-import { PROJECT_TYPE_ICONS } from '../../types'
+import { PROJECT_TYPE_ICONS, AppSettings, appSettings, StoredLocation } from '../../types'
 import { fromIpc } from '../../types/errors'
-import type { StoredLocation } from '../Settings/SettingsView'
 
 const db = () => (window as any).db
 
@@ -41,9 +40,10 @@ const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
 }
 
 interface Props {
-  dark:          boolean
-  onProjectOpen: (id: number) => void
-  onPageOpen:    (projectId: number, pageId: number) => void
+  dark:            boolean
+  onProjectOpen:   (id: number) => void
+  onPageOpen:      (projectId: number, pageId: number) => void
+  initialSettings: AppSettings
 }
 
 // ── Helpers de tempo ─────────────────────────────────────────────────────────
@@ -237,52 +237,31 @@ function dayLabel(iso: string): string {
   return DIAS_SEM[d.getDay()]
 }
 
-// ── Persistência ──────────────────────────────────────────────────────────────
+// ── Helpers de inicialização a partir de AppSettings ──────────────────────────
 
-function loadOrder(): WidgetId[] {
-  try {
-    const s = localStorage.getItem('ogma_dashboard_order')
-    if (s) {
-      const arr    = JSON.parse(s) as string[]
-      const hidden = loadHidden()
-      const valid  = arr.filter(id => DEFAULT_ORDER.includes(id as WidgetId)) as WidgetId[]
-      DEFAULT_ORDER.forEach(id => { if (!valid.includes(id) && !hidden.has(id)) valid.push(id) })
-      return valid
-    }
-  } catch {}
-  return [...DEFAULT_ORDER]
-}
-
-function loadHidden(): Set<WidgetId> {
-  try {
-    const s = localStorage.getItem('ogma_hidden_widgets')
-    if (s) return new Set(JSON.parse(s) as WidgetId[])
-  } catch {}
+function parseHidden(raw: string[] | undefined): Set<WidgetId> {
+  if (raw) return new Set(raw.filter(id => DEFAULT_ORDER.includes(id as WidgetId)) as WidgetId[])
   return new Set()
 }
 
-function saveHidden(hidden: Set<WidgetId>) {
-  localStorage.setItem('ogma_hidden_widgets', JSON.stringify([...hidden]))
+function parseOrder(raw: string[] | undefined, hidden: Set<WidgetId>): WidgetId[] {
+  if (raw) {
+    const valid = raw.filter(id => DEFAULT_ORDER.includes(id as WidgetId)) as WidgetId[]
+    DEFAULT_ORDER.forEach(id => { if (!valid.includes(id) && !hidden.has(id)) valid.push(id) })
+    return valid
+  }
+  return DEFAULT_ORDER.filter(id => !hidden.has(id))
 }
 
-function loadSizes(): Record<WidgetId, WidgetSize> {
-  try {
-    const s = localStorage.getItem('ogma_widget_sizes')
-    if (s) {
-      const obj   = JSON.parse(s) as Record<string, string>
-      const valid = { ...DEFAULT_SIZES }
-      for (const [k, v] of Object.entries(obj)) {
-        if (DEFAULT_ORDER.includes(k as WidgetId) && ['sm','md','lg'].includes(v))
-          valid[k as WidgetId] = v as WidgetSize
-      }
-      return valid
+function parseSizes(raw: Record<string, string> | undefined): Record<WidgetId, WidgetSize> {
+  const valid = { ...DEFAULT_SIZES }
+  if (raw) {
+    for (const [k, v] of Object.entries(raw)) {
+      if (DEFAULT_ORDER.includes(k as WidgetId) && ['sm', 'md', 'lg'].includes(v))
+        valid[k as WidgetId] = v as WidgetSize
     }
-  } catch {}
-  return { ...DEFAULT_SIZES }
-}
-
-function loadLocation(): StoredLocation | null {
-  try { return JSON.parse(localStorage.getItem('ogma_location') ?? 'null') } catch { return null }
+  }
+  return valid
 }
 
 // ── WidgetWrapper ─────────────────────────────────────────────────────────────
@@ -833,14 +812,13 @@ function CosmosWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
 
 // ── Widget: Roda do Ano (astronómica + hemisfério) ────────────────────────────
 
-function WheelOfYearWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+function WheelOfYearWidget({ dark, size, location }: { dark: boolean; size: WidgetSize; location: StoredLocation | null | undefined }) {
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const accent = dark ? '#D4A820' : '#b8860b'
   const border = dark ? '#3A3020' : '#C4B9A8'
   const cardBg = dark ? '#211D16' : '#EDE7D9'
   const ink    = dark ? '#E8DFC8' : '#2C2416'
 
-  const location  = loadLocation()
   const hemisphere = location?.hemisphere ?? null
 
   const now      = new Date()
@@ -1716,7 +1694,7 @@ function DayPlanWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   )
 }
 
-function WeatherWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+function WeatherWidget({ dark, size, location }: { dark: boolean; size: WidgetSize; location: StoredLocation | null | undefined }) {
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const accent = dark ? '#D4A820' : '#b8860b'
   const border = dark ? '#3A3020' : '#C4B9A8'
@@ -1726,8 +1704,6 @@ function WeatherWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   const [weather,  setWeather]  = useState<WeatherData | null>(null)
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState<string | null>(null)
-
-  const location = loadLocation()
 
   const label = (
     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
@@ -1985,10 +1961,11 @@ function AddWidgetCard({ dark, hiddenWidgets, onAdd }: {
 
 // ── Dashboard principal ───────────────────────────────────────────────────────
 
-export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen }) => {
-  const [order,    setOrder]    = useState<WidgetId[]>(loadOrder)
-  const [sizes,    setSizes]    = useState<Record<WidgetId, WidgetSize>>(loadSizes)
-  const [hidden,   setHidden]   = useState<Set<WidgetId>>(loadHidden)
+export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen, initialSettings }) => {
+  const initHidden = parseHidden(initialSettings.hidden_widgets)
+  const [order,    setOrder]    = useState<WidgetId[]>(() => parseOrder(initialSettings.dashboard_order, initHidden))
+  const [sizes,    setSizes]    = useState<Record<WidgetId, WidgetSize>>(() => parseSizes(initialSettings.widget_sizes))
+  const [hidden,   setHidden]   = useState<Set<WidgetId>>(initHidden)
   const [dragging, setDragging] = useState<WidgetId | null>(null)
 
   const handleDragStart = (id: WidgetId) => setDragging(id)
@@ -2003,37 +1980,41 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
   }
 
   const handleDrop = () => {
-    setOrder(prev => { localStorage.setItem('ogma_dashboard_order', JSON.stringify(prev)); return prev })
+    setOrder(prev => { appSettings().set('dashboard_order', prev); return prev })
     setDragging(null)
   }
 
   const handleSizeChange = (id: WidgetId, s: WidgetSize) => {
     setSizes(prev => {
       const next = { ...prev, [id]: s }
-      localStorage.setItem('ogma_widget_sizes', JSON.stringify(next))
+      appSettings().set('widget_sizes', next)
       return next
     })
   }
 
   const handleRemove = (id: WidgetId) => {
     setHidden(prev => {
-      const next = new Set(prev); next.add(id); saveHidden(next); return next
+      const next = new Set(prev); next.add(id)
+      appSettings().set('hidden_widgets', [...next])
+      return next
     })
     setOrder(prev => {
       const next = prev.filter(w => w !== id)
-      localStorage.setItem('ogma_dashboard_order', JSON.stringify(next))
+      appSettings().set('dashboard_order', next)
       return next
     })
   }
 
   const handleAdd = (id: WidgetId) => {
     setHidden(prev => {
-      const next = new Set(prev); next.delete(id); saveHidden(next); return next
+      const next = new Set(prev); next.delete(id)
+      appSettings().set('hidden_widgets', [...next])
+      return next
     })
     setOrder(prev => {
       if (prev.includes(id)) return prev
       const next = [...prev, id]
-      localStorage.setItem('ogma_dashboard_order', JSON.stringify(next))
+      appSettings().set('dashboard_order', next)
       return next
     })
   }
@@ -2045,8 +2026,8 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
       case 'recent':   return <RecentWidget   dark={dark} size={size} onPageOpen={onPageOpen} />
       case 'prazos':   return <PrazosWidget   dark={dark} size={size} onPageOpen={onPageOpen} />
       case 'cosmos':   return <CosmosWidget   dark={dark} size={size} />
-      case 'wheel':         return <WheelOfYearWidget  dark={dark} size={size} />
-      case 'weather':       return <WeatherWidget     dark={dark} size={size} />
+      case 'wheel':         return <WheelOfYearWidget  dark={dark} size={size} location={initialSettings.location} />
+      case 'weather':       return <WeatherWidget     dark={dark} size={size} location={initialSettings.location} />
       case 'planner':       return <DayPlanWidget     dark={dark} size={size} />
       case 'agenda':        return <AgendaWidget      dark={dark} size={size} />
       case 'reminders':     return <RemindersWidget   dark={dark} size={size} />

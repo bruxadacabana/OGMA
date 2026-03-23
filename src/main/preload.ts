@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { AppSettings } from './settings'
 
 const api = (channel: string, data?: any) => ipcRenderer.invoke(channel, data)
 
@@ -153,4 +154,11 @@ contextBridge.exposeInMainWorld('db', {
     rescheduleAll: ()                                 => api('planner:rescheduleAll', {}),
     todayBlocks:   ()                                 => api('planner:todayBlocks',   {}),
   },
+})
+
+contextBridge.exposeInMainWorld('appSettings', {
+  getAll: ():                                          Promise<AppSettings>    => ipcRenderer.invoke('appSettings:getAll'),
+  get:    <K extends keyof AppSettings>(key: K):       Promise<AppSettings[K]> => ipcRenderer.invoke('appSettings:get', { key }),
+  set:    <K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<void> =>
+    ipcRenderer.invoke('appSettings:set', { key, value }),
 })
