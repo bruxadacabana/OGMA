@@ -15,8 +15,6 @@ import { createLogger } from './logger'
 
 const log = createLogger('database')
 
-const SCHEMA_VERSION = 2
-
 let _client: Client | null = null
 
 function toFileUrl(p: string): string {
@@ -101,32 +99,10 @@ export async function dbRun(sql: string, ...args: any[]): Promise<DbRunResult> {
 // ── Schema ─────────────────────────────────────────────────────────────────────
 
 async function initSchema(client: Client): Promise<void> {
-  const vResult = await client.execute('PRAGMA user_version')
-  const version = Number(vResult.rows[0]?.[0] ?? 0)
-
-  if (version < SCHEMA_VERSION) {
-    log.info(`Migrando schema: v${version} → v${SCHEMA_VERSION} (slate limpo)`)
-    await runMigration(client)
-  }
-
+  // Sem nuclear migration: schema já está em v2 e CREATE TABLE IF NOT EXISTS
+  // é idempotente. PRAGMA user_version = N não é suportado pelo Turso remoto.
   await createTables(client)
   await runIncrementalMigrations(client)
-}
-
-async function runMigration(client: Client): Promise<void> {
-  await client.execute('PRAGMA foreign_keys = OFF')
-  await client.execute('DROP TABLE IF EXISTS search_index')
-
-  const tablesResult = await client.execute(
-    `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`
-  )
-  for (const row of tablesResult.rows) {
-    await client.execute(`DROP TABLE IF EXISTS "${row[0]}"`)
-  }
-
-  await client.execute(`PRAGMA user_version = ${SCHEMA_VERSION}`)
-  await client.execute('PRAGMA foreign_keys = ON')
-  log.info('Migração concluída')
 }
 
 async function createTables(client: Client): Promise<void> {
