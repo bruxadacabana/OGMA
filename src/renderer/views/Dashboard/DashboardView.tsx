@@ -1153,7 +1153,7 @@ function AgendaWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
                 {evs.slice(0, size === 'sm' ? 2 : 4).map((ev: any) => {
                   const color = EVENT_TYPE_COLORS[ev.event_type ?? 'outro'] ?? '#8B7355'
                   return (
-                    <div key={ev.id} title={ev.title} style={{
+                    <div key={`${ev.source ?? 'c'}_${ev.id}`} title={ev.title} style={{
                       background: color + '22', borderLeft: `2px solid ${color}`,
                       borderRadius: 1, padding: '1px 3px',
                       fontFamily: 'var(--font-mono)', fontSize: 8, color: ink,

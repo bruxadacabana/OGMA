@@ -1280,14 +1280,33 @@ export function registerIpcHandlers(): void {
       ? `${year + 1}-01-01`
       : `${y}-${String(month + 2).padStart(2, '0')}-01`
     return dbAll(`
-      SELECT ce.*, p.title AS page_title, pr.name AS project_name, pr.color AS project_color
+      SELECT 'calendar' AS source, ce.id, ce.title, ce.description,
+        ce.start_dt, ce.end_dt, ce.all_day, ce.color, ce.event_type,
+        ce.linked_page_id, ce.linked_project_id,
+        p.title AS page_title, pr.name AS project_name, pr.color AS project_color
       FROM calendar_events ce
       LEFT JOIN pages    p  ON p.id  = ce.linked_page_id
       LEFT JOIN projects pr ON pr.id = ce.linked_project_id
       WHERE ce.workspace_id = (SELECT id FROM workspaces LIMIT 1)
         AND ce.start_dt >= ? AND ce.start_dt < ?
-      ORDER BY ce.start_dt
-    `, start, next)
+
+      UNION ALL
+
+      SELECT 'planner' AS source, pt.id, pt.title, pt.task_type AS description,
+        pt.due_date AS start_dt, pt.due_date AS end_dt, 1 AS all_day,
+        pr.color AS color,
+        CASE WHEN pt.task_type IN ('prova','trabalho','seminario','defesa','prazo','reuniao')
+          THEN pt.task_type ELSE 'outro' END AS event_type,
+        pt.page_id AS linked_page_id, pt.project_id AS linked_project_id,
+        p.title AS page_title, pr.name AS project_name, pr.color AS project_color
+      FROM planned_tasks pt
+      LEFT JOIN projects pr ON pr.id = pt.project_id
+      LEFT JOIN pages    p  ON p.id  = pt.page_id
+      WHERE pt.status NOT IN ('done')
+        AND pt.due_date >= ? AND pt.due_date < ?
+
+      ORDER BY start_dt
+    `, start, next, start, next)
   })
 
   api('events:listForPage', ({ page_id }) =>
@@ -1308,14 +1327,33 @@ export function registerIpcHandlers(): void {
     const now    = new Date().toISOString().slice(0, 10)
     const future = new Date(Date.now() + (days ?? 14) * 86_400_000).toISOString().slice(0, 10)
     return dbAll(`
-      SELECT ce.*, p.title AS page_title, pr.name AS project_name, pr.color AS project_color
+      SELECT 'calendar' AS source, ce.id, ce.title, ce.description,
+        ce.start_dt, ce.end_dt, ce.all_day, ce.color, ce.event_type,
+        ce.linked_page_id, ce.linked_project_id,
+        p.title AS page_title, pr.name AS project_name, pr.color AS project_color
       FROM calendar_events ce
       LEFT JOIN pages    p  ON p.id  = ce.linked_page_id
       LEFT JOIN projects pr ON pr.id = ce.linked_project_id
       WHERE ce.workspace_id = (SELECT id FROM workspaces LIMIT 1)
         AND date(ce.start_dt) >= ? AND date(ce.start_dt) <= ?
-      ORDER BY ce.start_dt
-    `, now, future)
+
+      UNION ALL
+
+      SELECT 'planner' AS source, pt.id, pt.title, pt.task_type AS description,
+        pt.due_date AS start_dt, pt.due_date AS end_dt, 1 AS all_day,
+        pr.color AS color,
+        CASE WHEN pt.task_type IN ('prova','trabalho','seminario','defesa','prazo','reuniao')
+          THEN pt.task_type ELSE 'outro' END AS event_type,
+        pt.page_id AS linked_page_id, pt.project_id AS linked_project_id,
+        p.title AS page_title, pr.name AS project_name, pr.color AS project_color
+      FROM planned_tasks pt
+      LEFT JOIN projects pr ON pr.id = pt.project_id
+      LEFT JOIN pages    p  ON p.id  = pt.page_id
+      WHERE pt.status NOT IN ('done')
+        AND pt.due_date >= ? AND pt.due_date <= ?
+
+      ORDER BY start_dt
+    `, now, future, now, future)
   })
 
   api('events:create', (data) => {

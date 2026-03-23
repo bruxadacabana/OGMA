@@ -30,7 +30,7 @@ Fazer `git commit` após cada funcionalidade ou mudança implementada, com mensa
 
 - [x] Dashboard reseta ao trocar de aba (DashboardView desmontava — corrigido: sempre montado com display:none)
 - [x] Cor de acento não aplicada ao CSS (accent_color guardado mas não aplicado à variável --accent — corrigido: useEffect em App.tsx)
-- [ ] Atividades do Planner não aparecem no Calendário Global nem no widget de Agenda
+- [x] Atividades do Planner não aparecem no Calendário Global nem no widget de Agenda (UNION planned_tasks nas queries events:listForMonth e events:listUpcoming)
 - [ ] Algoritmo de agendamento automático do Planner precisa de melhoria + edição manual
 - [ ] Lembretes: mover para dentro do Planner do projeto; adicionar múltiplos lembretes, opções de tempo e prioridade
 

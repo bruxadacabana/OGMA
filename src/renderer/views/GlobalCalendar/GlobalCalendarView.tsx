@@ -30,7 +30,7 @@ interface CalPage {
 }
 
 interface CalEvent {
-  id: number; title: string; description: string | null
+  id: number; source: 'calendar' | 'planner'; title: string; description: string | null
   start_dt: string; end_dt: string | null; all_day: number
   event_type: string; color: string | null
   linked_page_id: number | null; linked_project_id: number | null
@@ -421,7 +421,7 @@ export function GlobalCalendarView({ dark, onPageOpen }: Props) {
                   {cellEvents.slice(0, total <= 3 ? 2 : 1).map(ev => {
                     const color = EVENT_COLORS[ev.event_type ?? 'outro'] ?? '#8B7355'
                     return (
-                      <div key={`e_${ev.id}`}
+                      <div key={`${ev.source ?? 'c'}_${ev.id}`}
                         title={`${EVENT_LABELS[ev.event_type ?? 'outro']}: ${ev.title}`}
                         style={{
                           display: 'block', width: '100%',
@@ -477,7 +477,7 @@ export function GlobalCalendarView({ dark, onPageOpen }: Props) {
                     const time  = !ev.all_day && ev.start_dt.includes('T')
                       ? ev.start_dt.slice(11, 16) : null
                     return (
-                      <div key={ev.id} style={{
+                      <div key={`${ev.source ?? 'c'}_${ev.id}`} style={{
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: '8px 12px', border: `1px solid ${color}44`,
                         borderLeft: `4px solid ${color}`, borderRadius: 2,
