@@ -126,3 +126,46 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [ ] Pomodoro Timer completo com estatísticas
 - [ ] Templates customizados de projeto
 - [ ] IA: integração com Ollama e APIs externas
+
+---
+
+# IDEIAS
+
+## Widgets
+
+### Alta prioridade (dados já disponíveis)
+- [ ] **Agenda da Semana** — faixa de 7 dias com chips de `calendar_events` coloridos por tipo
+- [ ] **Lembretes Pendentes** — lista de `reminders` não dispensados com countdown
+- [ ] **Próximas Provas** — eventos do tipo prova/defesa/trabalho com dias restantes em destaque
+- [ ] **Progresso dos Projetos** — barra de progresso por projeto activo (páginas concluídas / total)
+- [ ] **Citação Aleatória** — uma citação aleatória de `reading_quotes`, renovável a clique
+
+### Média prioridade (UI mais rica)
+- [ ] **Mapa de Calor** — grid estilo GitHub dos últimos 90 dias (páginas criadas/editadas)
+- [ ] **Nuvem de Tags** — tags com tamanho proporcional à frequência, clicáveis
+- [ ] **Leituras em Progresso** — livros com barra de progresso e % concluída
+- [ ] **Meta de Leitura Anual** — gauge circular de progresso (depende de `reading_goals`)
+- [ ] **Sumário do Dia** — briefing textual: eventos hoje + prazos + planner
+
+### Futuros (dependem de features pendentes)
+- [ ] **Tempo de Foco Hoje** — sessões Pomodoro do dia (depende de `time_sessions`)
+- [ ] **Streak de Estudo** — dias consecutivos com blocos concluídos (`work_blocks`)
+- [ ] **Grafo de Conexões** — mini grafo de força com `page_backlinks` (requer lib de visualização)
+
+## Analytics
+
+### Por projeto / académico
+- [ ] **Horas por projecto** — gráfico de barras com `work_blocks` agrupados por projecto
+- [ ] **Taxa de conclusão do Planner** — tarefas concluídas vs. atrasadas por mês
+- [ ] **Distribuição de tipos de tarefa** — pizza de `task_type` (aula/prova/atividade…)
+- [ ] **Progresso por prazo** — linha do tempo de tarefas vs. deadline
+
+### Leitura
+- [ ] **Ritmo de leitura** — páginas/dia ao longo do tempo (`reading_sessions`)
+- [ ] **Livros concluídos por mês** — gráfico de barras
+- [ ] **Progresso da meta anual** — gauge + projecção de conclusão
+
+### Conhecimento
+- [ ] **Páginas mais conectadas** — top backlinks (hubs de conhecimento)
+- [ ] **Tags mais usadas** — evolução temporal
+- [ ] **Actividade por dia da semana** — padrão de produtividade
