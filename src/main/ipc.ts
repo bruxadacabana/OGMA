@@ -449,6 +449,8 @@ export function registerIpcHandlers(): void {
 
   api('projects:delete', ({ id }) => {
     dbLog.info('projects:delete', { id })
+    // Apagar eventos de calendário ligados ao projecto (linked_project_id usa ON DELETE SET NULL)
+    dbRun('DELETE FROM calendar_events WHERE linked_project_id = ?', id)
     return dbRun('DELETE FROM projects WHERE id = ?', id)
   })
 
