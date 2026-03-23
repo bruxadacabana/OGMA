@@ -55,6 +55,8 @@ function runRclone(args: string[]): Promise<void> {
 
 // Ficheiros a excluir sempre do sync (WAL são recriados pelo SQLite; logs são locais)
 const EXCLUDES = ['--exclude', 'logs/**', '--exclude', '*.db-shm', '--exclude', '*.db-wal']
+// Proton Drive não suporta alterar modtime sem re-upload; esta flag evita o loop de 422
+const BASE_FLAGS = [...EXCLUDES, '--no-update-modtime', '--create-empty-src-dirs']
 
 /**
  * Pull: copia ficheiros do remote para data/ local.
@@ -66,7 +68,7 @@ export async function syncPull(remote: string): Promise<void> {
   const dst = toRclonePath(DATA_DIR.replace(/\/?$/, '/'))
 
   log.info('Sync pull', { src, dst })
-  await runRclone(['sync', src, dst, ...EXCLUDES, '--create-empty-src-dirs'])
+  await runRclone(['sync', src, dst, ...BASE_FLAGS])
 }
 
 /**
@@ -88,5 +90,5 @@ export async function syncPush(remote: string): Promise<void> {
   const dst = toRclonePath(remote.replace(/\/?$/, '/'))
 
   log.info('Sync push', { src, dst })
-  await runRclone(['sync', src, dst, ...EXCLUDES, '--create-empty-src-dirs'])
+  await runRclone(['sync', src, dst, ...BASE_FLAGS])
 }

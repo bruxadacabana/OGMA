@@ -1967,6 +1967,14 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
   const [sizes,    setSizes]    = useState<Record<WidgetId, WidgetSize>>(() => parseSizes(initialSettings.widget_sizes))
   const [hidden,   setHidden]   = useState<Set<WidgetId>>(initHidden)
   const [dragging, setDragging] = useState<WidgetId | null>(null)
+  const [location, setLocation] = useState<StoredLocation | null | undefined>(initialSettings.location)
+
+  // Re-ler localização sempre que o dashboard montar (pode ter sido configurada após o arranque)
+  useEffect(() => {
+    appSettings().get('location').then((loc: StoredLocation | null | undefined) => {
+      if (loc) setLocation(loc)
+    })
+  }, [])
 
   const handleDragStart = (id: WidgetId) => setDragging(id)
 
@@ -2026,8 +2034,8 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
       case 'recent':   return <RecentWidget   dark={dark} size={size} onPageOpen={onPageOpen} />
       case 'prazos':   return <PrazosWidget   dark={dark} size={size} onPageOpen={onPageOpen} />
       case 'cosmos':   return <CosmosWidget   dark={dark} size={size} />
-      case 'wheel':         return <WheelOfYearWidget  dark={dark} size={size} location={initialSettings.location} />
-      case 'weather':       return <WeatherWidget     dark={dark} size={size} location={initialSettings.location} />
+      case 'wheel':         return <WheelOfYearWidget  dark={dark} size={size} location={location} />
+      case 'weather':       return <WeatherWidget     dark={dark} size={size} location={location} />
       case 'planner':       return <DayPlanWidget     dark={dark} size={size} />
       case 'agenda':        return <AgendaWidget      dark={dark} size={size} />
       case 'reminders':     return <RemindersWidget   dark={dark} size={size} />
