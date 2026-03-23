@@ -44,7 +44,7 @@ export const NewPageModal: React.FC<Props> = ({ project, onClose, onCreated }) =
         <div className="form-group" style={{ flex: 0, minWidth: 56 }}>
           <label className="form-label" style={{ color: ink2 }}>Ícone</label>
           <div style={{ paddingTop: 4 }}>
-            <IconPicker value={icon} onChange={setIcon} dark={dark} size={26} />
+            <IconPicker value={icon} onChange={setIcon} dark={dark} size={26} suggestFor={title} />
           </div>
         </div>
         <div className="form-group" style={{ flex: 1 }}>

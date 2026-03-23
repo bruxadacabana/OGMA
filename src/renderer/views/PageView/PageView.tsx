@@ -1194,6 +1194,7 @@ export const PageView: React.FC<Props> = ({ page, project, dark, onBack }) => {
             }}
             dark={dark}
             size={28}
+            suggestFor={titleVal}
           />
 
           <div style={{ flex: 1, overflow: 'hidden' }}>

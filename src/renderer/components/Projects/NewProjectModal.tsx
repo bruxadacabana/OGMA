@@ -129,7 +129,7 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
           <div className="form-group" style={{ flex: 0, minWidth: 60 }}>
             <label className="form-label" style={{ color: ink2 }}>Ícone</label>
             <div style={{ paddingTop: 4 }}>
-              <IconPicker value={icon} onChange={setIcon} dark={dark} size={26} />
+              <IconPicker value={icon} onChange={setIcon} dark={dark} size={26} suggestFor={name} />
             </div>
           </div>
           <div className="form-group" style={{ flex: 1 }}>
