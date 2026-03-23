@@ -36,8 +36,6 @@ interface AppState {
   accentColor: string
   loading:     boolean
   toasts:      Toast[]
-  syncStatus:  'idle' | 'syncing' | 'ok' | 'error'
-
   // ── Actions UI ────────────────────────────────────────────────────────────
   setDark:        (dark: boolean) => void
   setAccentColor: (color: string) => void
@@ -45,7 +43,6 @@ interface AppState {
   setActiveView:  (id: number | null) => void
   pushToast:      (toast: Omit<Toast, 'id'>) => void
   dismissToast:   (id: string) => void
-  setSyncStatus:  (s: 'idle' | 'syncing' | 'ok' | 'error') => void
 
   // ── Loads (void — erros surfaced via toast) ───────────────────────────────
   loadWorkspace:  () => Promise<void>
@@ -90,7 +87,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   accentColor:       '#b8860b',
   loading:           false,
   toasts:            [],
-  syncStatus:        'idle',
 
   // ── UI ────────────────────────────────────────────────────────────────────
 
@@ -98,7 +94,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAccentColor: (color) => set({ accentColor: color }),
   setLoading:     (v)     => set({ loading: v }),
   setActiveView:  (id)    => set({ activeViewId: id }),
-  setSyncStatus:  (s)     => set({ syncStatus: s }),
 
   pushToast: (toast) =>
     set(s => ({ toasts: [...s.toasts, { ...toast, id: nextId() }] })),

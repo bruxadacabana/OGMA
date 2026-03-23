@@ -21,7 +21,6 @@ interface Props {
   activeSub?: SubSection
   projects: Project[]
   dark: boolean
-  syncStatus?: 'idle' | 'syncing' | 'ok' | 'error'
   onNavigate: (s: Section) => void
   onNavigateSub: (s: SubSection) => void
   onProjectSelect: (id: number) => void
@@ -38,7 +37,7 @@ const NAV: { key: Section; icon: string; label: string }[] = [
 ]
 
 export const Sidebar: React.FC<Props> = ({
-  active, activeSub, projects, dark, syncStatus = 'idle',
+  active, activeSub, projects, dark,
   onNavigate, onNavigateSub, onProjectSelect, onNewProject,
 }) => {
   const [projectsOpen, setProjectsOpen] = useState(true)
@@ -154,25 +153,6 @@ export const Sidebar: React.FC<Props> = ({
           }}>
             OGMA v0.1.0
           </span>
-          {syncStatus !== 'idle' && (
-            <span title={{
-              syncing: 'A sincronizar…',
-              ok:      'Sincronizado',
-              error:   'Erro de sincronização',
-            }[syncStatus]} style={{
-              width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-              background: {
-                syncing: '#D4A820',
-                ok:      '#4CAF50',
-                error:   '#E53935',
-              }[syncStatus],
-              boxShadow: syncStatus === 'syncing'
-                ? '0 0 4px #D4A82088'
-                : syncStatus === 'ok'
-                  ? '0 0 4px #4CAF5088'
-                  : '0 0 4px #E5393588',
-            }} />
-          )}
         </div>
       </div>
     </aside>

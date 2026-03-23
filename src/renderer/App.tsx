@@ -55,7 +55,6 @@ export default function App() {
     workspace,
     projects, loadProjects, loadWorkspace,
     activeProject, selectProject, loadPages, pages,
-    syncStatus,
   } = useAppStore()
 
   // Carregar settings ao iniciar (antes do splash terminar)
@@ -170,7 +169,6 @@ export default function App() {
         active={section} activeSub={activeSub}
         projects={projects.map(p => ({ id: p.id, name: p.name, icon: p.icon ?? undefined, color: p.color ?? undefined }))}
         dark={dark}
-        syncStatus={syncStatus}
         onNavigate={handleNavigate}
         onNavigateSub={s => { setActiveSub(s); setSection('library'); setView('library') }}
         onProjectSelect={handleProjectSelect}

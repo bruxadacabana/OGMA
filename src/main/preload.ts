@@ -156,9 +156,6 @@ contextBridge.exposeInMainWorld('db', {
   },
 })
 
-contextBridge.exposeInMainWorld('sync', {
-  now: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('sync:now'),
-})
 
 contextBridge.exposeInMainWorld('appSettings', {
   getAll: ():                                          Promise<AppSettings>    => ipcRenderer.invoke('appSettings:getAll'),

@@ -23,7 +23,7 @@ interface GeoResult {
 }
 
 export function SettingsView({ dark, onToggleTheme }: Props) {
-  const { workspace, loadWorkspace, pushToast, setSyncStatus } = useAppStore()
+  const { workspace, loadWorkspace, pushToast } = useAppStore()
 
   const [name,        setName]        = useState('')
   const [icon,        setIcon]        = useState('')
@@ -92,43 +92,6 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
   const clearLocation = () => {
     appSettings().set('location', null)
     setSavedLoc(null)
-  }
-
-  // Sincronização
-  const [syncRemote,  setSyncRemote]  = useState('')
-  const [syncEnabled, setSyncEnabled] = useState(false)
-  const [syncSaved,   setSyncSaved]   = useState(false)
-  const [syncing,    setSyncing]   = useState(false)
-  const [syncResult, setSyncResult] = useState<'ok' | 'error' | null>(null)
-
-  useEffect(() => {
-    appSettings().get('sync_remote').then(v  => setSyncRemote(v  ?? ''))
-    appSettings().get('sync_enabled').then(v => setSyncEnabled(v ?? false))
-  }, [])
-
-  const saveSyncSettings = async () => {
-    await appSettings().set('sync_remote',  syncRemote.trim())
-    await appSettings().set('sync_enabled', syncEnabled)
-    setSyncSaved(true)
-    setTimeout(() => setSyncSaved(false), 2000)
-  }
-
-  const handleSyncNow = async () => {
-    if (syncing) return
-    setSyncing(true)
-    setSyncResult(null)
-    setSyncStatus('syncing')
-    const res = await (window as any).sync.now() as { ok: boolean; error?: string }
-    setSyncing(false)
-    if (res.ok) {
-      setSyncResult('ok')
-      setSyncStatus('ok')
-      setTimeout(() => setSyncResult(null), 3000)
-    } else {
-      setSyncResult('error')
-      setSyncStatus('error')
-      pushToast({ kind: 'error', title: 'Sync falhou', detail: res.error })
-    }
   }
 
   // Sincronizar com store
@@ -340,63 +303,6 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
         </div>
       </div>
 
-      {/* ── Sincronização ── */}
-      <div className="settings-section">
-        <div className="settings-section-label">Sincronização</div>
-        <div className="settings-card">
-
-          <div className="settings-row">
-            <span className="settings-row-label">Ativar sync</span>
-            <div className="settings-row-control">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <input
-                  type="checkbox" checked={syncEnabled}
-                  onChange={e => setSyncEnabled(e.target.checked)}
-                  style={{ cursor: 'pointer' }}
-                />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-faint)' }}>
-                  Sincronizar ao abrir e fechar o OGMA
-                </span>
-              </label>
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <span className="settings-row-label">Remote rclone</span>
-            <div className="settings-row-control">
-              <input
-                className="settings-input"
-                value={syncRemote}
-                onChange={e => setSyncRemote(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && saveSyncSettings()}
-                placeholder="ex: proton:backup/programFiles/OGMA"
-                style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 11 }}
-              />
-            </div>
-          </div>
-
-          <div className="settings-save-row" style={{ marginTop: 10, gap: 8 }}>
-            {syncSaved && <span className="settings-saved-msg" style={{ marginRight: 4 }}>✓ Guardado</span>}
-            <button className="btn btn-sm" onClick={saveSyncSettings}>
-              Guardar
-            </button>
-            <button
-              className="btn btn-sm"
-              onClick={handleSyncNow}
-              disabled={syncing || !syncRemote.trim()}
-              style={{ marginLeft: 8 }}
-            >
-              {syncing ? 'A sincronizar…' : syncResult === 'ok' ? '✓ Sincronizado' : '↑ Sincronizar agora'}
-            </button>
-          </div>
-
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-faint)', marginTop: 12, fontStyle: 'italic' }}>
-            Requer rclone instalado e o remote configurado via <code>rclone config</code>.
-            O sync copia <code>data/</code> ↔ remote, excluindo logs.
-            As alterações têm efeito no próximo arranque.
-          </p>
-        </div>
-      </div>
 
       {/* ── Aparência ── */}
       <div className="settings-section">

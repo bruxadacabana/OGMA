@@ -4,7 +4,6 @@ import http from 'http'
 import { dbGet, dbAll, dbRun, getDb } from './database'
 import { createLogger, RENDERER_LOG_CHANNEL } from './logger'
 import { getSetting, setSetting, getAllSettings, AppSettings } from './settings'
-import { syncPush } from './sync'
 
 const log   = createLogger('ipc')
 const dbLog = createLogger('db')
@@ -1679,14 +1678,4 @@ export function registerIpcHandlers(): void {
     setSetting(key, value as any)
   })
 
-  ipcMain.handle('sync:now', async () => {
-    const remote = getSetting('sync_remote')
-    if (!remote) return { ok: false, error: 'Remote não configurado.' }
-    try {
-      await syncPush(remote)
-      return { ok: true }
-    } catch (e) {
-      return { ok: false, error: String(e) }
-    }
-  })
 }

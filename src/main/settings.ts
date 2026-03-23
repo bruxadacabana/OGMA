@@ -1,7 +1,6 @@
 /**
  * OGMA App Settings — data/settings.json
  * Preferências do utilizador separadas do banco de dados.
- * Sincronizadas via rclone junto com ogma.db e uploads/.
  */
 
 import fs from 'fs'
@@ -29,8 +28,6 @@ export interface AppSettings {
   dashboard_order?: string[]
   widget_sizes?:    Record<string, string>
   hidden_widgets?:  string[]
-  sync_remote?:     string   // ex.: "proton:backup/programFiles/OGMA"
-  sync_enabled?:    boolean
 }
 
 // ── Cache em memória ───────────────────────────────────────────────────────────

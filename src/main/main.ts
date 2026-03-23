@@ -5,8 +5,7 @@ import { getDb, closeDb } from './database'
 import { registerIpcHandlers } from './ipc'
 import { startReminderScheduler } from './scheduler'
 import { createLogger, setupGlobalErrorHandlers } from './logger'
-import { initSettings, getSetting } from './settings'
-import { syncPull, syncPush } from './sync'
+import { initSettings } from './settings'
 
 const log = createLogger('main')
 
@@ -17,7 +16,6 @@ const ICON_PATH = app.isPackaged
   : path.resolve(__dirname, '..', '..', 'assets', 'ogma.ico')
 
 let mainWindow: BrowserWindow | null = null
-let quitting = false
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -65,18 +63,6 @@ app.whenReady().then(async () => {
   log.info('Carregando settings')
   initSettings()
 
-  // Pull do remote antes de abrir o banco
-  const syncEnabled = getSetting('sync_enabled')
-  const syncRemote  = getSetting('sync_remote')
-  if (syncEnabled && syncRemote) {
-    log.info('Sync pull antes de abrir banco', { remote: syncRemote })
-    try {
-      await syncPull(syncRemote)
-    } catch (e) {
-      log.error('Sync pull falhou (continuando com dados locais)', { error: String(e) })
-    }
-  }
-
   log.info('Inicializando banco de dados')
   getDb()
 
@@ -94,26 +80,9 @@ app.whenReady().then(async () => {
   })
 })
 
-app.on('before-quit', (e) => {
-  if (quitting) return
+app.on('before-quit', () => {
   log.info('OGMA encerrando')
-
-  const syncEnabled = getSetting('sync_enabled')
-  const syncRemote  = getSetting('sync_remote')
-
-  if (syncEnabled && syncRemote) {
-    e.preventDefault()
-    quitting = true
-    log.info('Sync push antes de encerrar', { remote: syncRemote })
-    syncPush(syncRemote)
-      .catch(err => log.error('Sync push falhou', { error: String(err) }))
-      .finally(() => {
-        closeDb()
-        app.quit()
-      })
-  } else {
-    closeDb()
-  }
+  closeDb()
 })
 
 app.on('window-all-closed', () => {

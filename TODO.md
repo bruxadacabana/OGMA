@@ -141,15 +141,7 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 
 - [x] `data/settings.json` — preferências do utilizador separadas do banco (`electron-store` substituído por JSON direto via `src/main/settings.ts`)
 - [x] Migrar `localStorage` (tema, localização, dashboard_order, widget_sizes, hidden_widgets) → `data/settings.json` via IPC `appSettings:*`
-- [x] `src/main/sync.ts` — rclone pull/push com WAL checkpoint antes do push
-- [x] Integrar sync no ciclo de vida: pull antes de `getDb()`, push no `before-quit`
-- [x] UI de sync em Ajustes → Sincronização (remote configurável, enable/disable, status)
-- [x] Botão "Sincronizar agora" em Ajustes → Sincronização (push imediato com feedback)
-- [x] Fix: spawn rclone com shell:true no Windows (PATH não resolvia o executável)
-- [x] Indicador de status de sync na sidebar (bolinha verde/vermelha/cinza no rodapé)
-- [x] Fix: excluir ficheiros WAL do SQLite do sync rclone (evita 422 no Proton Drive)
-- [x] Fix: push usa delete-então-copy para contornar bug 422 do Proton Drive em updates
-- [x] Fix: pull com --update para não sobrescrever ficheiros locais mais recentes (evita perda de dados quando push anterior falhou)
+- ~~rclone + Proton Drive~~ — removido (v0.1); incompatibilidade com a API do Proton Drive (erro 422 persistente ao actualizar ficheiros). Ver alternativas em `# IDEIAS → ## Sincronização`
 
 ## Ícone da aplicação
 
