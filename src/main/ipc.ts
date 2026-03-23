@@ -1388,4 +1388,207 @@ export function registerIpcHandlers(): void {
   api('reminders:delete', ({ id }) =>
     dbRun(`DELETE FROM reminders WHERE id = ?`, id)
   )
+
+  // ── Planejador académico ───────────────────────────────────────────────────
+
+  function getDailyCapacity(): number {
+    const row = dbGet(`SELECT value FROM settings WHERE key = 'planner_daily_hours'`)
+    return row ? parseFloat(row.value) || 4 : 4
+  }
+
+  function scheduleTasks(projectId: number): void {
+    const db        = getDb()
+    const dailyCap  = getDailyCapacity()
+    const today     = new Date().toISOString().slice(0, 10)
+
+    const tasks = dbAll(`
+      SELECT pt.*,
+        COALESCE((
+          SELECT SUM(wb.logged_hours) FROM work_blocks wb
+          WHERE wb.task_id = pt.id AND wb.status = 'done'
+        ), 0) AS done_hours
+      FROM planned_tasks pt
+      WHERE pt.project_id = ? AND pt.status IN ('pending','in_progress')
+      ORDER BY pt.due_date ASC
+    `, projectId)
+
+    if (tasks.length === 0) return
+
+    const taskIds = tasks.map((t: any) => t.id)
+    db.prepare(
+      `DELETE FROM work_blocks WHERE task_id IN (${taskIds.map(() => '?').join(',')})
+       AND date >= ? AND status = 'scheduled'`
+    ).run(...taskIds, today)
+
+    // Carga já comprometida de outros projetos
+    const otherBlocks = dbAll(`
+      SELECT wb.date, SUM(wb.planned_hours) as total
+      FROM work_blocks wb
+      JOIN planned_tasks pt ON pt.id = wb.task_id
+      WHERE pt.project_id != ? AND wb.date >= ? AND wb.status = 'scheduled'
+      GROUP BY wb.date
+    `, projectId, today)
+    const loadMap = new Map<string, number>()
+    for (const b of otherBlocks) loadMap.set(b.date, b.total)
+
+    const insertBlock = db.prepare(
+      `INSERT INTO work_blocks (task_id, date, planned_hours, logged_hours, status)
+       VALUES (?, ?, ?, 0, 'scheduled')`
+    )
+
+    for (const task of tasks) {
+      const remaining = Math.max(0, task.estimated_hours - task.done_hours)
+      if (remaining <= 0) continue
+
+      const due     = task.due_date.slice(0, 10)
+      const dates: string[] = []
+      let cur = new Date(today + 'T12:00:00')
+      const dueDate = new Date(due + 'T12:00:00')
+      while (cur <= dueDate) {
+        dates.push(cur.toISOString().slice(0, 10))
+        cur = new Date(cur.getTime() + 86400000)
+      }
+      if (dates.length === 0) {
+        // Prazo já passou — agenda tudo hoje
+        insertBlock.run(task.id, today, Math.round(remaining * 100) / 100)
+        loadMap.set(today, (loadMap.get(today) ?? 0) + remaining)
+        continue
+      }
+
+      let hoursLeft = remaining
+      for (const date of dates) {
+        if (hoursLeft <= 0) break
+        const load      = loadMap.get(date) ?? 0
+        const available = Math.max(0, dailyCap - load)
+        if (available <= 0) continue
+        const h = Math.min(hoursLeft, available)
+        insertBlock.run(task.id, date, Math.round(h * 100) / 100)
+        loadMap.set(date, load + h)
+        hoursLeft -= h
+      }
+      // Se ainda sobrar horas (todos os dias estavam cheios), adiciona ao dia do prazo
+      if (hoursLeft > 0.01) {
+        const lastDate = dates[dates.length - 1]
+        insertBlock.run(task.id, lastDate, Math.round(hoursLeft * 100) / 100)
+        loadMap.set(lastDate, (loadMap.get(lastDate) ?? 0) + hoursLeft)
+      }
+    }
+  }
+
+  function updateTaskStatus(taskId: number): void {
+    const task = dbGet(`SELECT * FROM planned_tasks WHERE id = ?`, taskId)
+    if (!task) return
+    const doneHours = dbGet(
+      `SELECT COALESCE(SUM(logged_hours),0) AS h FROM work_blocks WHERE task_id = ? AND status = 'done'`,
+      taskId
+    )?.h ?? 0
+    let newStatus = task.status
+    if (doneHours >= task.estimated_hours) {
+      newStatus = 'completed'
+    } else if (doneHours > 0) {
+      newStatus = 'in_progress'
+    }
+    dbRun(`UPDATE planned_tasks SET status = ?, updated_at = datetime('now') WHERE id = ?`, newStatus, taskId)
+  }
+
+  api('planner:listTasks', ({ project_id }) =>
+    dbAll(`
+      SELECT pt.*,
+        COALESCE((SELECT SUM(wb.logged_hours) FROM work_blocks wb WHERE wb.task_id = pt.id AND wb.status = 'done'), 0) AS done_hours,
+        p.title AS page_title, p.icon AS page_icon
+      FROM planned_tasks pt
+      LEFT JOIN pages p ON p.id = pt.page_id
+      WHERE pt.project_id = ?
+      ORDER BY pt.due_date ASC, pt.created_at ASC
+    `, project_id)
+  )
+
+  api('planner:createTask', (data) => {
+    const r = dbRun(`
+      INSERT INTO planned_tasks (project_id, page_id, title, task_type, due_date, estimated_hours, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending')
+    `, data.project_id, data.page_id ?? null, data.title, data.task_type ?? 'atividade',
+       data.due_date, data.estimated_hours ?? 1)
+    const taskId = Number(r.lastInsertRowid)
+    scheduleTasks(data.project_id)
+    return dbGet(`
+      SELECT pt.*, p.title AS page_title, p.icon AS page_icon
+      FROM planned_tasks pt LEFT JOIN pages p ON p.id = pt.page_id WHERE pt.id = ?
+    `, taskId)
+  })
+
+  api('planner:updateTask', (data) => {
+    const allowed = ['title','task_type','due_date','estimated_hours','page_id','status']
+    const cols: string[] = [], vals: any[] = []
+    for (const key of allowed) {
+      if (data[key] !== undefined) { cols.push(`${key} = ?`); vals.push(data[key]) }
+    }
+    if (cols.length) {
+      cols.push(`updated_at = datetime('now')`)
+      dbRun(`UPDATE planned_tasks SET ${cols.join(', ')} WHERE id = ?`, ...vals, data.id)
+    }
+    const task = dbGet(`SELECT * FROM planned_tasks WHERE id = ?`, data.id)
+    if (task) scheduleTasks(task.project_id)
+    return dbGet(`
+      SELECT pt.*, p.title AS page_title, p.icon AS page_icon
+      FROM planned_tasks pt LEFT JOIN pages p ON p.id = pt.page_id WHERE pt.id = ?
+    `, data.id)
+  })
+
+  api('planner:deleteTask', ({ id }) =>
+    dbRun(`DELETE FROM planned_tasks WHERE id = ?`, id)
+  )
+
+  api('planner:listBlocks', ({ task_id }) =>
+    dbAll(`SELECT * FROM work_blocks WHERE task_id = ? ORDER BY date ASC`, task_id)
+  )
+
+  api('planner:logBlock', ({ id, logged_hours }) => {
+    const block = dbGet(`SELECT * FROM work_blocks WHERE id = ?`, id)
+    if (!block) throw new Error('Bloco não encontrado')
+    const capped = Math.min(logged_hours, block.planned_hours)
+    const status = capped >= block.planned_hours ? 'done' : 'scheduled'
+    dbRun(`UPDATE work_blocks SET logged_hours = ?, status = ? WHERE id = ?`, capped, status, id)
+    updateTaskStatus(block.task_id)
+    return dbGet(`SELECT * FROM work_blocks WHERE id = ?`, id)
+  })
+
+  api('planner:schedule', ({ project_id }) => {
+    scheduleTasks(project_id)
+    return { ok: true }
+  })
+
+  api('planner:rescheduleAll', () => {
+    const today = new Date().toISOString().slice(0, 10)
+    // Blocos passados não concluídos → missed
+    dbRun(
+      `UPDATE work_blocks SET status = 'missed' WHERE date < ? AND status = 'scheduled'`,
+      today
+    )
+    // Atualiza status de tarefas cujo prazo passou e não estão completas
+    dbRun(`
+      UPDATE planned_tasks SET status = 'overdue', updated_at = datetime('now')
+      WHERE due_date < ? AND status IN ('pending','in_progress')
+    `, today)
+    // Reagenda todos os projetos com tarefas ativas
+    const projects = dbAll(
+      `SELECT DISTINCT project_id FROM planned_tasks WHERE status IN ('pending','in_progress')`
+    )
+    for (const { project_id } of projects) scheduleTasks(project_id)
+    return { ok: true }
+  })
+
+  api('planner:todayBlocks', () => {
+    const today = new Date().toISOString().slice(0, 10)
+    return dbAll(`
+      SELECT wb.*,
+        pt.title AS task_title, pt.task_type, pt.due_date, pt.estimated_hours,
+        p.name AS project_name, p.color AS project_color, p.icon AS project_icon
+      FROM work_blocks wb
+      JOIN planned_tasks pt ON pt.id = wb.task_id
+      JOIN projects p ON p.id = pt.project_id
+      WHERE wb.date = ? AND wb.status != 'missed'
+      ORDER BY pt.due_date ASC
+    `, today)
+  })
 }

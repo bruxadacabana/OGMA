@@ -120,6 +120,33 @@ function initSchema(db: Database.Database): void {
   try { db.exec(`ALTER TABLE readings ADD COLUMN progress_percent INTEGER DEFAULT 0`) } catch {}
   try { db.exec(`ALTER TABLE reading_sessions ADD COLUMN percent_end INTEGER`) } catch {}
 
+  // Planejador académico
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS planned_tasks (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id      INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      page_id         INTEGER REFERENCES pages(id) ON DELETE SET NULL,
+      title           TEXT NOT NULL,
+      task_type       TEXT DEFAULT 'atividade',
+      due_date        TEXT NOT NULL,
+      estimated_hours REAL NOT NULL DEFAULT 1,
+      status          TEXT DEFAULT 'pending',
+      created_at      TEXT DEFAULT (datetime('now')),
+      updated_at      TEXT DEFAULT (datetime('now'))
+    )
+  `) } catch {}
+  try { db.exec(`
+    CREATE TABLE IF NOT EXISTS work_blocks (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id       INTEGER NOT NULL REFERENCES planned_tasks(id) ON DELETE CASCADE,
+      date          TEXT NOT NULL,
+      planned_hours REAL NOT NULL DEFAULT 1,
+      logged_hours  REAL DEFAULT 0,
+      status        TEXT DEFAULT 'scheduled',
+      created_at    TEXT DEFAULT (datetime('now'))
+    )
+  `) } catch {}
+
   // Garante propriedade "Semestre" em projetos acadêmicos existentes
   try {
     const year = new Date().getFullYear()

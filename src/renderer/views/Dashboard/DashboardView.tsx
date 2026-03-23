@@ -10,12 +10,12 @@ const db = () => (window as any).db
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 export type WidgetSize = 'sm' | 'md' | 'lg'
-type WidgetId = 'stats' | 'projects' | 'recent' | 'prazos' | 'cosmos' | 'wheel' | 'weather'
+type WidgetId = 'stats' | 'projects' | 'recent' | 'prazos' | 'cosmos' | 'wheel' | 'weather' | 'planner'
 
-const DEFAULT_ORDER: WidgetId[] = ['stats', 'projects', 'recent', 'prazos', 'cosmos', 'wheel', 'weather']
+const DEFAULT_ORDER: WidgetId[] = ['stats', 'projects', 'recent', 'prazos', 'cosmos', 'wheel', 'weather', 'planner']
 const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
   stats: 'md', projects: 'md', recent: 'md', prazos: 'md',
-  cosmos: 'md', wheel: 'md', weather: 'md',
+  cosmos: 'md', wheel: 'md', weather: 'md', planner: 'md',
 }
 
 interface Props {
@@ -1040,6 +1040,142 @@ interface WeatherData {
   }
 }
 
+// ── DayPlanWidget ─────────────────────────────────────────────────────────────
+
+interface TodayBlock {
+  id:            number
+  task_id:       number
+  date:          string
+  planned_hours: number
+  logged_hours:  number
+  status:        string
+  task_title:    string
+  task_type:     string
+  due_date:      string
+  project_name:  string
+  project_color: string
+  project_icon:  string
+}
+
+const TASK_TYPE_ICONS: Record<string, string> = {
+  aula: '📚', atividade: '📋', prova: '📝', leitura: '📖', outro: '◦',
+}
+
+function DayPlanWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+  const [blocks,  setBlocks]  = useState<TodayBlock[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const bg     = dark ? '#1A1610' : '#F5F0E8'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  const load = async () => {
+    setLoading(true)
+    const r = await fromIpc<TodayBlock[]>(() => db().planner.todayBlocks(), 'todayBlocks')
+    if (r.isOk()) setBlocks(r.value)
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const handleLog = async (block: TodayBlock, hours: number) => {
+    const r = await fromIpc<any>(() => db().planner.logBlock(block.id, hours), 'logBlock')
+    if (r.isOk()) setBlocks(prev => prev.map(b => b.id === block.id ? { ...b, ...r.value } : b))
+  }
+
+  const totalPlanned = blocks.reduce((s, b) => s + b.planned_hours, 0)
+  const totalDone    = blocks.filter(b => b.status === 'done').reduce((s, b) => s + b.planned_hours, 0)
+
+  return (
+    <div style={{ padding: size === 'sm' ? '10px 12px' : '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Cabeçalho */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2,
+        }}>
+          PLANO DO DIA
+        </span>
+        {totalPlanned > 0 && (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent }}>
+            {totalDone.toFixed(1)}/{totalPlanned.toFixed(1)}h
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink2 }}>…</span>
+      ) : blocks.length === 0 ? (
+        <span style={{
+          fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 13, color: ink2,
+        }}>
+          Nenhuma tarefa para hoje.
+        </span>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {blocks.map(block => {
+            const isDone = block.status === 'done'
+            const color  = block.project_color ?? '#8B7355'
+            return (
+              <div key={block.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: dark ? '#211D16' : '#EDE7D9',
+                border: `1px solid ${border}`,
+                borderLeft: `3px solid ${isDone ? '#4A6741' : color}`,
+                borderRadius: 2, padding: '6px 10px',
+                opacity: isDone ? 0.65 : 1,
+              }}>
+                <span style={{ fontSize: 14, flexShrink: 0 }}>
+                  {TASK_TYPE_ICONS[block.task_type] ?? '◦'}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: 'var(--font-body)', fontSize: 12, color: ink,
+                    textDecoration: isDone ? 'line-through' : 'none',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {block.task_title}
+                  </div>
+                  {size !== 'sm' && (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
+                      {block.project_icon ?? '◦'} {block.project_name}
+                    </div>
+                  )}
+                </div>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: isDone ? '#4A6741' : ink2, flexShrink: 0 }}>
+                  {isDone ? `✓ ${block.planned_hours}h` : `${block.planned_hours}h`}
+                </span>
+                {!isDone && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ padding: '1px 5px', fontSize: 10, color: accent, flexShrink: 0 }}
+                    onClick={() => handleLog(block, block.planned_hours)}
+                    title="Marcar como concluído"
+                  >
+                    ✓
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {size === 'lg' && totalPlanned > 0 && (
+        <div style={{
+          marginTop: 4, height: 4, background: border, borderRadius: 2, overflow: 'hidden',
+        }}>
+          <div style={{
+            width: `${Math.min(100, (totalDone / totalPlanned) * 100)}%`,
+            height: '100%', background: accent, borderRadius: 2, transition: 'width 400ms',
+          }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function WeatherWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const accent = dark ? '#D4A820' : '#b8860b'
@@ -1284,6 +1420,7 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
       case 'cosmos':   return <CosmosWidget   dark={dark} size={size} />
       case 'wheel':    return <WheelOfYearWidget dark={dark} size={size} />
       case 'weather':  return <WeatherWidget  dark={dark} size={size} />
+      case 'planner':  return <DayPlanWidget  dark={dark} size={size} />
     }
   }
 

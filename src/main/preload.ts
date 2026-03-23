@@ -138,4 +138,15 @@ contextBridge.exposeInMainWorld('db', {
     dismiss: (id: number)                  => api('reminders:dismiss', { id }),
     delete:  (id: number)                  => api('reminders:delete',  { id }),
   },
+  planner: {
+    listTasks:     (project_id: number)               => api('planner:listTasks',     { project_id }),
+    createTask:    (d: any)                           => api('planner:createTask',    d),
+    updateTask:    (d: any)                           => api('planner:updateTask',    d),
+    deleteTask:    (id: number)                       => api('planner:deleteTask',    { id }),
+    listBlocks:    (task_id: number)                  => api('planner:listBlocks',    { task_id }),
+    logBlock:      (id: number, logged_hours: number) => api('planner:logBlock',      { id, logged_hours }),
+    schedule:      (project_id: number)               => api('planner:schedule',      { project_id }),
+    rescheduleAll: ()                                 => api('planner:rescheduleAll', {}),
+    todayBlocks:   ()                                 => api('planner:todayBlocks',   {}),
+  },
 })

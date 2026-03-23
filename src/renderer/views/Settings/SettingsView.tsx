@@ -41,6 +41,23 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
   const [saved,       setSaved]       = useState(false)
   const [saving,      setSaving]      = useState(false)
 
+  // Planner
+  const [dailyHours,     setDailyHours]     = useState('4')
+  const [dailyHoursSaved, setDailyHoursSaved] = useState(false)
+
+  useEffect(() => {
+    fromIpc<any>(() => db().config.get('planner_daily_hours'), 'getDailyHours')
+      .then(r => { if (r.isOk() && r.value?.value) setDailyHours(r.value.value) })
+  }, [])
+
+  const saveDailyHours = async () => {
+    const val = Math.min(24, Math.max(0.5, parseFloat(dailyHours) || 4))
+    await fromIpc(() => db().config.set('planner_daily_hours', String(val)), 'setDailyHours')
+    setDailyHours(String(val))
+    setDailyHoursSaved(true)
+    setTimeout(() => setDailyHoursSaved(false), 2000)
+  }
+
   // Localização
   const [locQuery,     setLocQuery]     = useState('')
   const [locResults,   setLocResults]   = useState<GeoResult[]>([])
@@ -214,6 +231,42 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
           >
             {saving ? 'A guardar…' : 'Guardar alterações'}
           </button>
+        </div>
+      </div>
+
+      {/* ── Planner ── */}
+      <div className="settings-section">
+        <div className="settings-section-label">Planner</div>
+        <div className="settings-card">
+          <div className="settings-row">
+            <span className="settings-row-label">Capacidade diária</span>
+            <div className="settings-row-control" style={{ gap: 8 }}>
+              <input
+                type="number" min="0.5" max="24" step="0.5"
+                className="settings-input"
+                value={dailyHours}
+                onChange={e => setDailyHours(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && saveDailyHours()}
+                style={{ width: 70 }}
+              />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-faint)' }}>
+                horas/dia
+              </span>
+              <button
+                className="btn btn-sm"
+                onClick={saveDailyHours}
+                style={{ marginLeft: 4 }}
+              >
+                {dailyHoursSaved ? '✓ Guardado' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+          <p style={{
+            fontFamily: 'var(--font-mono)', fontSize: 10,
+            color: 'var(--ink-faint)', marginTop: 8, fontStyle: 'italic',
+          }}>
+            Máximo de horas de trabalho por dia usado pelo algoritmo de agendamento.
+          </p>
         </div>
       </div>
 

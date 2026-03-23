@@ -103,6 +103,18 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 
 ---
 
+## Fase 9b — Planejador Académico (Planner)
+
+Agendamento de tarefas com horas estimadas, replanejamento automático e vínculo com páginas do projeto.
+
+- [ ] Migrations: tabelas `planned_tasks` e `work_blocks`
+- [ ] IPC handlers: CRUD de `planned_tasks` + algoritmo de scheduling (EDF, capacidade diária global, replanejamento de missed blocks)
+- [ ] Aba "Planner" no ProjectView — lista de tarefas planejáveis + calendário semanal com blocos de horas + criar/vincular página ao criar tarefa
+- [ ] Widget "Plano do Dia" no Dashboard — consolidado de todos os projetos para hoje, com checkbox de sessão concluída
+- [ ] Campo "Capacidade diária (horas)" em Settings (padrão 4h)
+
+---
+
 ## Fase 10 — Polimento
 
 - [ ] Decoração cósmica completa, animações, ícone do app
