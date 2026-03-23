@@ -11,6 +11,27 @@ interface Props {
   onToggleTheme: () => void
 }
 
+interface GeoResult {
+  name:       string
+  admin1:     string
+  country:    string
+  country_code: string
+  latitude:   number
+  longitude:  number
+  timezone:   string
+}
+
+export interface StoredLocation {
+  city:         string
+  admin1:       string
+  country:      string
+  country_code: string
+  latitude:     number
+  longitude:    number
+  hemisphere:   'north' | 'south'
+  timezone:     string
+}
+
 export function SettingsView({ dark, onToggleTheme }: Props) {
   const { workspace, loadWorkspace, pushToast } = useAppStore()
 
@@ -19,6 +40,50 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
   const [accentColor, setAccentColor] = useState('#b8860b')
   const [saved,       setSaved]       = useState(false)
   const [saving,      setSaving]      = useState(false)
+
+  // Localização
+  const [locQuery,     setLocQuery]     = useState('')
+  const [locResults,   setLocResults]   = useState<GeoResult[]>([])
+  const [locSearching, setLocSearching] = useState(false)
+  const [savedLoc,     setSavedLoc]     = useState<StoredLocation | null>(() => {
+    try { return JSON.parse(localStorage.getItem('ogma_location') ?? 'null') } catch { return null }
+  })
+
+  const searchLocation = async () => {
+    if (!locQuery.trim()) return
+    setLocSearching(true)
+    setLocResults([])
+    try {
+      const res  = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locQuery.trim())}&count=6&language=pt&format=json`)
+      const data = await res.json()
+      setLocResults(data.results ?? [])
+    } catch {
+      pushToast({ kind: 'error', title: 'Erro na busca', detail: 'Verifique sua conexão.' })
+    }
+    setLocSearching(false)
+  }
+
+  const saveLocation = (r: GeoResult) => {
+    const loc: StoredLocation = {
+      city:         r.name,
+      admin1:       r.admin1 ?? '',
+      country:      r.country,
+      country_code: r.country_code,
+      latitude:     r.latitude,
+      longitude:    r.longitude,
+      hemisphere:   r.latitude >= 0 ? 'north' : 'south',
+      timezone:     r.timezone ?? 'UTC',
+    }
+    localStorage.setItem('ogma_location', JSON.stringify(loc))
+    setSavedLoc(loc)
+    setLocResults([])
+    setLocQuery('')
+  }
+
+  const clearLocation = () => {
+    localStorage.removeItem('ogma_location')
+    setSavedLoc(null)
+  }
 
   // Sincronizar com store
   useEffect(() => {
@@ -149,6 +214,92 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
           >
             {saving ? 'A guardar…' : 'Guardar alterações'}
           </button>
+        </div>
+      </div>
+
+      {/* ── Localização ── */}
+      <div className="settings-section">
+        <div className="settings-section-label">Localização</div>
+        <div className="settings-card">
+
+          {savedLoc && (
+            <>
+              <div className="settings-about-row">
+                <span className="settings-about-key">Cidade</span>
+                <span className="settings-about-val">
+                  {savedLoc.city}{savedLoc.admin1 ? `, ${savedLoc.admin1}` : ''}, {savedLoc.country}
+                </span>
+              </div>
+              <div className="settings-about-row" style={{ marginBottom: 14 }}>
+                <span className="settings-about-key">Hemisfério</span>
+                <span className="settings-about-val">
+                  {savedLoc.hemisphere === 'north' ? '☽ Norte' : '☾ Sul'}
+                  {' '}·{' '}{savedLoc.latitude.toFixed(2)}°, {savedLoc.longitude.toFixed(2)}°
+                </span>
+              </div>
+            </>
+          )}
+
+          <div className="settings-row">
+            <span className="settings-row-label">Buscar cidade</span>
+            <div className="settings-row-control" style={{ gap: 8 }}>
+              <input
+                className="settings-input"
+                value={locQuery}
+                onChange={e => setLocQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && searchLocation()}
+                placeholder="Ex: São Paulo, Belo Horizonte…"
+                style={{ flex: 1 }}
+              />
+              <button
+                className="btn btn-sm"
+                onClick={searchLocation}
+                disabled={locSearching || !locQuery.trim()}
+                style={{ flexShrink: 0 }}
+              >
+                {locSearching ? '…' : 'Buscar'}
+              </button>
+            </div>
+          </div>
+
+          {locResults.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {locResults.map((r, i) => (
+                <button
+                  key={i}
+                  className="btn btn-sm"
+                  style={{ textAlign: 'left', justifyContent: 'flex-start', gap: 8 }}
+                  onClick={() => saveLocation(r)}
+                >
+                  <span>{r.name}{r.admin1 ? `, ${r.admin1}` : ''}, {r.country}</span>
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9,
+                    color: 'var(--ink-faint)', marginLeft: 'auto',
+                  }}>
+                    {r.latitude.toFixed(2)}°, {r.longitude.toFixed(2)}°
+                    {' · '}{r.latitude >= 0 ? 'Norte' : 'Sul'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {savedLoc && (
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ color: 'var(--ink-faint)', marginTop: 10 }}
+              onClick={clearLocation}
+            >
+              Remover localização
+            </button>
+          )}
+
+          <p style={{
+            fontFamily: 'var(--font-mono)', fontSize: 10,
+            color: 'var(--ink-faint)', marginTop: 12, fontStyle: 'italic',
+          }}>
+            Usado na Roda do Ano (hemisfério) e na previsão do tempo.
+          </p>
         </div>
       </div>
 

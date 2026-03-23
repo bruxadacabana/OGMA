@@ -3,17 +3,19 @@ import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { useAppStore } from '../../store/useAppStore'
 import { PROJECT_TYPE_ICONS } from '../../types'
 import { fromIpc } from '../../types/errors'
+import type { StoredLocation } from '../Settings/SettingsView'
 
 const db = () => (window as any).db
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 export type WidgetSize = 'sm' | 'md' | 'lg'
-type WidgetId = 'stats' | 'projects' | 'recent' | 'prazos' | 'cosmos' | 'wheel'
+type WidgetId = 'stats' | 'projects' | 'recent' | 'prazos' | 'cosmos' | 'wheel' | 'weather'
 
-const DEFAULT_ORDER: WidgetId[]              = ['stats', 'projects', 'recent', 'prazos', 'cosmos', 'wheel']
+const DEFAULT_ORDER: WidgetId[] = ['stats', 'projects', 'recent', 'prazos', 'cosmos', 'wheel', 'weather']
 const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
-  stats: 'md', projects: 'md', recent: 'md', prazos: 'md', cosmos: 'md', wheel: 'md',
+  stats: 'md', projects: 'md', recent: 'md', prazos: 'md',
+  cosmos: 'md', wheel: 'md', weather: 'md',
 }
 
 interface Props {
@@ -60,15 +62,15 @@ function formatUpcomingDate(iso: string): string {
   } catch { return iso }
 }
 
-// ── Astronomia ────────────────────────────────────────────────────────────────
+// ── Astronomia — Lua ──────────────────────────────────────────────────────────
 
-const KNOWN_NEW  = new Date('2000-01-06T18:14:00Z').getTime()
-const CYCLE_MS   = 29.530588853 * 86400000
-const MESES_ABR  = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez']
+const KNOWN_NEW = new Date('2000-01-06T18:14:00Z').getTime()
+const CYCLE_MS  = 29.530588853 * 86400000
+const MESES_ABR = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez']
 
 function getMoonPhase() {
-  const phase = ((Date.now() - KNOWN_NEW) % CYCLE_MS) / CYCLE_MS
-  const idx   = Math.floor(phase * 8) % 8
+  const phase  = ((Date.now() - KNOWN_NEW) % CYCLE_MS) / CYCLE_MS
+  const idx    = Math.floor(phase * 8) % 8
   const emojis = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘']
   const names  = ['Lua Nova','Crescente','Quarto Crescente','Gibosa Crescente',
                   'Lua Cheia','Gibosa Minguante','Quarto Minguante','Minguante']
@@ -85,16 +87,132 @@ function getNextFullMoon() {
 }
 
 function getNextQuarter() {
-  const phase     = ((Date.now() - KNOWN_NEW) % CYCLE_MS) / CYCLE_MS
-  const quarters  = [
+  const phase    = ((Date.now() - KNOWN_NEW) % CYCLE_MS) / CYCLE_MS
+  const quarters = [
     { pct: 0.25, name: 'Quarto Crescente' },
-    { pct: 0.5,  name: 'Lua Cheia' },
+    { pct: 0.50, name: 'Lua Cheia'        },
     { pct: 0.75, name: 'Quarto Minguante' },
-    { pct: 1.0,  name: 'Lua Nova' },
+    { pct: 1.00, name: 'Lua Nova'         },
   ]
   const next   = quarters.find(q => q.pct > phase) ?? quarters[0]
   const daysTo = (next.pct - phase) * 29.530588853
   return { name: next.name, days: Math.ceil(daysTo) }
+}
+
+// ── Astronomia — Roda do Ano ──────────────────────────────────────────────────
+
+interface ComputedSabbat {
+  name:    string
+  symbol:  string
+  date:    Date
+  day:     number   // dia do ano (1-365)
+  dateStr: string   // "21 dez"
+  season:  string   // "Solstício de Inverno"
+}
+
+/** Solstícios e equinócios via algoritmo de Meeus (precisão ~1 dia) */
+function computeEquinoxSolstice(year: number, event: 0|1|2|3): Date {
+  const Y   = (year - 2000) / 1000
+  const JDE = [
+    2451623.80984 + 365242.37404*Y + 0.05169*Y*Y - 0.00411*Y*Y*Y - 0.00057*Y*Y*Y*Y,
+    2451716.56767 + 365241.62603*Y + 0.00325*Y*Y + 0.00888*Y*Y*Y - 0.00030*Y*Y*Y*Y,
+    2451810.21715 + 365242.01767*Y - 0.11575*Y*Y + 0.00337*Y*Y*Y + 0.00078*Y*Y*Y*Y,
+    2451900.05952 + 365242.74049*Y - 0.06223*Y*Y - 0.00823*Y*Y*Y + 0.00032*Y*Y*Y*Y,
+  ][event]
+  return new Date((JDE - 2440587.5) * 86400000)
+}
+
+function getDayOfYear(d: Date): number {
+  return Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 86400000) + 1
+}
+
+function midDate(a: Date, b: Date): Date {
+  return new Date((a.getTime() + b.getTime()) / 2)
+}
+
+function fmtDate(d: Date): string {
+  return `${d.getDate()} ${MESES_ABR[d.getMonth()]}`
+}
+
+function buildWheelSabbats(year: number, hemisphere: 'north' | 'south'): ComputedSabbat[] {
+  // 0=equinócio março, 1=solstício junho, 2=equinócio setembro, 3=solstício dezembro
+  const prevDec = computeEquinoxSolstice(year - 1, 3)
+  const march   = computeEquinoxSolstice(year, 0)
+  const june    = computeEquinoxSolstice(year, 1)
+  const sep     = computeEquinoxSolstice(year, 2)
+  const dec     = computeEquinoxSolstice(year, 3)
+
+  const mk = (name: string, symbol: string, date: Date, season: string): ComputedSabbat => ({
+    name, symbol, date, day: getDayOfYear(date), dateStr: fmtDate(date), season,
+  })
+
+  const raw = hemisphere === 'north' ? [
+    mk('Imbolc',     '❄', midDate(prevDec, march), 'Início da Primavera'),
+    mk('Ostara',     '🌱', march,                   'Equinócio de Primavera'),
+    mk('Beltane',    '🔥', midDate(march, june),    'Início do Verão'),
+    mk('Litha',      '☀', june,                    'Solstício de Verão'),
+    mk('Lughnasadh', '🌾', midDate(june, sep),      'Início do Outono'),
+    mk('Mabon',      '🍂', sep,                     'Equinócio de Outono'),
+    mk('Samhain',    '🕯', midDate(sep, dec),       'Início do Inverno'),
+    mk('Yule',       '✦', dec,                     'Solstício de Inverno'),
+  ] : [
+    // Hemisfério Sul — estações invertidas
+    mk('Lughnasadh', '🌾', midDate(prevDec, march), 'Início do Outono'),
+    mk('Mabon',      '🍂', march,                   'Equinócio de Outono'),
+    mk('Samhain',    '🕯', midDate(march, june),    'Início do Inverno'),
+    mk('Yule',       '✦', june,                    'Solstício de Inverno'),
+    mk('Imbolc',     '❄', midDate(june, sep),      'Início da Primavera'),
+    mk('Ostara',     '🌱', sep,                     'Equinócio de Primavera'),
+    mk('Beltane',    '🔥', midDate(sep, dec),       'Início do Verão'),
+    mk('Litha',      '☀', dec,                     'Solstício de Verão'),
+  ]
+
+  return raw.sort((a, b) => a.day - b.day)
+}
+
+// ── Clima — WMO codes ────────────────────────────────────────────────────────
+
+function wmoIcon(code: number): string {
+  if (code === 0)              return '☀'
+  if (code === 1)              return '🌤'
+  if (code === 2)              return '⛅'
+  if (code === 3)              return '☁'
+  if (code <= 49)              return '🌫'
+  if (code <= 59)              return '🌦'
+  if (code <= 69)              return '🌧'
+  if (code <= 79)              return '🌨'
+  if (code <= 84)              return '🌦'
+  if (code <= 99)              return '⛈'
+  return '🌡'
+}
+
+function wmoLabel(code: number): string {
+  if (code === 0)  return 'Céu limpo'
+  if (code === 1)  return 'Maiormente limpo'
+  if (code === 2)  return 'Parcialmente nublado'
+  if (code === 3)  return 'Nublado'
+  if (code <= 49)  return 'Névoa'
+  if (code <= 55)  return 'Garoa'
+  if (code <= 59)  return 'Garoa com geada'
+  if (code <= 65)  return 'Chuva'
+  if (code <= 69)  return 'Chuva com geada'
+  if (code <= 75)  return 'Neve'
+  if (code <= 77)  return 'Granizo'
+  if (code <= 82)  return 'Pancadas de chuva'
+  if (code <= 86)  return 'Neve com rajadas'
+  if (code <= 99)  return 'Tempestade'
+  return 'Condição desconhecida'
+}
+
+const DIAS_SEM = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+
+function dayLabel(iso: string): string {
+  const d    = new Date(iso + 'T12:00:00')
+  const now  = new Date(); now.setHours(0, 0, 0, 0)
+  const diff = Math.round((new Date(iso + 'T00:00:00').getTime() - now.getTime()) / 86400000)
+  if (diff === 0) return 'Hoje'
+  if (diff === 1) return 'Amanhã'
+  return DIAS_SEM[d.getDay()]
 }
 
 // ── Persistência ──────────────────────────────────────────────────────────────
@@ -116,12 +234,11 @@ function loadSizes(): Record<WidgetId, WidgetSize> {
   try {
     const s = localStorage.getItem('ogma_widget_sizes')
     if (s) {
-      const obj = JSON.parse(s) as Record<string, string>
-      const valid: Record<WidgetId, WidgetSize> = { ...DEFAULT_SIZES }
+      const obj   = JSON.parse(s) as Record<string, string>
+      const valid = { ...DEFAULT_SIZES }
       for (const [k, v] of Object.entries(obj)) {
-        if (DEFAULT_ORDER.includes(k as WidgetId) && ['sm','md','lg'].includes(v)) {
+        if (DEFAULT_ORDER.includes(k as WidgetId) && ['sm','md','lg'].includes(v))
           valid[k as WidgetId] = v as WidgetSize
-        }
       }
       return valid
     }
@@ -129,19 +246,16 @@ function loadSizes(): Record<WidgetId, WidgetSize> {
   return { ...DEFAULT_SIZES }
 }
 
+function loadLocation(): StoredLocation | null {
+  try { return JSON.parse(localStorage.getItem('ogma_location') ?? 'null') } catch { return null }
+}
+
 // ── WidgetWrapper ─────────────────────────────────────────────────────────────
 
 interface WrapperProps {
-  id:           WidgetId
-  size:         WidgetSize
-  dark:         boolean
-  isDragging:   boolean
-  onDragStart:  () => void
-  onDragEnter:  () => void
-  onDrop:       () => void
-  onDragEnd:    () => void
-  onSizeChange: (s: WidgetSize) => void
-  children:     React.ReactNode
+  id: WidgetId; size: WidgetSize; dark: boolean; isDragging: boolean
+  onDragStart: () => void; onDragEnter: () => void; onDrop: () => void; onDragEnd: () => void
+  onSizeChange: (s: WidgetSize) => void; children: React.ReactNode
 }
 
 function WidgetWrapper({ id, size, dark, isDragging, onDragStart, onDragEnter, onDrop, onDragEnd, onSizeChange, children }: WrapperProps) {
@@ -152,8 +266,6 @@ function WidgetWrapper({ id, size, dark, isDragging, onDragStart, onDragEnter, o
   const accent = dark ? '#D4A820' : '#b8860b'
   const border = dark ? '#3A3020' : '#C4B9A8'
   const cardBg = dark ? '#211D16' : '#EDE7D9'
-
-  const SIZE_LABELS: Record<WidgetSize, string> = { sm: 'S', md: 'M', lg: 'L' }
 
   return (
     <div
@@ -170,62 +282,37 @@ function WidgetWrapper({ id, size, dark, isDragging, onDragStart, onDragEnter, o
       onDragOver={e => e.preventDefault()}
       onDrop={() => { counterRef.current = 0; onDrop() }}
     >
-      {/* Barra de controles — aparece no hover */}
       <div style={{
-        position: 'absolute', top: 8, right: 10,
-        zIndex: 20,
+        position: 'absolute', top: 8, right: 10, zIndex: 20,
         display: 'flex', alignItems: 'center', gap: 4,
-        opacity: hovered ? 1 : 0,
-        transition: 'opacity 150ms',
+        opacity: hovered ? 1 : 0, transition: 'opacity 150ms',
         pointerEvents: hovered ? 'auto' : 'none',
       }}>
-        {(['sm', 'md', 'lg'] as WidgetSize[]).map(s => (
-          <button
-            key={s}
-            onClick={() => onSizeChange(s)}
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              letterSpacing: '0.08em',
-              padding: '2px 6px',
-              border: `1px solid ${size === s ? accent : border}`,
-              borderRadius: 2,
-              background: size === s ? accent + '25' : cardBg,
-              color: size === s ? accent : ink2,
-              cursor: 'pointer',
-              userSelect: 'none',
-            }}
-          >
-            {SIZE_LABELS[s]}
+        {(['sm','md','lg'] as WidgetSize[]).map(s => (
+          <button key={s} onClick={() => onSizeChange(s)} style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em',
+            padding: '2px 6px', border: `1px solid ${size === s ? accent : border}`,
+            borderRadius: 2, background: size === s ? accent + '25' : cardBg,
+            color: size === s ? accent : ink2, cursor: 'pointer', userSelect: 'none',
+          }}>
+            {s.toUpperCase()}
           </button>
         ))}
-
-        {/* Alça de arrasto */}
         <div
           draggable
           onDragStart={e => { e.stopPropagation(); onDragStart() }}
           onDragEnd={onDragEnd}
-          style={{
-            cursor: 'grab',
-            color: ink2,
-            fontSize: 14,
-            padding: '1px 4px',
-            userSelect: 'none',
-            lineHeight: 1,
-            marginLeft: 2,
-          }}
+          style={{ cursor: 'grab', color: ink2, fontSize: 14, padding: '1px 4px',
+            userSelect: 'none', lineHeight: 1, marginLeft: 2 }}
           title="Arrastar para reordenar"
-        >
-          ⠿
-        </div>
+        >⠿</div>
       </div>
-
       {children}
     </div>
   )
 }
 
-// ── Widget: Boas-vindas (sempre lg, não arrastável) ───────────────────────────
+// ── Widget: Boas-vindas ───────────────────────────────────────────────────────
 
 function WelcomeWidget({ dark }: { dark: boolean }) {
   const [time, setTime] = useState(formatTime())
@@ -247,7 +334,6 @@ function WelcomeWidget({ dark }: { dark: boolean }) {
   const phrase   = phrases[new Date().getDate() % phrases.length]
   const hour     = new Date().getHours()
   const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
-  const wsName   = workspace?.name ?? 'Viajante'
 
   useEffect(() => {
     const t = setInterval(() => setTime(formatTime()), 1000)
@@ -257,19 +343,17 @@ function WelcomeWidget({ dark }: { dark: boolean }) {
   return (
     <div className="card" style={{
       background: cardBg, borderColor: border,
-      position: 'relative', overflow: 'hidden', minHeight: 100,
-      gridColumn: '1 / -1',
+      position: 'relative', overflow: 'hidden', minHeight: 100, gridColumn: '1 / -1',
     }}>
       <CosmosLayer width={600} height={100} seed="dash_welcome" density="low" dark={dark}
         style={{ opacity: 0.45, left: 'auto', right: 0, width: 300 }} />
       <div style={{ position: 'relative', zIndex: 2 }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24,
           fontStyle: 'italic', color: ink, fontWeight: 'normal', marginBottom: 4 }}>
-          {greeting}, {wsName}
+          {greeting}, {workspace?.name ?? 'Viajante'}
         </h1>
         <p style={{ fontSize: 12, color: ink2, fontStyle: 'italic', marginBottom: 8 }}>{phrase}</p>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11,
-          color: accent, letterSpacing: '0.08em' }}>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: accent, letterSpacing: '0.08em' }}>
           {formatDateLong()}  ·  {time}
         </p>
       </div>
@@ -280,10 +364,7 @@ function WelcomeWidget({ dark }: { dark: boolean }) {
 // ── Widget: Estatísticas ──────────────────────────────────────────────────────
 
 interface StatsData {
-  total_pages:     number
-  pages_this_week: number
-  active_projects: number
-  total_projects:  number
+  total_pages: number; pages_this_week: number; active_projects: number; total_projects: number
 }
 
 function StatsWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
@@ -302,9 +383,7 @@ function StatsWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
 
   const label = (
     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
-      color: ink2, textTransform: 'uppercase', marginBottom: 12 }}>
-      ◈ Estatísticas
-    </div>
+      color: ink2, textTransform: 'uppercase', marginBottom: 12 }}>◈ Estatísticas</div>
   )
 
   if (!stats) return (
@@ -314,32 +393,30 @@ function StatsWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
     </div>
   )
 
-  if (size === 'sm') {
-    return (
-      <div className="card" style={{ background: cardBg, borderColor: border }}>
-        {label}
-        <div style={{ display: 'flex', gap: 20 }}>
-          <div>
+  if (size === 'sm') return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      {label}
+      <div style={{ display: 'flex', gap: 20 }}>
+        {[
+          { v: stats.total_pages,     l: 'Páginas'  },
+          { v: stats.active_projects, l: 'Projetos' },
+        ].map(({ v, l }) => (
+          <div key={l}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 28,
-              fontStyle: 'italic', color: accent, lineHeight: 1 }}>{stats.total_pages}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, marginTop: 2 }}>Páginas</div>
+              fontStyle: 'italic', color: accent, lineHeight: 1 }}>{v}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, marginTop: 2 }}>{l}</div>
           </div>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 28,
-              fontStyle: 'italic', color: accent, lineHeight: 1 }}>{stats.active_projects}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, marginTop: 2 }}>Projetos</div>
-          </div>
-        </div>
+        ))}
       </div>
-    )
-  }
+    </div>
+  )
 
-  const allItems = size === 'lg'
+  const items = size === 'lg'
     ? [
-        { label: 'Páginas',          value: stats.total_pages,     sub: `+${stats.pages_this_week} esta semana` },
-        { label: 'Esta semana',      value: stats.pages_this_week, sub: 'páginas criadas'                       },
-        { label: 'Projetos ativos',  value: stats.active_projects, sub: `${stats.total_projects} no total`      },
-        { label: 'Total de projetos',value: stats.total_projects,  sub: 'incluindo inativos'                    },
+        { label: 'Páginas',           value: stats.total_pages,     sub: `+${stats.pages_this_week} esta semana` },
+        { label: 'Esta semana',       value: stats.pages_this_week, sub: 'páginas criadas'                       },
+        { label: 'Projetos ativos',   value: stats.active_projects, sub: `${stats.total_projects} no total`      },
+        { label: 'Total de projetos', value: stats.total_projects,  sub: 'incluindo inativos'                    },
       ]
     : [
         { label: 'Páginas',         value: stats.total_pages,     sub: `+${stats.pages_this_week} esta semana` },
@@ -350,23 +427,17 @@ function StatsWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
     <div className="card" style={{ background: cardBg, borderColor: border }}>
       {label}
       <div style={{ display: 'flex', gap: 0 }}>
-        {allItems.map((item, i) => (
+        {items.map((item, i) => (
           <div key={item.label} style={{
             flex: 1,
-            paddingRight: i < allItems.length - 1 ? 16 : 0,
-            marginRight:  i < allItems.length - 1 ? 16 : 0,
-            borderRight:  i < allItems.length - 1 ? `1px solid ${border}` : 'none',
+            paddingRight: i < items.length - 1 ? 16 : 0,
+            marginRight:  i < items.length - 1 ? 16 : 0,
+            borderRight:  i < items.length - 1 ? `1px solid ${border}` : 'none',
           }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: size === 'lg' ? 40 : 36,
-              fontStyle: 'italic', color: accent, lineHeight: 1, marginBottom: 4 }}>
-              {item.value}
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink, letterSpacing: '0.08em' }}>
-              {item.label}
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginTop: 2 }}>
-              {item.sub}
-            </div>
+              fontStyle: 'italic', color: accent, lineHeight: 1, marginBottom: 4 }}>{item.value}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink, letterSpacing: '0.08em' }}>{item.label}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginTop: 2 }}>{item.sub}</div>
           </div>
         ))}
       </div>
@@ -377,8 +448,8 @@ function StatsWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
 // ── Widget: Projetos Ativos ───────────────────────────────────────────────────
 
 function ProjectsWidget({ dark, size, onProjectOpen }: { dark: boolean; size: WidgetSize; onProjectOpen: (id: number) => void }) {
-  const projects = useAppStore(s => s.projects)
-  const [pageCounts, setPageCounts] = useState<Record<number, number>>({})
+  const projects   = useAppStore(s => s.projects)
+  const [counts, setCounts] = useState<Record<number, number>>({})
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
@@ -388,14 +459,11 @@ function ProjectsWidget({ dark, size, onProjectOpen }: { dark: boolean; size: Wi
   useEffect(() => {
     fromIpc<StatsData & { page_counts?: { project_id: number; count: number }[] }>(
       () => db().dashboard.stats(), 'dashboardStatsProjects'
-    ).then(r => r.match(
-      data => {
-        const map: Record<number, number> = {}
-        for (const { project_id, count } of (data.page_counts ?? [])) map[project_id] = count
-        setPageCounts(map)
-      },
-      _e => {},
-    ))
+    ).then(r => r.match(data => {
+      const map: Record<number, number> = {}
+      for (const { project_id, count } of (data.page_counts ?? [])) map[project_id] = count
+      setCounts(map)
+    }, _e => {}))
   }, [])
 
   const active = projects.filter(p => p.status === 'active')
@@ -404,21 +472,11 @@ function ProjectsWidget({ dark, size, onProjectOpen }: { dark: boolean; size: Wi
 
   const label = (
     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
-      color: ink2, textTransform: 'uppercase', marginBottom: 10 }}>
-      ✦ Projetos Ativos
-    </div>
+      color: ink2, textTransform: 'uppercase', marginBottom: 10 }}>✦ Projetos Ativos</div>
   )
 
-  if (shown.length === 0) return (
-    <div className="card" style={{ background: cardBg, borderColor: border }}>
-      {label}
-      <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>Nenhum projeto ativo.</p>
-    </div>
-  )
-
-  const ProjectRow = ({ p, compact }: { p: typeof shown[0]; compact?: boolean }) => {
+  const Row = ({ p, compact }: { p: typeof shown[0]; compact?: boolean }) => {
     const color = p.color ?? '#8B7355'
-    const count = pageCounts[p.id] ?? 0
     return (
       <button onClick={() => onProjectOpen(p.id)} style={{
         display: 'flex', alignItems: 'center', gap: 8,
@@ -430,17 +488,14 @@ function ProjectsWidget({ dark, size, onProjectOpen }: { dark: boolean; size: Wi
         onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(232,223,200,0.05)' : 'rgba(44,36,22,0.04)')}
         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
       >
-        <span style={{ fontSize: compact ? 13 : 16, flexShrink: 0 }}>
-          {p.icon ?? PROJECT_TYPE_ICONS[p.project_type]}
-        </span>
+        <span style={{ fontSize: compact ? 13 : 16, flexShrink: 0 }}>{p.icon ?? PROJECT_TYPE_ICONS[p.project_type]}</span>
         <span style={{ flex: 1, fontFamily: 'var(--font-display)', fontSize: compact ? 12 : 13,
-          fontStyle: 'italic', color: ink,
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          fontStyle: 'italic', color: ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {p.name}
         </span>
         {!compact && (
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, flexShrink: 0 }}>
-            {count} {count === 1 ? 'pág' : 'págs'}
+            {counts[p.id] ?? 0} págs
           </span>
         )}
       </button>
@@ -450,14 +505,19 @@ function ProjectsWidget({ dark, size, onProjectOpen }: { dark: boolean; size: Wi
   return (
     <div className="card" style={{ background: cardBg, borderColor: border }}>
       {label}
-      <div style={{
-        display: size === 'lg' ? 'grid' : 'flex',
-        gridTemplateColumns: size === 'lg' ? '1fr 1fr' : undefined,
-        flexDirection: size === 'lg' ? undefined : 'column',
-        gap: 5,
-      }}>
-        {shown.map(p => <ProjectRow key={p.id} p={p} compact={size === 'sm'} />)}
-      </div>
+      {shown.length === 0
+        ? <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>Nenhum projeto ativo.</p>
+        : (
+          <div style={{
+            display: size === 'lg' ? 'grid' : 'flex',
+            gridTemplateColumns: size === 'lg' ? '1fr 1fr' : undefined,
+            flexDirection: size === 'lg' ? undefined : 'column',
+            gap: 5,
+          }}>
+            {shown.map(p => <Row key={p.id} p={p} compact={size === 'sm'} />)}
+          </div>
+        )
+      }
       {active.length > limit && (
         <p style={{ fontSize: 10, color: ink2, fontStyle: 'italic', textAlign: 'right', marginTop: 6 }}>
           +{active.length - limit} mais
@@ -485,18 +545,15 @@ function RecentWidget({ dark, size, onPageOpen }: { dark: boolean; size: WidgetS
 
   const label = (
     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
-      color: ink2, textTransform: 'uppercase', marginBottom: 10 }}>
-      ⊛ Atividade Recente
-    </div>
+      color: ink2, textTransform: 'uppercase', marginBottom: 10 }}>⊛ Atividade Recente</div>
   )
 
-  const PageRow = ({ p, i, total, compact }: { p: any; i: number; total: number; compact?: boolean }) => (
+  const Row = ({ p, i, total, compact }: { p: any; i: number; total: number; compact?: boolean }) => (
     <button onClick={() => onPageOpen(p.project_id, p.id)} style={{
       display: 'flex', alignItems: 'center', gap: 8,
       padding: '6px 4px', background: 'transparent', border: 'none',
       borderBottom: i < total - 1 ? `1px solid ${border}` : 'none',
-      cursor: 'pointer', textAlign: 'left', width: '100%',
-      transition: 'background 100ms',
+      cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background 100ms',
     }}
       onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(232,223,200,0.05)' : 'rgba(44,36,22,0.04)')}
       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -508,8 +565,7 @@ function RecentWidget({ dark, size, onPageOpen }: { dark: boolean; size: WidgetS
           {p.title}
         </div>
         {!compact && (
-          <div style={{ fontSize: 10, color: ink2,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 10, color: ink2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {p.project_name}
           </div>
         )}
@@ -522,27 +578,23 @@ function RecentWidget({ dark, size, onPageOpen }: { dark: boolean; size: WidgetS
     </button>
   )
 
-  if (pages.length === 0) return (
-    <div className="card" style={{ background: cardBg, borderColor: border }}>
-      {label}
-      <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>Nenhuma atividade ainda.</p>
-    </div>
-  )
-
   return (
     <div className="card" style={{ background: cardBg, borderColor: border }}>
       {label}
-      {size === 'lg' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-          {pages.map((p, i) => (
-            <PageRow key={p.id} p={p} i={i % Math.ceil(pages.length / 2)} total={Math.ceil(pages.length / 2)} />
-          ))}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          {pages.map((p, i) => <PageRow key={p.id} p={p} i={i} total={pages.length} compact={size === 'sm'} />)}
-        </div>
-      )}
+      {pages.length === 0
+        ? <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>Nenhuma atividade ainda.</p>
+        : size === 'lg'
+          ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+              {pages.map((p, i) => <Row key={p.id} p={p} i={i % Math.ceil(pages.length / 2)} total={Math.ceil(pages.length / 2)} />)}
+            </div>
+          )
+          : (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {pages.map((p, i) => <Row key={p.id} p={p} i={i} total={pages.length} compact={size === 'sm'} />)}
+            </div>
+          )
+      }
     </div>
   )
 }
@@ -567,13 +619,11 @@ function PrazosWidget({ dark, size, onPageOpen }: { dark: boolean; size: WidgetS
   const label = (
     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
       color: ink2, textTransform: 'uppercase', marginBottom: 10 }}>
-      ⚑ Prazos Próximos {size !== 'md' && (
-        <span style={{ opacity: 0.6 }}>({days} dias)</span>
-      )}
+      ⚑ Prazos Próximos {size !== 'md' && <span style={{ opacity: 0.6 }}>({days} dias)</span>}
     </div>
   )
 
-  const PrazoRow = ({ item, i, compact }: { item: any; i: number; compact?: boolean }) => {
+  const Row = ({ item, compact }: { item: any; compact?: boolean }) => {
     const color     = item.project_color ?? '#8B7355'
     const dateLabel = formatUpcomingDate(item.value_date)
     const isUrgent  = dateLabel === 'hoje' || dateLabel === 'amanhã'
@@ -581,10 +631,9 @@ function PrazosWidget({ dark, size, onPageOpen }: { dark: boolean; size: WidgetS
       <button onClick={() => onPageOpen(item.project_id, item.id)} style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: compact ? '4px 6px' : '5px 8px',
-        border: `1px solid ${border}`,
-        borderLeft: `3px solid ${isUrgent ? ribbon : color}`,
-        borderRadius: 2, background: 'transparent',
-        cursor: 'pointer', textAlign: 'left', transition: 'background 100ms', width: '100%',
+        border: `1px solid ${border}`, borderLeft: `3px solid ${isUrgent ? ribbon : color}`,
+        borderRadius: 2, background: 'transparent', cursor: 'pointer', textAlign: 'left',
+        transition: 'background 100ms', width: '100%',
       }}
         onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(232,223,200,0.05)' : 'rgba(44,36,22,0.04)')}
         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -595,40 +644,29 @@ function PrazosWidget({ dark, size, onPageOpen }: { dark: boolean; size: WidgetS
             fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {item.title}
           </div>
-          {!compact && (
-            <div style={{ fontSize: 10, color: ink2 }}>{item.project_name} · {item.prop_name}</div>
-          )}
+          {!compact && <div style={{ fontSize: 10, color: ink2 }}>{item.project_name} · {item.prop_name}</div>}
         </div>
-        <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: 10, flexShrink: 0,
-          color: isUrgent ? ribbon : ink2, fontWeight: isUrgent ? 'bold' : 'normal',
-        }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, flexShrink: 0,
+          color: isUrgent ? ribbon : ink2, fontWeight: isUrgent ? 'bold' : 'normal' }}>
           {dateLabel}
         </span>
       </button>
     )
   }
 
-  const empty = (
-    <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>
-      Nenhum prazo nos próximos {days} dias.
-    </p>
-  )
-
   return (
     <div className="card" style={{ background: cardBg, borderColor: border }}>
       {label}
-      {items.length === 0 ? empty : (
-        size === 'lg' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 16px' }}>
-            {items.map((item, i) => <PrazoRow key={`${item.id}_${i}`} item={item} i={i} />)}
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {items.map((item, i) => <PrazoRow key={`${item.id}_${i}`} item={item} i={i} compact={size === 'sm'} />)}
-          </div>
-        )
-      )}
+      {items.length === 0
+        ? <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>Nenhum prazo nos próximos {days} dias.</p>
+        : size === 'lg'
+          ? <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 16px' }}>
+              {items.map((item, i) => <Row key={`${item.id}_${i}`} item={item} />)}
+            </div>
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {items.map((item, i) => <Row key={`${item.id}_${i}`} item={item} compact={size === 'sm'} />)}
+            </div>
+      }
     </div>
   )
 }
@@ -642,120 +680,90 @@ function CosmosWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   const border = dark ? '#3A3020' : '#C4B9A8'
   const cardBg = dark ? '#211D16' : '#EDE7D9'
 
-  const moon       = getMoonPhase()
-  const fullMoon   = size === 'lg' ? getNextFullMoon()  : null
-  const nextQ      = size === 'lg' ? getNextQuarter()   : null
+  const moon     = getMoonPhase()
+  const fullMoon = size === 'lg' ? getNextFullMoon() : null
+  const nextQ    = size === 'lg' ? getNextQuarter()  : null
 
   const label = (
     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
-      color: ink2, textTransform: 'uppercase', marginBottom: 8 }}>
-      ☽ Fase da Lua
+      color: ink2, textTransform: 'uppercase', marginBottom: 8 }}>☽ Fase da Lua</div>
+  )
+
+  if (size === 'sm') return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      {label}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 36, lineHeight: 1 }}>{moon.emoji}</span>
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontStyle: 'italic', color: ink }}>{moon.name}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent, marginTop: 2 }}>{moon.pct}% do ciclo</div>
+        </div>
+      </div>
     </div>
   )
 
-  // SM: só emoji + nome + %
-  if (size === 'sm') {
-    return (
-      <div className="card" style={{ background: cardBg, borderColor: border }}>
-        {label}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 36, lineHeight: 1 }}>{moon.emoji}</span>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 13,
-              fontStyle: 'italic', color: ink }}>{moon.name}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10,
-              color: accent, marginTop: 2 }}>{moon.pct}% do ciclo</div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Arco SVG
-  const arcR = size === 'lg' ? 48 : 36
+  const arcR  = size === 'lg' ? 48 : 36
   const arcCx = size === 'lg' ? 60 : 50
   const arcCy = size === 'lg' ? 60 : 50
-  const svgSize = size === 'lg' ? 120 : 100
-  const pct = moon.raw
-  const endAngle = pct * 2 * Math.PI - Math.PI / 2
+  const svgSz = size === 'lg' ? 120 : 100
+  const endAngle = moon.raw * 2 * Math.PI - Math.PI / 2
   const arcX = arcCx + arcR * Math.cos(endAngle)
   const arcY = arcCy + arcR * Math.sin(endAngle)
-  const largeArc = pct > 0.5 ? 1 : 0
+  const lrg  = moon.raw > 0.5 ? 1 : 0
+  const sw   = size === 'lg' ? 7 : 6
 
   const arcSvg = (
-    <svg width={svgSize} height={svgSize} viewBox={`0 0 ${svgSize} ${svgSize}`} style={{ flexShrink: 0 }}>
-      <circle cx={arcCx} cy={arcCy} r={arcR} fill="none" stroke={border} strokeWidth={size === 'lg' ? 7 : 6} />
-      {pct > 0 && pct < 1 && (
-        <path
-          d={`M ${arcCx} ${arcCy - arcR} A ${arcR} ${arcR} 0 ${largeArc} 1 ${arcX.toFixed(1)} ${arcY.toFixed(1)}`}
-          fill="none" stroke={accent} strokeWidth={size === 'lg' ? 7 : 6} strokeLinecap="round"
-        />
+    <svg width={svgSz} height={svgSz} viewBox={`0 0 ${svgSz} ${svgSz}`} style={{ flexShrink: 0 }}>
+      <circle cx={arcCx} cy={arcCy} r={arcR} fill="none" stroke={border} strokeWidth={sw} />
+      {moon.raw > 0 && moon.raw < 1 && (
+        <path d={`M ${arcCx} ${arcCy - arcR} A ${arcR} ${arcR} 0 ${lrg} 1 ${arcX.toFixed(1)} ${arcY.toFixed(1)}`}
+          fill="none" stroke={accent} strokeWidth={sw} strokeLinecap="round" />
       )}
-      {pct >= 1 && <circle cx={arcCx} cy={arcCy} r={arcR} fill="none" stroke={accent} strokeWidth={size === 'lg' ? 7 : 6} />}
+      {moon.raw >= 1 && <circle cx={arcCx} cy={arcCy} r={arcR} fill="none" stroke={accent} strokeWidth={sw} />}
       <text x={arcCx} y={arcCy} textAnchor="middle" dominantBaseline="middle"
         fontSize={size === 'lg' ? 28 : 22}>{moon.emoji}</text>
     </svg>
   )
 
-  // MD: emoji + arco lado a lado
-  if (size === 'md') {
-    return (
-      <div className="card" style={{ background: cardBg, borderColor: border, position: 'relative', overflow: 'hidden' }}>
-        <CosmosLayer width={260} height={120} seed="dash_cosmos" density="medium" dark={dark}
-          style={{ opacity: 0.4 }} />
-        <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 20, alignItems: 'center' }}>
-          <div style={{ flex: 1 }}>
-            {label}
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 13,
-              fontStyle: 'italic', color: ink, marginBottom: 2 }}>{moon.name}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>{moon.pct}% do ciclo</div>
-          </div>
-          <div style={{ width: 1, background: border, alignSelf: 'stretch' }} />
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-            {arcSvg}
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: accent, letterSpacing: '0.08em' }}>
-              {moon.pct}%
-            </div>
-          </div>
+  if (size === 'md') return (
+    <div className="card" style={{ background: cardBg, borderColor: border, position: 'relative', overflow: 'hidden' }}>
+      <CosmosLayer width={260} height={120} seed="dash_cosmos" density="medium" dark={dark} style={{ opacity: 0.4 }} />
+      <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 20, alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          {label}
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontStyle: 'italic', color: ink, marginBottom: 2 }}>{moon.name}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>{moon.pct}% do ciclo</div>
+        </div>
+        <div style={{ width: 1, background: border, alignSelf: 'stretch' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          {arcSvg}
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: accent, letterSpacing: '0.08em' }}>{moon.pct}%</div>
         </div>
       </div>
-    )
-  }
+    </div>
+  )
 
-  // LG: arco maior + informações detalhadas
   return (
     <div className="card" style={{ background: cardBg, borderColor: border, position: 'relative', overflow: 'hidden' }}>
-      <CosmosLayer width={600} height={160} seed="dash_cosmos_lg" density="medium" dark={dark}
-        style={{ opacity: 0.3 }} />
+      <CosmosLayer width={600} height={160} seed="dash_cosmos_lg" density="medium" dark={dark} style={{ opacity: 0.3 }} />
       <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 28, alignItems: 'center' }}>
-        {/* Arco */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           {label}
           {arcSvg}
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: accent, letterSpacing: '0.08em' }}>
-            {moon.pct}%
-          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: accent, letterSpacing: '0.08em' }}>{moon.pct}%</div>
         </div>
-
         <div style={{ width: 1, background: border, alignSelf: 'stretch' }} />
-
-        {/* Fase atual */}
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
             color: ink2, textTransform: 'uppercase', marginBottom: 4 }}>Fase Atual</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18,
-            fontStyle: 'italic', color: ink, marginBottom: 2 }}>{moon.name}</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginBottom: 12 }}>
-            {moon.pct}% do ciclo sinódico
-          </div>
-
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontStyle: 'italic', color: ink, marginBottom: 2 }}>{moon.name}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginBottom: 12 }}>{moon.pct}% do ciclo sinódico</div>
           <div style={{ display: 'flex', gap: 20 }}>
             {fullMoon && (
               <div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
                   color: ink2, textTransform: 'uppercase', marginBottom: 3 }}>Próxima Lua Cheia</div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 14,
-                  fontStyle: 'italic', color: ink }}>{fullMoon.dateStr}</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontStyle: 'italic', color: ink }}>{fullMoon.dateStr}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent, marginTop: 1 }}>
                   {fullMoon.days === 0 ? 'hoje' : fullMoon.days === 1 ? 'amanhã' : `em ${fullMoon.days} dias`}
                 </div>
@@ -765,8 +773,7 @@ function CosmosWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
               <div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
                   color: ink2, textTransform: 'uppercase', marginBottom: 3 }}>Próxima Fase</div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 14,
-                  fontStyle: 'italic', color: ink }}>{nextQ.name}</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontStyle: 'italic', color: ink }}>{nextQ.name}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent, marginTop: 1 }}>
                   {nextQ.days === 0 ? 'hoje' : nextQ.days === 1 ? 'amanhã' : `em ${nextQ.days} dias`}
                 </div>
@@ -779,18 +786,7 @@ function CosmosWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   )
 }
 
-// ── Widget: Roda do Ano ───────────────────────────────────────────────────────
-
-const SABBATS = [
-  { name: 'Imbolc',     symbol: '❄', day: 33,  dateStr: '2 fev'  },
-  { name: 'Ostara',     symbol: '🌱', day: 79,  dateStr: '20 mar' },
-  { name: 'Beltane',    symbol: '🔥', day: 121, dateStr: '1 mai'  },
-  { name: 'Litha',      symbol: '☀', day: 172, dateStr: '21 jun' },
-  { name: 'Lughnasadh', symbol: '🌾', day: 213, dateStr: '1 ago'  },
-  { name: 'Mabon',      symbol: '🍂', day: 265, dateStr: '22 set' },
-  { name: 'Samhain',    symbol: '🕯', day: 304, dateStr: '31 out' },
-  { name: 'Yule',       symbol: '✦', day: 355, dateStr: '21 dez' },
-]
+// ── Widget: Roda do Ano (astronómica + hemisfério) ────────────────────────────
 
 function WheelOfYearWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
@@ -799,36 +795,51 @@ function WheelOfYearWidget({ dark, size }: { dark: boolean; size: WidgetSize }) 
   const cardBg = dark ? '#211D16' : '#EDE7D9'
   const ink    = dark ? '#E8DFC8' : '#2C2416'
 
-  const now = new Date()
-  const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000) + 1
+  const location  = loadLocation()
+  const hemisphere = location?.hemisphere ?? null
 
-  const nextSabbat = SABBATS.find(s => s.day >= dayOfYear) ?? SABBATS[0]
-  const daysLeft   = nextSabbat.day - dayOfYear
-  const daysUntil  = daysLeft >= 0 ? daysLeft : 365 - dayOfYear + nextSabbat.day
-  const daysLabel  = daysUntil === 0 ? 'hoje' : daysUntil === 1 ? 'amanhã' : `em ${daysUntil} dias`
+  const now      = new Date()
+  const year     = now.getFullYear()
+  const todayDoy = getDayOfYear(now)
 
   const label = (
-    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
-      color: ink2, textTransform: 'uppercase', marginBottom: 8 }}>
-      ✦ Roda do Ano
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
+        color: ink2, textTransform: 'uppercase' }}>✦ Roda do Ano</span>
+      {hemisphere !== null && (
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: ink2, opacity: 0.65 }}>
+          · {hemisphere === 'north' ? 'NORTE' : 'SUL'}
+        </span>
+      )}
     </div>
   )
 
-  // SM: só próximo sabbat + barra de progresso
+  const NoLocation = () => (
+    <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>
+      Configure sua localização em <strong>Ajustes → Localização</strong> para ver a Roda correta para seu hemisfério e datas astronómicas precisas.
+    </p>
+  )
+
   if (size === 'sm') {
+    if (!hemisphere) return (
+      <div className="card" style={{ background: cardBg, borderColor: border }}>{label}<NoLocation /></div>
+    )
+    const sabbats    = buildWheelSabbats(year, hemisphere)
+    const nextSabbat = sabbats.find(s => s.day >= todayDoy) ?? sabbats[0]
+    const daysLeft   = nextSabbat.day - todayDoy
+    const daysUntil  = daysLeft >= 0 ? daysLeft : 365 - todayDoy + nextSabbat.day
+    const dl = daysUntil === 0 ? 'hoje' : daysUntil === 1 ? 'amanhã' : `em ${daysUntil} dias`
     return (
       <div className="card" style={{ background: cardBg, borderColor: border }}>
         {label}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 32, lineHeight: 1 }}>{nextSabbat.symbol}</span>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 14,
-              fontStyle: 'italic', color: ink }}>{nextSabbat.name}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10,
-              color: accent, marginTop: 2 }}>{daysLabel}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontStyle: 'italic', color: ink }}>{nextSabbat.name}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent, marginTop: 2 }}>{dl}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, marginTop: 1 }}>{nextSabbat.dateStr} · {nextSabbat.season}</div>
             <div style={{ height: 3, background: border, borderRadius: 2, marginTop: 6, width: 80, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${Math.round(dayOfYear / 365 * 100)}%`,
-                background: accent, borderRadius: 2 }} />
+              <div style={{ height: '100%', width: `${Math.round(todayDoy / 365 * 100)}%`, background: accent, borderRadius: 2 }} />
             </div>
           </div>
         </div>
@@ -836,204 +847,397 @@ function WheelOfYearWidget({ dark, size }: { dark: boolean; size: WidgetSize }) 
     )
   }
 
-  // Roda SVG (MD ou LG)
+  if (!hemisphere) return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>{label}<NoLocation /></div>
+  )
+
+  const sabbats    = buildWheelSabbats(year, hemisphere)
+  const nextSabbat = sabbats.find(s => s.day >= todayDoy) ?? sabbats[0]
+  const daysLeft   = nextSabbat.day - todayDoy
+  const daysUntil  = daysLeft >= 0 ? daysLeft : 365 - todayDoy + nextSabbat.day
+  const dl         = daysUntil === 0 ? 'hoje' : daysUntil === 1 ? 'amanhã' : `em ${daysUntil} dias`
+
   const svgSize = size === 'lg' ? 240 : 200
   const cx = svgSize / 2, cy = svgSize / 2
-  const rim = size === 'lg' ? 100 : 78
-  const inner = size === 'lg' ? 18 : 14
+  const rim = size === 'lg' ? 100 : 78, inner = size === 'lg' ? 18 : 14
   const symbolR = size === 'lg' ? 68 : 54
 
   const f = (n: number) => n.toFixed(1)
   const toRad = (day: number) => (day / 365 * 360 - 90) * Math.PI / 180
-  const pt = (day: number, r: number) => ({
-    x: cx + r * Math.cos(toRad(day)),
-    y: cy + r * Math.sin(toRad(day)),
-  })
+  const pt    = (day: number, r: number) => ({ x: cx + r * Math.cos(toRad(day)), y: cy + r * Math.sin(toRad(day)) })
 
   const sector = (startDay: number, endDay: number, fill: string, key: string) => {
-    const a1 = toRad(startDay), a2 = toRad(endDay)
-    const ox1 = cx + rim * Math.cos(a1),   oy1 = cy + rim * Math.sin(a1)
-    const ox2 = cx + rim * Math.cos(a2),   oy2 = cy + rim * Math.sin(a2)
-    const ix1 = cx + inner * Math.cos(a1), iy1 = cy + inner * Math.sin(a1)
-    const ix2 = cx + inner * Math.cos(a2), iy2 = cy + inner * Math.sin(a2)
-    const span = ((endDay - startDay) + 730) % 365
+    const eff = startDay > endDay ? endDay + 365 : endDay
+    const a1 = toRad(startDay), a2 = toRad(eff)
+    const ox1 = cx+rim*Math.cos(a1), oy1 = cy+rim*Math.sin(a1)
+    const ox2 = cx+rim*Math.cos(a2), oy2 = cy+rim*Math.sin(a2)
+    const ix1 = cx+inner*Math.cos(a1), iy1 = cy+inner*Math.sin(a1)
+    const ix2 = cx+inner*Math.cos(a2), iy2 = cy+inner*Math.sin(a2)
+    const span = ((eff - startDay) + 730) % 365
     const large = span > 182 ? 1 : 0
     return (
       <path key={key} fill={fill} d={
-        `M ${f(ix1)} ${f(iy1)} L ${f(ox1)} ${f(oy1)} ` +
-        `A ${rim} ${rim} 0 ${large} 1 ${f(ox2)} ${f(oy2)} ` +
-        `L ${f(ix2)} ${f(iy2)} ` +
-        `A ${inner} ${inner} 0 ${large} 0 ${f(ix1)} ${f(iy1)} Z`
+        `M ${f(ix1)} ${f(iy1)} L ${f(ox1)} ${f(oy1)} A ${rim} ${rim} 0 ${large} 1 ${f(ox2)} ${f(oy2)} L ${f(ix2)} ${f(iy2)} A ${inner} ${inner} 0 ${large} 0 ${f(ix1)} ${f(iy1)} Z`
       } />
     )
   }
 
+  const byName = (name: string) => sabbats.find(s => s.name === name)!
+  const imbolc = byName('Imbolc'), beltane = byName('Beltane')
+  const lugh   = byName('Lughnasadh'), samhain = byName('Samhain')
+
   const wheel = (
     <svg width={svgSize} height={svgSize} viewBox={`0 0 ${svgSize} ${svgSize}`} style={{ flexShrink: 0 }}>
-      {sector(33, 121, 'rgba(107,140,74,0.22)',  'spring')}
-      {sector(121, 213, 'rgba(196,137,42,0.20)', 'summer')}
-      {sector(213, 304, 'rgba(140,74,26,0.20)',  'autumn')}
-      {sector(304, 398, 'rgba(100,120,150,0.18)','winter')}
+      {sector(imbolc.day,  beltane.day,  'rgba(107,140,74,0.22)',  'spring')}
+      {sector(beltane.day, lugh.day,     'rgba(196,137,42,0.20)',  'summer')}
+      {sector(lugh.day,    samhain.day,  'rgba(140,74,26,0.20)',   'autumn')}
+      {sector(samhain.day, imbolc.day,   'rgba(100,120,150,0.18)', 'winter')}
 
       <circle cx={cx} cy={cy} r={rim}   fill="none" stroke={border} strokeWidth={1} />
       <circle cx={cx} cy={cy} r={inner} fill={cardBg} stroke={border} strokeWidth={1} />
 
-      {SABBATS.map(s => {
+      {sabbats.map(s => {
         const o = pt(s.day, inner), i = pt(s.day, rim)
-        return <line key={s.name + 'r'} x1={f(o.x)} y1={f(o.y)} x2={f(i.x)} y2={f(i.y)}
-          stroke={border} strokeWidth={0.8} />
+        return <line key={s.name+'r'} x1={f(o.x)} y1={f(o.y)} x2={f(i.x)} y2={f(i.y)} stroke={border} strokeWidth={0.8} />
       })}
 
-      {SABBATS.map(s => {
-        const p = pt(s.day, symbolR)
-        const isNext = s === nextSabbat
+      {sabbats.map(s => {
+        const p = pt(s.day, symbolR), isNext = s === nextSabbat
         return (
-          <text key={s.name + 't'} x={f(p.x)} y={f(p.y)}
-            textAnchor="middle" dominantBaseline="middle"
-            fontSize={isNext ? (size === 'lg' ? 20 : 16) : (size === 'lg' ? 16 : 13)}
-            opacity={isNext ? 1 : 0.55}>
+          <text key={s.name+'t'} x={f(p.x)} y={f(p.y)} textAnchor="middle" dominantBaseline="middle"
+            fontSize={isNext ? (size === 'lg' ? 20 : 16) : (size === 'lg' ? 16 : 13)} opacity={isNext ? 1 : 0.55}>
             {s.symbol}
           </text>
         )
       })}
 
-      {(() => {
-        const p = pt(dayOfYear, rim - 7)
-        return <circle cx={f(p.x)} cy={f(p.y)} r={size === 'lg' ? 7 : 5.5}
-          fill={accent} stroke={cardBg} strokeWidth={1.5} />
-      })()}
+      {(() => { const p = pt(todayDoy, rim - 7); return (
+        <circle cx={f(p.x)} cy={f(p.y)} r={size === 'lg' ? 7 : 5.5} fill={accent} stroke={cardBg} strokeWidth={1.5} />
+      )})()}
 
       <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle"
         fontSize={size === 'lg' ? 16 : 13} fill={accent}>✦</text>
     </svg>
   )
 
-  // MD: roda + legenda compacta
-  if (size === 'md') {
-    return (
-      <div className="card" style={{ background: cardBg, borderColor: border }}>
-        {label}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {wheel}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
-                letterSpacing: '0.15em', color: ink2, textTransform: 'uppercase', marginBottom: 6 }}>
-                Próximo Sabá
-              </div>
-              <div style={{ fontSize: 26, marginBottom: 4 }}>{nextSabbat.symbol}</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 15,
-                fontStyle: 'italic', color: ink }}>{nextSabbat.name}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10,
-                color: accent, marginTop: 3 }}>{daysLabel}</div>
+  const legend = (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
+          color: ink2, textTransform: 'uppercase', marginBottom: 6 }}>Próximo Sabá</div>
+        <div style={{ fontSize: 26, marginBottom: 4 }}>{nextSabbat.symbol}</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontStyle: 'italic', color: ink }}>{nextSabbat.name}</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent, marginTop: 2 }}>{dl}</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, marginTop: 1 }}>{nextSabbat.season} · {nextSabbat.dateStr}</div>
+      </div>
+      <div style={{ borderTop: `1px solid ${border}`, paddingTop: 10 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
+          color: ink2, textTransform: 'uppercase', marginBottom: 6 }}>Posição no Ano</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink, marginBottom: 6 }}>
+          Dia {todayDoy} · {Math.round(todayDoy / 365 * 100)}%
+        </div>
+        <div style={{ height: 3, background: border, borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${Math.round(todayDoy / 365 * 100)}%`, background: accent, borderRadius: 2 }} />
+        </div>
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {sabbats.filter(s => s.day >= todayDoy).slice(0, 3).map(s => (
+            <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 11 }}>{s.symbol}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: s === nextSabbat ? accent : ink2 }}>
+                {s.name} · {s.dateStr}{s === nextSabbat && ' ←'}
+              </span>
             </div>
-            <div style={{ borderTop: `1px solid ${border}`, paddingTop: 10 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
-                letterSpacing: '0.15em', color: ink2, textTransform: 'uppercase', marginBottom: 6 }}>
-                Posição no Ano
-              </div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink, marginBottom: 6 }}>
-                Dia {dayOfYear} · {Math.round(dayOfYear / 365 * 100)}%
-              </div>
-              <div style={{ height: 3, background: border, borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.round(dayOfYear / 365 * 100)}%`,
-                  background: accent, borderRadius: 2 }} />
-              </div>
-              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {SABBATS.filter(s => s.day >= dayOfYear).slice(0, 3).map(s => (
-                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ fontSize: 11 }}>{s.symbol}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
-                      color: s === nextSabbat ? accent : ink2 }}>
-                      {s.name}{s === nextSabbat && ' ←'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
-    )
-  }
+    </div>
+  )
 
-  // LG: roda maior + lista completa dos sabbats em 2 colunas
+  if (size === 'md') return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      {label}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>{wheel}{legend}</div>
+    </div>
+  )
+
+  // LG
   return (
     <div className="card" style={{ background: cardBg, borderColor: border }}>
       {label}
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
         {wheel}
-
         <div style={{ flex: 1 }}>
-          {/* Próximo destaque */}
           <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 36 }}>{nextSabbat.symbol}</span>
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
-                letterSpacing: '0.15em', color: ink2, textTransform: 'uppercase', marginBottom: 2 }}>
-                Próximo Sabá
-              </div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18,
-                fontStyle: 'italic', color: ink }}>{nextSabbat.name}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11,
-                color: accent, marginTop: 2 }}>{daysLabel} · {nextSabbat.dateStr}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
+                color: ink2, textTransform: 'uppercase', marginBottom: 2 }}>Próximo Sabá</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontStyle: 'italic', color: ink }}>{nextSabbat.name}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: accent, marginTop: 2 }}>{dl} · {nextSabbat.dateStr}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginTop: 1 }}>{nextSabbat.season}</div>
             </div>
           </div>
-
-          {/* Progresso do ano */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
-                Dia {dayOfYear} de 365
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: accent }}>
-                {Math.round(dayOfYear / 365 * 100)}%
-              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>Dia {todayDoy} de 365</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: accent }}>{Math.round(todayDoy / 365 * 100)}%</span>
             </div>
             <div style={{ height: 3, background: border, borderRadius: 2, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${Math.round(dayOfYear / 365 * 100)}%`,
-                background: accent, borderRadius: 2 }} />
+              <div style={{ height: '100%', width: `${Math.round(todayDoy / 365 * 100)}%`, background: accent, borderRadius: 2 }} />
             </div>
           </div>
-
-          {/* Todos os sabbats em 2 colunas */}
           <div style={{ borderTop: `1px solid ${border}`, paddingTop: 12 }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
-              letterSpacing: '0.15em', color: ink2, textTransform: 'uppercase', marginBottom: 8 }}>
-              Roda Completa
-            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
+              color: ink2, textTransform: 'uppercase', marginBottom: 8 }}>Roda Completa</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
-              {SABBATS.map(s => {
-                const isPast   = s.day < dayOfYear
-                const isNext   = s === nextSabbat
+              {sabbats.map(s => {
+                const isPast = s.day < todayDoy, isNext = s === nextSabbat
                 return (
                   <div key={s.name} style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '3px 6px',
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '3px 6px',
                     background: isNext ? accent + '18' : 'transparent',
                     border: isNext ? `1px solid ${accent}40` : '1px solid transparent',
                     borderRadius: 2,
                   }}>
                     <span style={{ fontSize: 13, opacity: isPast ? 0.45 : 1 }}>{s.symbol}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 11,
-                        fontStyle: 'italic', color: isPast ? ink2 : ink,
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 11, fontStyle: 'italic',
+                        color: isPast ? ink2 : ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {s.name}
                       </div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
-                        {s.dateStr}
+                        {s.dateStr} · {s.season}
                       </div>
                     </div>
-                    {isNext && (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8,
-                        color: accent, flexShrink: 0 }}>←</span>
-                    )}
+                    {isNext && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: accent, flexShrink: 0 }}>←</span>}
                   </div>
                 )
               })}
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Widget: Previsão do Tempo ─────────────────────────────────────────────────
+
+interface WeatherData {
+  current: {
+    temperature_2m:       number
+    apparent_temperature: number
+    weather_code:         number
+    wind_speed_10m:       number
+    relative_humidity_2m: number
+  }
+  daily: {
+    time:                          string[]
+    temperature_2m_max:            number[]
+    temperature_2m_min:            number[]
+    weather_code:                  number[]
+    precipitation_probability_max: number[]
+  }
+}
+
+function WeatherWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+
+  const [weather,  setWeather]  = useState<WeatherData | null>(null)
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
+
+  const location = loadLocation()
+
+  const label = (
+    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
+      color: ink2, textTransform: 'uppercase', marginBottom: 8 }}>
+      ◌ Previsão do Tempo{location && (
+        <span style={{ opacity: 0.65 }}> · {location.city}</span>
+      )}
+    </div>
+  )
+
+  useEffect(() => {
+    if (!location) return
+    setLoading(true)
+    setError(null)
+    const days = size === 'lg' ? 4 : 3
+    fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}` +
+      `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m` +
+      `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max` +
+      `&timezone=${encodeURIComponent(location.timezone)}&forecast_days=${days}`
+    )
+      .then(r => r.json())
+      .then((data: WeatherData) => { setWeather(data); setLoading(false) })
+      .catch(() => { setError('Não foi possível obter a previsão.'); setLoading(false) })
+  }, [location?.latitude, location?.longitude, size])
+
+  if (!location) return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      {label}
+      <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>
+        Configure sua localização em <strong>Ajustes → Localização</strong> para ver a previsão do tempo.
+      </p>
+    </div>
+  )
+
+  if (loading) return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      {label}
+      <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>A carregar…</p>
+    </div>
+  )
+
+  if (error || !weather) return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      {label}
+      <p style={{ fontSize: 11, color: ink2, fontStyle: 'italic' }}>{error ?? 'Sem dados.'}</p>
+    </div>
+  )
+
+  const cur   = weather.current
+  const daily = weather.daily
+
+  // SM: ícone + temperatura + descrição
+  if (size === 'sm') return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      {label}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <span style={{ fontSize: 38, lineHeight: 1 }}>{wmoIcon(cur.weather_code)}</span>
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28,
+            fontStyle: 'italic', color: ink, lineHeight: 1 }}>
+            {Math.round(cur.temperature_2m)}°
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginTop: 3 }}>
+            {wmoLabel(cur.weather_code)}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  // MD: atual completo + min/max de hoje
+  if (size === 'md') return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      {label}
+      <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+        {/* Atual */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+          <span style={{ fontSize: 44, lineHeight: 1 }}>{wmoIcon(cur.weather_code)}</span>
+          <div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 36,
+              fontStyle: 'italic', color: ink, lineHeight: 1 }}>
+              {Math.round(cur.temperature_2m)}°
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginTop: 3 }}>
+              {wmoLabel(cur.weather_code)}
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginTop: 2 }}>
+              Sensação {Math.round(cur.apparent_temperature)}°
+            </div>
+          </div>
+        </div>
+
+        <div style={{ width: 1, background: border, alignSelf: 'stretch' }} />
+
+        {/* Detalhes + min/max */}
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+            {[
+              ['Umidade',   `${cur.relative_humidity_2m}%`],
+              ['Vento',     `${Math.round(cur.wind_speed_10m)} km/h`],
+            ].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>{k}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink }}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ borderTop: `1px solid ${border}`, paddingTop: 8,
+            display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>Hoje</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink }}>
+              {Math.round(daily.temperature_2m_min[0])}° / {Math.round(daily.temperature_2m_max[0])}°
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  // LG: atual + previsão dos próximos dias
+  return (
+    <div className="card" style={{ background: cardBg, borderColor: border }}>
+      {label}
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        {/* Atual */}
+        <div style={{ flexShrink: 0, minWidth: 160 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <span style={{ fontSize: 52, lineHeight: 1 }}>{wmoIcon(cur.weather_code)}</span>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 44,
+                fontStyle: 'italic', color: ink, lineHeight: 1 }}>
+                {Math.round(cur.temperature_2m)}°
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent }}>
+                Sensação {Math.round(cur.apparent_temperature)}°
+              </div>
+            </div>
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 14,
+            fontStyle: 'italic', color: ink, marginBottom: 8 }}>
+            {wmoLabel(cur.weather_code)}
+          </div>
+          {[
+            ['Umidade', `${cur.relative_humidity_2m}%`],
+            ['Vento',   `${Math.round(cur.wind_speed_10m)} km/h`],
+          ].map(([k, v]) => (
+            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>{k}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink }}>{v}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ width: 1, background: border, alignSelf: 'stretch' }} />
+
+        {/* Previsão diária */}
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: `repeat(${daily.time.length}, 1fr)`, gap: 8 }}>
+          {daily.time.map((date, i) => {
+            const precip = daily.precipitation_probability_max[i]
+            return (
+              <div key={date} style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                padding: '8px 4px', borderRadius: 2,
+                background: i === 0 ? accent + '14' : 'transparent',
+                border: i === 0 ? `1px solid ${accent}35` : '1px solid transparent',
+              }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: i === 0 ? accent : ink2,
+                  textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  {dayLabel(date)}
+                </div>
+                <div style={{ fontSize: 26 }}>{wmoIcon(daily.weather_code[i])}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink }}>
+                  {Math.round(daily.temperature_2m_max[i])}°
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>
+                  {Math.round(daily.temperature_2m_min[i])}°
+                </div>
+                {precip > 0 && (
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
+                    💧 {precip}%
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>
@@ -1052,11 +1256,8 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
   const handleDragEnter = (id: WidgetId) => {
     if (!dragging || dragging === id) return
     setOrder(prev => {
-      const arr  = [...prev]
-      const from = arr.indexOf(dragging)
-      const to   = arr.indexOf(id)
-      arr.splice(from, 1)
-      arr.splice(to, 0, dragging)
+      const arr = [...prev], from = arr.indexOf(dragging), to = arr.indexOf(id)
+      arr.splice(from, 1); arr.splice(to, 0, dragging)
       return arr
     })
   }
@@ -1082,26 +1283,17 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
       case 'prazos':   return <PrazosWidget   dark={dark} size={size} onPageOpen={onPageOpen} />
       case 'cosmos':   return <CosmosWidget   dark={dark} size={size} />
       case 'wheel':    return <WheelOfYearWidget dark={dark} size={size} />
+      case 'weather':  return <WeatherWidget  dark={dark} size={size} />
     }
   }
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 40px' }}>
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: 16,
-        maxWidth: 1100,
-      }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 1100 }}>
         <WelcomeWidget dark={dark} />
-
         {order.map(id => (
           <WidgetWrapper
-            key={id}
-            id={id}
-            size={sizes[id]}
-            dark={dark}
-            isDragging={dragging === id}
+            key={id} id={id} size={sizes[id]} dark={dark} isDragging={dragging === id}
             onDragStart={() => handleDragStart(id)}
             onDragEnter={() => handleDragEnter(id)}
             onDrop={handleDrop}
