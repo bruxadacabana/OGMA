@@ -178,6 +178,7 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [ ] **Próximas Provas** — eventos do tipo prova/defesa/trabalho com dias restantes em destaque
 - [ ] **Progresso dos Projetos** — barra de progresso por projeto activo (páginas concluídas / total)
 - [ ] **Citação Aleatória** — uma citação aleatória de `reading_quotes`, renovável a clique
+- [ ] **Decoração de estação do ano atual com animação no card de boas vindas do dashboard**
 
 ### Média prioridade (UI mais rica)
 - [ ] **Mapa de Calor** — grid estilo GitHub dos últimos 90 dias (páginas criadas/editadas)
