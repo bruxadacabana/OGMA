@@ -21,6 +21,7 @@ interface Props {
   activeSub?: SubSection
   projects: Project[]
   dark: boolean
+  syncStatus?: 'idle' | 'syncing' | 'ok' | 'error'
   onNavigate: (s: Section) => void
   onNavigateSub: (s: SubSection) => void
   onProjectSelect: (id: number) => void
@@ -37,7 +38,7 @@ const NAV: { key: Section; icon: string; label: string }[] = [
 ]
 
 export const Sidebar: React.FC<Props> = ({
-  active, activeSub, projects, dark,
+  active, activeSub, projects, dark, syncStatus = 'idle',
   onNavigate, onNavigateSub, onProjectSelect, onNewProject,
 }) => {
   const [projectsOpen, setProjectsOpen] = useState(true)
@@ -142,14 +143,37 @@ export const Sidebar: React.FC<Props> = ({
           seed="sidebar_footer" density="low" dark={dark}
           style={{ opacity: 0.45, top: 0, left: 0 }}
         />
-        <span style={{
+        <div style={{
           position: 'relative', zIndex: 2,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 9, letterSpacing: '0.14em',
-          color: ink2,
+          display: 'flex', alignItems: 'center', gap: 6,
         }}>
-          OGMA v0.1.0
-        </span>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9, letterSpacing: '0.14em',
+            color: ink2,
+          }}>
+            OGMA v0.1.0
+          </span>
+          {syncStatus !== 'idle' && (
+            <span title={{
+              syncing: 'A sincronizar…',
+              ok:      'Sincronizado',
+              error:   'Erro de sincronização',
+            }[syncStatus]} style={{
+              width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+              background: {
+                syncing: '#D4A820',
+                ok:      '#4CAF50',
+                error:   '#E53935',
+              }[syncStatus],
+              boxShadow: syncStatus === 'syncing'
+                ? '0 0 4px #D4A82088'
+                : syncStatus === 'ok'
+                  ? '0 0 4px #4CAF5088'
+                  : '0 0 4px #E5393588',
+            }} />
+          )}
+        </div>
       </div>
     </aside>
   )

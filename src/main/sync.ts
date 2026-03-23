@@ -22,7 +22,7 @@ function runRclone(args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     log.info('rclone', { args: args.join(' ') })
 
-    const proc = spawn('rclone', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const proc = spawn('rclone', args, { stdio: ['ignore', 'pipe', 'pipe'], shell: true })
 
     proc.stdout.on('data', (d: Buffer) => {
       const line = d.toString().trim()

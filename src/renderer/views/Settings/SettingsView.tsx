@@ -23,7 +23,7 @@ interface GeoResult {
 }
 
 export function SettingsView({ dark, onToggleTheme }: Props) {
-  const { workspace, loadWorkspace, pushToast } = useAppStore()
+  const { workspace, loadWorkspace, pushToast, setSyncStatus } = useAppStore()
 
   const [name,        setName]        = useState('')
   const [icon,        setIcon]        = useState('')
@@ -98,8 +98,8 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
   const [syncRemote,  setSyncRemote]  = useState('')
   const [syncEnabled, setSyncEnabled] = useState(false)
   const [syncSaved,   setSyncSaved]   = useState(false)
-  const [syncing,     setSyncing]     = useState(false)
-  const [syncResult,  setSyncResult]  = useState<'ok' | 'error' | null>(null)
+  const [syncing,    setSyncing]   = useState(false)
+  const [syncResult, setSyncResult] = useState<'ok' | 'error' | null>(null)
 
   useEffect(() => {
     appSettings().get('sync_remote').then(v  => setSyncRemote(v  ?? ''))
@@ -117,13 +117,16 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
     if (syncing) return
     setSyncing(true)
     setSyncResult(null)
+    setSyncStatus('syncing')
     const res = await (window as any).sync.now() as { ok: boolean; error?: string }
     setSyncing(false)
     if (res.ok) {
       setSyncResult('ok')
+      setSyncStatus('ok')
       setTimeout(() => setSyncResult(null), 3000)
     } else {
       setSyncResult('error')
+      setSyncStatus('error')
       pushToast({ kind: 'error', title: 'Sync falhou', detail: res.error })
     }
   }

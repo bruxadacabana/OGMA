@@ -135,6 +135,8 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [x] Integrar sync no ciclo de vida: pull antes de `getDb()`, push no `before-quit`
 - [x] UI de sync em Ajustes → Sincronização (remote configurável, enable/disable, status)
 - [x] Botão "Sincronizar agora" em Ajustes → Sincronização (push imediato com feedback)
+- [x] Fix: spawn rclone com shell:true no Windows (PATH não resolvia o executável)
+- [x] Indicador de status de sync na sidebar (bolinha verde/vermelha/cinza no rodapé)
 - [ ] Testar com Proton Drive (`proton:backup/programFiles/OGMA`)
 
 ---
