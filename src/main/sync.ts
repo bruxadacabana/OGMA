@@ -53,17 +53,20 @@ function runRclone(args: string[]): Promise<void> {
 
 // ── API pública ───────────────────────────────────────────────────────────────
 
+// Ficheiros a excluir sempre do sync (WAL são recriados pelo SQLite; logs são locais)
+const EXCLUDES = ['--exclude', 'logs/**', '--exclude', '*.db-shm', '--exclude', '*.db-wal']
+
 /**
  * Pull: copia ficheiros do remote para data/ local.
  * Deve ser chamado ANTES de getDb().
- * Exclui a pasta logs/ (não precisa de sync).
+ * Exclui logs/ e ficheiros WAL do SQLite.
  */
 export async function syncPull(remote: string): Promise<void> {
   const src = toRclonePath(remote.replace(/\/?$/, '/'))
   const dst = toRclonePath(DATA_DIR.replace(/\/?$/, '/'))
 
   log.info('Sync pull', { src, dst })
-  await runRclone(['sync', src, dst, '--exclude', 'logs/**', '--create-empty-src-dirs'])
+  await runRclone(['sync', src, dst, ...EXCLUDES, '--create-empty-src-dirs'])
 }
 
 /**
@@ -85,5 +88,5 @@ export async function syncPush(remote: string): Promise<void> {
   const dst = toRclonePath(remote.replace(/\/?$/, '/'))
 
   log.info('Sync push', { src, dst })
-  await runRclone(['sync', src, dst, '--exclude', 'logs/**', '--create-empty-src-dirs'])
+  await runRclone(['sync', src, dst, ...EXCLUDES, '--create-empty-src-dirs'])
 }
