@@ -1483,59 +1483,60 @@ function QuoteWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   useEffect(() => { load() }, [])
 
   return (
-    <div style={{
-      padding: size === 'sm' ? '10px 12px' : '16px 18px',
-      display: 'flex', flexDirection: 'column', gap: 10,
-      justifyContent: 'space-between', height: '100%',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
-          CITAÇÃO
-        </span>
-        <button
-          className="btn btn-ghost btn-sm"
-          style={{ color: ink2, padding: '1px 5px', fontSize: 11 }}
-          onClick={load}
-          title="Nova citação"
-        >↻</button>
-      </div>
-      {loading ? (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink2 }}>…</span>
-      ) : !quote ? (
-        <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 13, color: ink2 }}>
-          Nenhuma citação guardada ainda.
-        </span>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{
-            borderLeft: `3px solid ${accent}`,
-            paddingLeft: 12,
-          }}>
-            <p style={{
-              fontFamily: 'var(--font-display)', fontStyle: 'italic',
-              fontSize: size === 'sm' ? 13 : 15,
-              color: ink, margin: 0, lineHeight: 1.6,
-            }}>
-              "{quote.text}"
-            </p>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent }}>
-              — {quote.reading_title}
-            </span>
-            {quote.author && size !== 'sm' && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
-                {quote.author}
-              </span>
-            )}
-            {quote.location && size === 'lg' && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, fontStyle: 'italic' }}>
-                {quote.location}
-              </span>
-            )}
-          </div>
+    <div className="card" style={{ background: dark ? '#211D16' : '#EDE7D9', borderColor: dark ? '#3A3020' : '#C4B9A8' }}>
+      <div style={{
+        padding: size === 'sm' ? '10px 12px' : '16px 18px',
+        display: 'flex', flexDirection: 'column', gap: 10,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
+            CITAÇÃO
+          </span>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ color: ink2, padding: '1px 5px', fontSize: 11 }}
+            onClick={load}
+            title="Nova citação"
+          >↻</button>
         </div>
-      )}
+        {loading ? (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink2 }}>…</span>
+        ) : !quote ? (
+          <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 13, color: ink2 }}>
+            Nenhuma citação guardada ainda.
+          </span>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ borderLeft: `3px solid ${accent}`, paddingLeft: 12 }}>
+              <p style={{
+                fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                fontSize: size === 'sm' ? 13 : 15,
+                color: ink, margin: 0, lineHeight: 1.6,
+                display: '-webkit-box', WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: size === 'sm' ? 3 : size === 'md' ? 6 : undefined,
+                overflow: size !== 'lg' ? 'hidden' : undefined,
+              }}>
+                "{quote.text}"
+              </p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent }}>
+                — {quote.reading_title}
+              </span>
+              {quote.author && size !== 'sm' && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
+                  {quote.author}
+                </span>
+              )}
+              {quote.location && size === 'lg' && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, fontStyle: 'italic' }}>
+                  {quote.location}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1931,7 +1932,7 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 40px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 1100 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, gridAutoFlow: 'dense' }}>
         <WelcomeWidget dark={dark} />
         {order.map(id => (
           <WidgetWrapper
