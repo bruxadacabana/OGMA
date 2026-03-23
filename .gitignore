@@ -8,12 +8,14 @@ dist-electron/
 out/
 src/editor/web/editor.bundle.js
 
-# ── Dados do app (banco, logs, uploads) ──────────────────────────────────────
+# ── Dados do app (banco, logs, uploads, settings local) ──────────────────────
 data/ogma.db
 data/ogma.db-shm
 data/ogma.db-wal
 data/logs/
 data/uploads/
+data/exports/
+data/settings.json
 
 # ── Ambiente ──────────────────────────────────────────────────────────────────
 .env
