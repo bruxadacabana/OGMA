@@ -46,9 +46,14 @@ function createWindow(): void {
   })
 }
 
-// Suprime aviso "GetVSyncParametersIfAvailable() failed" no Linux
-// quando o driver de GPU não suporta VSync parameters (inofensivo)
+// Compatibilidade GPU no Linux (eglCreateImage / EGL_BAD_MATCH)
+// Estes flags são necessários em algumas combinações de driver/compositor
 app.commandLine.appendSwitch('disable-gpu-vsync')
+app.commandLine.appendSwitch('disable-gpu-memory-buffer-compositor-resources')
+app.commandLine.appendSwitch('disable-gpu-memory-buffer-video-frames')
+app.commandLine.appendSwitch('enable-zero-copy', 'false')
+// Fallback para SwiftShader (software GL) se a GPU falhar
+app.commandLine.appendSwitch('use-angle', 'swiftshader-webgl')
 
 app.whenReady().then(() => {
   setupGlobalErrorHandlers()
