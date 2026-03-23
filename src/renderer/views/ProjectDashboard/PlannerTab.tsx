@@ -334,12 +334,13 @@ function WeekView({ tasks, dark, weekOffset, onLog, onWeekChange }: {
 
   useEffect(() => {
     if (tasks.length === 0) { setBlocks([]); return }
-    Promise.all(
-      tasks.map(t =>
-        fromIpc<WorkBlock[]>(() => db().planner.listBlocks(t.id), 'listBlocks')
-          .then(r => r.isOk() ? r.value : [])
-      )
-    ).then(all => setBlocks(all.flat()))
+    ;(async () => {
+      const all = await Promise.all(tasks.map(async t => {
+        const r = await fromIpc<WorkBlock[]>(() => db().planner.listBlocks(t.id), 'listBlocks')
+        return r.isOk() ? r.value : [] as WorkBlock[]
+      }))
+      setBlocks(all.flat())
+    })()
   }, [tasks])
 
   const taskMap = Object.fromEntries(tasks.map(t => [t.id, t]))

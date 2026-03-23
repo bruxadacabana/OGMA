@@ -851,16 +851,14 @@ function PropPanel({ page, properties, dark, projectId, onChanged }: PropPanelPr
       p.prop_type === 'select' || p.prop_type === 'multi_select'
     )
     if (selects.length === 0) return
-    Promise.all(
-      selects.map(p =>
-        fromIpc<PropOption[]>(() => db().properties.getOptions(p.id), 'getOptions')
-          .then(r => ({ propId: p.id, options: r.isOk() ? r.value : [] }))
-      )
-    ).then(results => {
+    ;(async () => {
       const map: Record<number, PropOption[]> = {}
-      results.forEach(r => { map[r.propId] = r.options })
+      await Promise.all(selects.map(async p => {
+        const r = await fromIpc<PropOption[]>(() => db().properties.getOptions(p.id), 'getOptions')
+        map[p.id] = r.isOk() ? r.value : []
+      }))
       setPropOptions(map)
-    })
+    })()
   }, [properties])
 
   const setPropValue = useCallback(async (propId: number, field: string, value: any) => {

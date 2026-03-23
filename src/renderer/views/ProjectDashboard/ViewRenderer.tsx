@@ -56,16 +56,14 @@ const TableView: React.FC<ViewRendererProps> = ({
       p.prop_type === 'select' || p.prop_type === 'multi_select'
     )
     if (!selects.length) return
-    Promise.all(
-      selects.map(p =>
-        fromIpc<PropOption[]>(() => db().properties.getOptions(p.id), 'tableGetOptions')
-          .then(r => ({ propId: p.id, options: r.isOk() ? r.value : [] }))
-      )
-    ).then(results => {
+    ;(async () => {
       const map: Record<number, PropOption[]> = {}
-      results.forEach(r => { map[r.propId] = r.options })
+      await Promise.all(selects.map(async p => {
+        const r = await fromIpc<PropOption[]>(() => db().properties.getOptions(p.id), 'tableGetOptions')
+        map[p.id] = r.isOk() ? r.value : []
+      }))
       setPropOptions(map)
-    })
+    })()
   }, [properties])
 
   // Ordenação
