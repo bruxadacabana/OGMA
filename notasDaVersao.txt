@@ -3,3 +3,7 @@
 - por algum motivo as atividades que salvei no planner de um projeto não estão aparecendo no calendário global??? e nem no widget de agenda?? e também precisamos de um algoritmo melhor pra o agendamento automatico do planner, além de incluir a opção de poder alterar manualmente. O planner é como se fosse uma ligação do projeto com o calendário e seu conteúdo é de extrema importância
 - acho que talvez seja melhor mover a opção de "Lembretes" para dentro do planner do projeto. É o mais faz sentido eu acho. E adicione mais opções de tempo para lembretes, inclusive permita adicionar mais de um. Acrescente também opções de prioridade.
 - a cor de destaque das configurações serve para que exatamente? mudei a cor pra testar mas não alterou nada.
+- a "## Fase 4 — Kanban" já está toda implementada, não? não está marcado como finalizado no TODO
+- sobre a implementação do pomodoro: eu acho legal mas é importante que eu possa incluir o tempo de estudo manualmente também, pois eu gosto de usar um aplicativo para isso geralmente.
+- dos widgets de média prioridade, "Mapa de Calor de Atividade": não faz sentido para páginas criadas e editadas, mas talvez faça sentido para horas estudadas com matérias, páginas, tags e etc. 
+- tem informações dublicadas no TODO
