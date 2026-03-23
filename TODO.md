@@ -26,6 +26,16 @@ Fazer `git commit` após cada funcionalidade ou mudança implementada, com mensa
 
 ---
 
+## Bugs conhecidos / Prioridade imediata
+
+- [x] Dashboard reseta ao trocar de aba (DashboardView desmontava — corrigido: sempre montado com display:none)
+- [x] Cor de acento não aplicada ao CSS (accent_color guardado mas não aplicado à variável --accent — corrigido: useEffect em App.tsx)
+- [ ] Atividades do Planner não aparecem no Calendário Global nem no widget de Agenda
+- [ ] Algoritmo de agendamento automático do Planner precisa de melhoria + edição manual
+- [ ] Lembretes: mover para dentro do Planner do projeto; adicionar múltiplos lembretes, opções de tempo e prioridade
+
+---
+
 ## Fase Extra — Prioridade Imediata
 
 Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Editor, Produtividade).
@@ -39,15 +49,15 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [ ] Meta de leitura anual (tabela `reading_goals`)
 - [ ] Histórico de versões de página (tabela `page_versions` já existe no schema)
 - [x] Backlinks: mostrar no PageView as páginas que referenciam a atual
-- [ ] Pomodoro / timer com histórico por página (tabela `time_sessions`)
+- [ ] Pomodoro / timer com histórico por página (tabela `time_sessions`) — deve permitir também registo manual de tempo
 - [ ] Exportar página como PDF ou Markdown
 
 ---
 
 ## Fase 4 — Kanban
 
-- [ ] Drag & drop entre colunas (muda `prop_value` do Status)
-- [ ] Filtros e ordenação na view
+- [x] Drag & drop entre colunas (muda `prop_value` do Status)
+- [x] Filtros e ordenação na view
 
 ---
 
@@ -105,7 +115,7 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] **Citação Aleatória** — citação aleatória de `reading_quotes`, renovável a clique
 
 #### Média prioridade (UI mais rica)
-- [ ] **Mapa de Calor de Atividade** — grid estilo GitHub dos últimos 90 dias com contagem de páginas criadas/editadas
+- [ ] **Mapa de Calor de Atividade** — grid estilo GitHub de horas estudadas por matéria/página/tag (não por páginas criadas; requer Pomodoro/time_sessions)
 - [ ] **Sumário do Dia** — briefing textual: eventos hoje, prazos próximos, lembretes ativos
 
 #### Futuros (dependem de features pendentes)
@@ -187,6 +197,17 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [ ] **Tempo de Foco Hoje** — sessões Pomodoro do dia (depende de `time_sessions`)
 - [ ] **Streak de Estudo** — dias consecutivos com blocos concluídos (`work_blocks`)
 - [ ] **Grafo de Conexões** — mini grafo de força com `page_backlinks` (requer lib de visualização)
+
+## Sincronização
+
+Alternativas ao rclone + Proton Drive (para avaliar):
+
+- **Syncthing** — P2P, sem cloud, funciona em LAN ou via relay; suporta SQLite se a BD estiver fechada no momento da sync
+- **Restic + B2/S3** — backup incremental com dedup; adequado para BD; requer script de backup periódico em vez de sync contínuo
+- **Git LFS** — versionar a BD com LFS; útil se quiser histórico de versões dos dados
+- **SQLite Cloud** — substituir ficheiro local por base de dados remota (libsql/Turso); muda a arquitectura fundamentalmente
+- **Electron-store com cifra + iCloud/OneDrive** — mais simples para ficheiros pequenos (settings); iCloud tem conflito automático
+- **Custom HTTP sync** — endpoint próprio com autenticação; controlo total mas requer servidor
 
 ## Analytics
 

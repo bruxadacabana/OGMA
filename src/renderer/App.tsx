@@ -52,6 +52,7 @@ export default function App() {
 
   const {
     dark, setDark,
+    workspace,
     projects, loadProjects, loadWorkspace,
     activeProject, selectProject, loadPages, pages,
     syncStatus,
@@ -67,6 +68,12 @@ export default function App() {
       }
     })
   }, [setDark])
+
+  // Aplicar cor de acento do workspace ao CSS quando carregado ou alterado
+  useEffect(() => {
+    if (!workspace?.accent_color) return
+    document.documentElement.style.setProperty('--accent', workspace.accent_color)
+  }, [workspace?.accent_color])
 
   // Manter activePage sincronizado quando o store recarrega as páginas
   useEffect(() => {
@@ -238,9 +245,12 @@ export default function App() {
         </header>
 
         {/* Conteúdo */}
-        {view === 'dashboard' && initialSettings && (
-          <DashboardView dark={dark} onProjectOpen={handleProjectSelect} onPageOpen={handleSearchOpen} initialSettings={initialSettings} />
-        )}
+        {/* DashboardView mantém-se sempre montado para preservar o estado dos widgets */}
+        <div style={{ display: view === 'dashboard' ? 'contents' : 'none' }}>
+          {initialSettings && (
+            <DashboardView dark={dark} onProjectOpen={handleProjectSelect} onPageOpen={handleSearchOpen} initialSettings={initialSettings} />
+          )}
+        </div>
 
         {view === 'project' && activeProject && (
           <ProjectDashboardView
