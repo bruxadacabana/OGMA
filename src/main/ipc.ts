@@ -1670,6 +1670,51 @@ export function registerIpcHandlers(): void {
     `)
   )
 
+  // ── Sessões de tempo ──────────────────────────────────────────────────────────
+
+  api('time:list', ({ project_id }: { project_id: number }) =>
+    dbAll(`
+      SELECT ts.*, p.title AS page_title, p.icon AS page_icon
+      FROM   time_sessions ts
+      LEFT   JOIN pages p ON p.id = ts.page_id
+      WHERE  ts.project_id = ?
+      ORDER  BY ts.started_at DESC
+    `, project_id)
+  )
+
+  api('time:create', (d: {
+    project_id:   number
+    workspace_id: number
+    page_id?:     number | null
+    duration_min: number
+    session_type: string
+    notes?:       string | null
+    tags?:        string | null
+    started_at:   string
+    ended_at?:    string | null
+  }) => {
+    const r = dbRun(`
+      INSERT INTO time_sessions
+        (workspace_id, project_id, page_id, duration_min, session_type, notes, tags, started_at, ended_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+      d.workspace_id, d.project_id, d.page_id ?? null,
+      d.duration_min, d.session_type ?? 'manual',
+      d.notes?.trim() || null, d.tags?.trim() || null,
+      d.started_at, d.ended_at ?? null
+    )
+    return dbGet(`
+      SELECT ts.*, p.title AS page_title, p.icon AS page_icon
+      FROM   time_sessions ts
+      LEFT   JOIN pages p ON p.id = ts.page_id
+      WHERE  ts.id = ?
+    `, r.lastInsertRowid)
+  })
+
+  api('time:delete', ({ id }: { id: number }) =>
+    dbRun('DELETE FROM time_sessions WHERE id = ?', id)
+  )
+
   // ── App Settings (data/settings.json) ────────────────────────────────────────
 
   ipcMain.handle('appSettings:getAll', () => getAllSettings())

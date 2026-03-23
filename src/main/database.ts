@@ -147,6 +147,9 @@ function initSchema(db: Database.Database): void {
     )
   `) } catch {}
 
+  // Sessões de tempo: coluna tags
+  try { db.exec(`ALTER TABLE time_sessions ADD COLUMN tags TEXT`) } catch {}
+
   // Garante propriedade "Semestre" em projetos acadêmicos existentes
   try {
     const year = new Date().getFullYear()

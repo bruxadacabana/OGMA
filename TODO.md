@@ -49,7 +49,7 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [ ] Meta de leitura anual (tabela `reading_goals`)
 - [ ] Histórico de versões de página (tabela `page_versions` já existe no schema)
 - [x] Backlinks: mostrar no PageView as páginas que referenciam a atual
-- [ ] Pomodoro / timer com histórico por página (tabela `time_sessions`) — deve permitir também registo manual de tempo
+- [ ] Pomodoro / timer com histórico por página (tabela `time_sessions`) — aba "Tempo" no ProjectDashboardView: relógio SVG animado, modo Pomodoro (25/5min), registo manual de sessões (página, duração, data, notas, tags); independente do Planner; sessões ligadas a project_id + page_id, disponíveis globalmente para analytics
 - [ ] Exportar página como PDF ou Markdown
 
 ---
@@ -134,6 +134,7 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [ ] Aba "Planner" no ProjectView — lista de tarefas planejáveis + calendário semanal com blocos de horas + criar/vincular página ao criar tarefa
 - [ ] Widget "Plano do Dia" no Dashboard — consolidado de todos os projetos para hoje, com checkbox de sessão concluída
 - [ ] Campo "Capacidade diária (horas)" em Settings (padrão 4h)
+- [ ] Criar uma aba para o planner global no menu lateral
 
 ---
 
