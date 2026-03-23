@@ -1623,6 +1623,22 @@ export function registerIpcHandlers(): void {
     return { ok: true }
   })
 
+  api('planner:listAllTasks', ({ include_completed }: { include_completed?: boolean }) => {
+    const where = include_completed ? '' : `WHERE pt.status != 'completed'`
+    return dbAll(`
+      SELECT pt.*,
+        COALESCE((SELECT SUM(wb.logged_hours) FROM work_blocks wb
+                  WHERE wb.task_id = pt.id AND wb.status = 'done'), 0) AS done_hours,
+        pg.title AS page_title, pg.icon AS page_icon,
+        proj.name AS project_name, proj.color AS project_color, proj.icon AS project_icon
+      FROM planned_tasks pt
+      LEFT JOIN pages    pg   ON pg.id   = pt.page_id
+      LEFT JOIN projects proj ON proj.id = pt.project_id
+      ${where}
+      ORDER BY pt.due_date ASC, pt.created_at ASC
+    `)
+  })
+
   api('planner:todayBlocks', () => {
     const today = new Date().toISOString().slice(0, 10)
     return dbAll(`

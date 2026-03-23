@@ -4,7 +4,7 @@ import './Sidebar.css'
 
 export type Section =
   | 'dashboard' | 'projects' | 'calendar'
-  | 'library' | 'analytics' | 'settings'
+  | 'planner' | 'library' | 'analytics' | 'settings'
 
 export type SubSection = 'resources' | 'readings'
 
@@ -31,6 +31,7 @@ const NAV: { key: Section; icon: string; label: string }[] = [
   { key: 'dashboard',  icon: '◉', label: 'Dashboard'     },
   { key: 'projects',   icon: '✦', label: 'Projetos'       },
   { key: 'calendar',   icon: '☽', label: 'Calendário'     },
+  { key: 'planner',    icon: '◈', label: 'Planner'        },
   { key: 'library',    icon: '✶', label: 'Biblioteca'     },
   { key: 'analytics',  icon: '∿', label: 'Analytics'      },
   { key: 'settings',   icon: '⊛', label: 'Configurações'  },

@@ -153,6 +153,7 @@ contextBridge.exposeInMainWorld('db', {
     schedule:      (project_id: number)               => api('planner:schedule',      { project_id }),
     rescheduleAll: ()                                 => api('planner:rescheduleAll', {}),
     todayBlocks:   ()                                 => api('planner:todayBlocks',   {}),
+    listAllTasks:  (opts?: { include_completed?: boolean }) => api('planner:listAllTasks', opts ?? {}),
   },
   time: {
     list:   (d: { project_id: number }) => api('time:list',   d),

@@ -134,7 +134,7 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [ ] Aba "Planner" no ProjectView — lista de tarefas planejáveis + calendário semanal com blocos de horas + criar/vincular página ao criar tarefa
 - [ ] Widget "Plano do Dia" no Dashboard — consolidado de todos os projetos para hoje, com checkbox de sessão concluída
 - [ ] Campo "Capacidade diária (horas)" em Settings (padrão 4h)
-- [ ] Criar uma aba para o planner global no menu lateral
+- [x] Criar uma aba para o planner global no menu lateral (GlobalPlannerView: fundo pontilhado + cosmos, estética bullet journal, mini calendário, urgente/hoje à esquerda, log completo com agrupamento/criação/detalhe inline à direita)
 
 ---
 

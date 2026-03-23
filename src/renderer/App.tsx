@@ -14,6 +14,7 @@ import { SearchModal } from './components/Search/SearchModal'
 import { SettingsView } from './views/Settings/SettingsView'
 import { LibraryView } from './views/Library/LibraryView'
 import { GlobalCalendarView } from './views/GlobalCalendar/GlobalCalendarView'
+import { GlobalPlannerView } from './views/GlobalPlanner/GlobalPlannerView'
 import { useAppStore } from './store/useAppStore'
 import { Project, Page, PROJECT_TYPE_ICONS, AppSettings, appSettings } from './types'
 
@@ -156,6 +157,7 @@ export default function App() {
       ? (activeSub === 'readings' ? 'Biblioteca · Leituras'
          : activeSub === 'resources' ? 'Biblioteca · Recursos'
          : 'Biblioteca')
+    : view === 'planner' ? 'Planner'
     : view === 'analytics' ? 'Analytics'
     : view === 'settings' ? 'Configurações'
     : view
@@ -275,6 +277,7 @@ export default function App() {
         )}
 
         {view === 'calendar'  && <GlobalCalendarView dark={dark} onPageOpen={handleSearchOpen} />}
+        {view === 'planner'   && <GlobalPlannerView dark={dark} onProjectOpen={handleProjectSelect} />}
         {view === 'library'   && <LibraryView dark={dark} activeSub={activeSub}
             onNavigateSub={s => { setActiveSub(s); setSection('library'); setView('library') }} />}
         {view === 'analytics' && <PlaceholderView title="Analytics"     dark={dark} />}
