@@ -1551,7 +1551,9 @@ export function registerIpcHandlers(): void {
     const taskId = Number(r.lastInsertRowid)
     scheduleTasks(data.project_id)
     return dbGet(`
-      SELECT pt.*, p.title AS page_title, p.icon AS page_icon
+      SELECT pt.*,
+        COALESCE((SELECT SUM(wb.logged_hours) FROM work_blocks wb WHERE wb.task_id = pt.id AND wb.status = 'done'), 0) AS done_hours,
+        p.title AS page_title, p.icon AS page_icon
       FROM planned_tasks pt LEFT JOIN pages p ON p.id = pt.page_id WHERE pt.id = ?
     `, taskId)
   })
@@ -1569,7 +1571,9 @@ export function registerIpcHandlers(): void {
     const task = dbGet(`SELECT * FROM planned_tasks WHERE id = ?`, data.id)
     if (task) scheduleTasks(task.project_id)
     return dbGet(`
-      SELECT pt.*, p.title AS page_title, p.icon AS page_icon
+      SELECT pt.*,
+        COALESCE((SELECT SUM(wb.logged_hours) FROM work_blocks wb WHERE wb.task_id = pt.id AND wb.status = 'done'), 0) AS done_hours,
+        p.title AS page_title, p.icon AS page_icon
       FROM planned_tasks pt LEFT JOIN pages p ON p.id = pt.page_id WHERE pt.id = ?
     `, data.id)
   })

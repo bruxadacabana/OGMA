@@ -613,7 +613,7 @@ export function PlannerTab({ projectId, dark, pages }: {
                       }} />
                     </div>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
-                      {task.done_hours.toFixed(1)}/{task.estimated_hours}h
+                      {(task.done_hours ?? 0).toFixed(1)}/{task.estimated_hours}h
                     </span>
                     <span style={{
                       fontFamily: 'var(--font-mono)', fontSize: 9,
