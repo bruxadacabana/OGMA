@@ -105,7 +105,6 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 
 #### Média prioridade (UI mais rica)
 - [ ] **Mapa de Calor de Atividade** — grid estilo GitHub dos últimos 90 dias com contagem de páginas criadas/editadas
-- [ ] **Nuvem de Tags** — tags mais usadas com tamanho proporcional à frequência, clicáveis para filtrar
 - [ ] **Sumário do Dia** — briefing textual: eventos hoje, prazos próximos, lembretes ativos
 
 #### Futuros (dependem de features pendentes)
@@ -115,7 +114,7 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 
 ---
 
-## Fase 9b — Planejador Académico (Planner)
+## Fase 9b — Planejador Acadêmico (Planner)
 
 Agendamento de tarefas com horas estimadas, replanejamento automático e vínculo com páginas do projeto.
 
