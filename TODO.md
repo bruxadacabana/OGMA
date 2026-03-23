@@ -7,10 +7,16 @@
 
 ## ⚠ Padrões Obrigatórios
 
-### Tratamento de Erros
-Todo código que chama `db()` no renderer **deve** usar `fromIpc` de `src/renderer/types/errors.ts`.
-Nunca usar `.then((r: any) => { if (r?.ok) ... })` sem encapsulamento tipado.
-`pushToast` via `useAppStore()` é o canal de feedback de erros para o utilizador.
+### Tratamento de Erros — EXTREMA IMPORTÂNCIA
+
+É de extrema importância manter tipagem completa em **cada etapa do desenvolvimento**:
+
+- Todo código que chama `db()` no renderer **deve** usar `fromIpc<T>` de `src/renderer/types/errors.ts`
+- Nunca usar `fromIpc<any>` — sempre tipar o genérico com o tipo concreto esperado
+- Nunca usar `.then((r: any) => ...)` sem encapsulamento tipado
+- Usar `async/await` em vez de `.then()` encadeado em `ResultAsync` dentro de `Promise.all`
+- `pushToast` via `useAppStore()` é o canal de feedback de erros para o utilizador
+- Todo novo código deve passar em `tsc --noEmit` sem erros nos ficheiros da aplicação
 
 ### TODO.md
 Sempre manter este arquivo atualizado. Toda funcionalidade ou mudança pedida pelo utilizador deve ser anotada aqui (marcar com `[x]` quando concluída).
