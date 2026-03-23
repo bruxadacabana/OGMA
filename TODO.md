@@ -82,6 +82,12 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Widget de Previsão do Tempo (WeatherWidget) — Open-Meteo forecast, layouts por tamanho, WMO codes em PT
 - [x] Roda do Ano com hemisfério real e datas astronómicas (Meeus) por localização configurada
 
+### Gestão de widgets
+
+- [x] Remover widget do dashboard (botão × no hover)
+- [x] Adicionar widget oculto de volta (card "+ Adicionar widget" no final do grid)
+- [x] Persistência de widgets ocultos (`localStorage ogma_hidden_widgets`)
+
 ### Widgets novos (Fase 9c)
 
 #### Alta prioridade (dados já disponíveis)

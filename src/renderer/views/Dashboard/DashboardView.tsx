@@ -18,6 +18,22 @@ const DEFAULT_ORDER: WidgetId[] = [
   'stats', 'projects', 'recent', 'prazos', 'cosmos', 'wheel', 'weather', 'planner',
   'agenda', 'reminders', 'provas', 'proj_progress', 'quote',
 ]
+
+const WIDGET_LABELS: Record<WidgetId, string> = {
+  stats:        'Estatísticas',
+  projects:     'Projetos',
+  recent:       'Páginas Recentes',
+  prazos:       'Próximas Páginas',
+  cosmos:       'Cosmos',
+  wheel:        'Roda do Ano',
+  weather:      'Previsão do Tempo',
+  planner:      'Plano do Dia',
+  agenda:       'Agenda da Semana',
+  reminders:    'Lembretes Pendentes',
+  provas:       'Próximas Provas',
+  proj_progress:'Progresso dos Projetos',
+  quote:        'Citação Aleatória',
+}
 const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
   stats: 'md', projects: 'md', recent: 'md', prazos: 'md',
   cosmos: 'md', wheel: 'md', weather: 'md', planner: 'md',
@@ -227,13 +243,26 @@ function loadOrder(): WidgetId[] {
   try {
     const s = localStorage.getItem('ogma_dashboard_order')
     if (s) {
-      const arr   = JSON.parse(s) as string[]
-      const valid = arr.filter(id => DEFAULT_ORDER.includes(id as WidgetId)) as WidgetId[]
-      DEFAULT_ORDER.forEach(id => { if (!valid.includes(id)) valid.push(id) })
+      const arr    = JSON.parse(s) as string[]
+      const hidden = loadHidden()
+      const valid  = arr.filter(id => DEFAULT_ORDER.includes(id as WidgetId)) as WidgetId[]
+      DEFAULT_ORDER.forEach(id => { if (!valid.includes(id) && !hidden.has(id)) valid.push(id) })
       return valid
     }
   } catch {}
   return [...DEFAULT_ORDER]
+}
+
+function loadHidden(): Set<WidgetId> {
+  try {
+    const s = localStorage.getItem('ogma_hidden_widgets')
+    if (s) return new Set(JSON.parse(s) as WidgetId[])
+  } catch {}
+  return new Set()
+}
+
+function saveHidden(hidden: Set<WidgetId>) {
+  localStorage.setItem('ogma_hidden_widgets', JSON.stringify([...hidden]))
 }
 
 function loadSizes(): Record<WidgetId, WidgetSize> {
@@ -261,10 +290,10 @@ function loadLocation(): StoredLocation | null {
 interface WrapperProps {
   id: WidgetId; size: WidgetSize; dark: boolean; isDragging: boolean
   onDragStart: () => void; onDragEnter: () => void; onDrop: () => void; onDragEnd: () => void
-  onSizeChange: (s: WidgetSize) => void; children: React.ReactNode
+  onSizeChange: (s: WidgetSize) => void; onRemove: () => void; children: React.ReactNode
 }
 
-function WidgetWrapper({ id, size, dark, isDragging, onDragStart, onDragEnter, onDrop, onDragEnd, onSizeChange, children }: WrapperProps) {
+function WidgetWrapper({ id, size, dark, isDragging, onDragStart, onDragEnter, onDrop, onDragEnd, onSizeChange, onRemove, children }: WrapperProps) {
   const [hovered, setHovered] = useState(false)
   const counterRef = useRef(0)
 
@@ -312,6 +341,16 @@ function WidgetWrapper({ id, size, dark, isDragging, onDragStart, onDragEnter, o
             userSelect: 'none', lineHeight: 1, marginLeft: 2 }}
           title="Arrastar para reordenar"
         >⠿</div>
+        <button
+          onClick={onRemove}
+          title="Remover widget"
+          style={{
+            fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1,
+            padding: '1px 5px', border: `1px solid ${border}`,
+            borderRadius: 2, background: cardBg, color: ink2,
+            cursor: 'pointer', userSelect: 'none', marginLeft: 2,
+          }}
+        >×</button>
       </div>
       {children}
     </div>
@@ -1881,11 +1920,75 @@ function WeatherWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   )
 }
 
+// ── AddWidgetCard ─────────────────────────────────────────────────────────────
+
+function AddWidgetCard({ dark, hiddenWidgets, onAdd }: {
+  dark: boolean; hiddenWidgets: WidgetId[]; onAdd: (id: WidgetId) => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+  const rowHover = dark ? '#2A2318' : '#E5DDD0'
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', minHeight: 80,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          background: cardBg, border: `1px dashed ${border}`,
+          borderRadius: 4, cursor: 'pointer', color: ink2,
+          fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.06em',
+          transition: 'border-color 150ms, color 150ms',
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = accent; (e.currentTarget as HTMLButtonElement).style.color = accent }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = border; (e.currentTarget as HTMLButtonElement).style.color = ink2 }}
+      >
+        <span style={{ fontSize: 20, lineHeight: 1 }}>+</span>
+        Adicionar widget
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, zIndex: 50,
+          background: cardBg, border: `1px solid ${border}`, borderRadius: 4,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)', minWidth: 220, overflow: 'hidden',
+        }}>
+          <div style={{ padding: '8px 12px 6px', fontFamily: 'var(--font-mono)', fontSize: 10,
+            color: ink2, letterSpacing: '0.1em', textTransform: 'uppercase', borderBottom: `1px solid ${border}` }}>
+            Widgets ocultos
+          </div>
+          {hiddenWidgets.map(id => (
+            <button key={id} onClick={() => { onAdd(id); setOpen(false) }} style={{
+              width: '100%', textAlign: 'left', padding: '8px 14px',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              fontFamily: 'var(--font-mono)', fontSize: 12, color: ink,
+              display: 'flex', alignItems: 'center', gap: 8, transition: 'background 100ms',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = rowHover }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+            >
+              <span style={{ color: accent, fontSize: 14, lineHeight: 1 }}>+</span>
+              {WIDGET_LABELS[id]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Dashboard principal ───────────────────────────────────────────────────────
 
 export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen }) => {
   const [order,    setOrder]    = useState<WidgetId[]>(loadOrder)
   const [sizes,    setSizes]    = useState<Record<WidgetId, WidgetSize>>(loadSizes)
+  const [hidden,   setHidden]   = useState<Set<WidgetId>>(loadHidden)
   const [dragging, setDragging] = useState<WidgetId | null>(null)
 
   const handleDragStart = (id: WidgetId) => setDragging(id)
@@ -1912,6 +2015,29 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
     })
   }
 
+  const handleRemove = (id: WidgetId) => {
+    setHidden(prev => {
+      const next = new Set(prev); next.add(id); saveHidden(next); return next
+    })
+    setOrder(prev => {
+      const next = prev.filter(w => w !== id)
+      localStorage.setItem('ogma_dashboard_order', JSON.stringify(next))
+      return next
+    })
+  }
+
+  const handleAdd = (id: WidgetId) => {
+    setHidden(prev => {
+      const next = new Set(prev); next.delete(id); saveHidden(next); return next
+    })
+    setOrder(prev => {
+      if (prev.includes(id)) return prev
+      const next = [...prev, id]
+      localStorage.setItem('ogma_dashboard_order', JSON.stringify(next))
+      return next
+    })
+  }
+
   const renderWidget = (id: WidgetId, size: WidgetSize): React.ReactNode => {
     switch (id) {
       case 'stats':    return <StatsWidget    dark={dark} size={size} />
@@ -1930,11 +2056,13 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
     }
   }
 
+  const hiddenList = DEFAULT_ORDER.filter(id => hidden.has(id))
+
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 40px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, gridAutoFlow: 'dense' }}>
         <WelcomeWidget dark={dark} />
-        {order.map(id => (
+        {order.filter(id => !hidden.has(id)).map(id => (
           <WidgetWrapper
             key={id} id={id} size={sizes[id]} dark={dark} isDragging={dragging === id}
             onDragStart={() => handleDragStart(id)}
@@ -1942,10 +2070,14 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
             onDrop={handleDrop}
             onDragEnd={() => setDragging(null)}
             onSizeChange={s => handleSizeChange(id, s)}
+            onRemove={() => handleRemove(id)}
           >
             {renderWidget(id, sizes[id])}
           </WidgetWrapper>
         ))}
+        {hiddenList.length > 0 && (
+          <AddWidgetCard dark={dark} hiddenWidgets={hiddenList} onAdd={handleAdd} />
+        )}
       </div>
     </div>
   )
