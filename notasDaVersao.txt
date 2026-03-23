@@ -1,0 +1,5 @@
+- já que a sincronização com proton e rclone não estão funcionando, liste outras formas de sincronizar o banco de dados e configurações do usuário em # IDEIAS no TODO.md sobre o subtítulo ## SINCRONIZAÇÃO
+- se eu alterar a localização dos widgets do dashboard, abrir outra guia e então voltar, o dashboard volta para a configuração anterior (isso é extramamente irritante)
+- por algum motivo as atividades que salvei no planner de um projeto não estão aparecendo no calendário global??? e nem no widget de agenda?? e também precisamos de um algoritmo melhor pra o agendamento automatico do planner, além de incluir a opção de poder alterar manualmente. O planner é como se fosse uma ligação do projeto com o calendário e seu conteúdo é de extrema importância
+- acho que talvez seja melhor mover a opção de "Lembretes" para dentro do planner do projeto. É o mais faz sentido eu acho. E adicione mais opções de tempo para lembretes, inclusive permita adicionar mais de um. Acrescente também opções de prioridade.
+- a cor de destaque das configurações serve para que exatamente? mudei a cor pra testar mas não alterou nada.
