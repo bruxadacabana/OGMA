@@ -285,6 +285,7 @@ function WidgetWrapper({ id, size, dark, isDragging, onDragStart, onDragEnter, o
     <div
       style={{
         gridColumn: size === 'lg' ? 'span 2' : 'span 1',
+        gridRow:    size === 'lg' ? 'span 2' : 'span 1',
         position: 'relative',
         opacity: isDragging ? 0.35 : 1,
         transition: 'opacity 120ms',
@@ -2049,7 +2050,7 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 40px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, gridAutoFlow: 'dense' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: 16, gridAutoFlow: 'dense', gridAutoRows: 'minmax(180px, auto)' }}>
         <WelcomeWidget dark={dark} />
         {order.filter(id => !hidden.has(id)).map(id => (
           <WidgetWrapper

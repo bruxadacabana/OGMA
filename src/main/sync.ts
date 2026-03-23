@@ -51,30 +51,46 @@ function runRclone(args: string[]): Promise<void> {
   })
 }
 
-// ── API pública ───────────────────────────────────────────────────────────────
+/** Igual a runRclone mas ignora erros (para operações opcionais como deletefile) */
+async function runRcloneSafe(args: string[]): Promise<void> {
+  try { await runRclone(args) } catch { /* ignorado */ }
+}
 
-// Ficheiros a excluir sempre do sync (WAL são recriados pelo SQLite; logs são locais)
-const EXCLUDES = ['--exclude', 'logs/**', '--exclude', '*.db-shm', '--exclude', '*.db-wal']
-// Proton Drive não suporta alterar modtime sem re-upload; esta flag evita o loop de 422
-const BASE_FLAGS = [...EXCLUDES, '--no-update-modtime', '--create-empty-src-dirs']
+// ── Flags base ────────────────────────────────────────────────────────────────
+
+// Ficheiros a excluir sempre: WAL são recriados pelo SQLite; logs e uploads são locais
+const EXCLUDES = [
+  '--exclude', 'logs/**',
+  '--exclude', '*.db-shm',
+  '--exclude', '*.db-wal',
+  '--exclude', 'exports/**',
+  '--exclude', 'uploads/**',
+]
+
+// ── API pública ───────────────────────────────────────────────────────────────
 
 /**
  * Pull: copia ficheiros do remote para data/ local.
  * Deve ser chamado ANTES de getDb().
- * Exclui logs/ e ficheiros WAL do SQLite.
+ *
+ * Usa --update para NÃO sobrescrever ficheiros locais mais recentes.
+ * Isso protege alterações locais caso o push anterior tenha falhado.
  */
 export async function syncPull(remote: string): Promise<void> {
   const src = toRclonePath(remote.replace(/\/?$/, '/'))
   const dst = toRclonePath(DATA_DIR.replace(/\/?$/, '/'))
 
   log.info('Sync pull', { src, dst })
-  await runRclone(['sync', src, dst, ...BASE_FLAGS])
+  // --update: salta ficheiros que são mais recentes no destino (local)
+  await runRclone(['sync', src, dst, ...EXCLUDES, '--no-update-modtime', '--update'])
 }
 
 /**
  * Push: copia ficheiros de data/ local para o remote.
  * Força WAL checkpoint antes de enviar para garantir consistência do .db.
- * Exclui a pasta logs/.
+ *
+ * O Proton Drive retorna 422 ao tentar ACTUALIZAR um ficheiro existente via rclone.
+ * Workaround: apagar os ficheiros no remote antes de fazer upload fresco (copy).
  */
 export async function syncPush(remote: string): Promise<void> {
   // Checkpoint WAL para garantir que ogma.db está consolidado
@@ -90,5 +106,14 @@ export async function syncPush(remote: string): Promise<void> {
   const dst = toRclonePath(remote.replace(/\/?$/, '/'))
 
   log.info('Sync push', { src, dst })
-  await runRclone(['sync', src, dst, ...BASE_FLAGS])
+
+  // Apagar ficheiros no remote antes de fazer upload fresco
+  // (contorna bug 422 do Proton Drive ao actualizar ficheiros existentes)
+  const filesToDelete = ['ogma.db', 'settings.json']
+  for (const f of filesToDelete) {
+    await runRcloneSafe(['deletefile', `${dst}${f}`])
+  }
+
+  // Copiar ficheiros locais para remote
+  await runRclone(['copy', src, dst, ...EXCLUDES, '--no-update-modtime'])
 }

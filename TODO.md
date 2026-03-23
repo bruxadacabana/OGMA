@@ -84,6 +84,7 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Drag-and-drop dos widgets + persistência da ordem (localStorage `ogma_dashboard_order`)
 - [x] Roda do Ano (WheelOfYearWidget) — SVG com 8 Sabás, setores sazonais, marcador do dia atual, próximo Sabá destacado
 - [x] Três tamanhos por widget (SM/MD/LG) com layouts adaptativos + persistência (localStorage `ogma_widget_sizes`)
+- [x] LG: ocupa 2 colunas × 2 linhas na grid (permite 2 widgets SM empilhados ao lado)
 - [x] Localização do utilizador (cidade, estado, país, lat/lon, hemisfério, timezone) via geocoding Open-Meteo → Settings → Localização
 - [x] Widget de Previsão do Tempo (WeatherWidget) — Open-Meteo forecast, layouts por tamanho, WMO codes em PT
 - [x] Roda do Ano com hemisfério real e datas astronómicas (Meeus) por localização configurada
@@ -136,7 +137,9 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [x] Botão "Sincronizar agora" em Ajustes → Sincronização (push imediato com feedback)
 - [x] Fix: spawn rclone com shell:true no Windows (PATH não resolvia o executável)
 - [x] Indicador de status de sync na sidebar (bolinha verde/vermelha/cinza no rodapé)
-- [ ] Testar com Proton Drive (`proton:backup/programFiles/OGMA`)
+- [x] Fix: excluir ficheiros WAL do SQLite do sync rclone (evita 422 no Proton Drive)
+- [x] Fix: push usa delete-então-copy para contornar bug 422 do Proton Drive em updates
+- [x] Fix: pull com --update para não sobrescrever ficheiros locais mais recentes (evita perda de dados quando push anterior falhou)
 
 ## Ícone da aplicação
 
