@@ -4,18 +4,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 
-# Se o app já está a correr, focar a janela existente e sair
-if lsof -ti:5173 > /dev/null 2>&1; then
-    # Tenta focar a janela Electron existente
-    OGMA_PID=$(pgrep -f "electron \." | head -1)
-    if [ -n "$OGMA_PID" ]; then
-        # KDE: usa xdotool ou kdotool se disponível
-        xdotool search --name "OGMA" windowactivate 2>/dev/null \
-        || kdotool search --name "OGMA" windowactivate 2>/dev/null \
-        || notify-send "OGMA" "O programa já está a correr." 2>/dev/null \
-        || true
-    fi
+# Verifica se o Electron do OGMA está mesmo a correr
+ELECTRON_PID=$(pgrep -f "electron.*$SCRIPT_DIR" | head -1)
+
+if [ -n "$ELECTRON_PID" ]; then
+    # App já está a correr — tenta focar a janela
+    xdotool search --name "OGMA" windowactivate 2>/dev/null \
+    || kdotool search --name "OGMA" windowactivate 2>/dev/null \
+    || notify-send "OGMA" "O programa já está a correr." 2>/dev/null \
+    || true
     exit 0
+fi
+
+# Limpa processos órfãos na porta 5173 (sessão anterior não fechou bem)
+STALE_PID=$(lsof -ti:5173 2>/dev/null)
+if [ -n "$STALE_PID" ]; then
+    kill "$STALE_PID" 2>/dev/null || true
+    sleep 1
 fi
 
 exec > /tmp/ogma.log 2>&1
