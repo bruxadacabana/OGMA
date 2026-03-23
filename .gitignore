@@ -12,6 +12,9 @@ src/editor/web/editor.bundle.js
 data/ogma.db
 data/ogma.db-shm
 data/ogma.db-wal
+data/ogma.db-info
+data/ogma_backup.db
+data/*.sql
 data/logs/
 data/uploads/
 data/exports/

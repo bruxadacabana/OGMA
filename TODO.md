@@ -161,12 +161,12 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
   TURSO_TOKEN=ey...
   ```
 
-### Passo 2 — Instalar dependências
+### Passo 2 — Instalar dependências ✅
 
-- [ ] `npm install @libsql/client`
-- [ ] `npm uninstall better-sqlite3-multiple-ciphers`
-- [ ] Remover tipos associados se houver (`@types/better-sqlite3`)
-- [ ] Verificar se `@libsql/client` tem binários pré-compilados para CachyOS/Linux x64 (evitar problema GCC 15)
+- [x] `npm install @libsql/client`
+- [x] `npm uninstall better-sqlite3-multiple-ciphers`
+- [x] Scripts `postinstall` e `rebuild` removidos do package.json
+- [x] `@libsql/client` funciona sem compilação (N-API — sem problema GCC 15)
 
 ### Passo 3 — Reescrever `src/main/database.ts` ✅
 
@@ -198,11 +198,11 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 - [ ] Transações (se houver `db.transaction()` no código) — substituir por `client.transaction()` async
 - [ ] `tsc --noEmit` sem erros em todos os ficheiros da aplicação
 
-### Passo 6 — Migrar dados existentes
+### Passo 6 — Migrar dados existentes ✅
 
-- [ ] Exportar BD atual: `sqlite3 data/ogma.db .dump > data/ogma_dump.sql`
-- [ ] Importar para Turso: `turso db shell ogma < data/ogma_dump.sql`
-- [ ] Verificar integridade: `turso db shell ogma "SELECT COUNT(*) FROM projects"`
+- [x] BD exportada para `data/ogma_dump.sql` (backup em `data/ogma_backup.db`)
+- [x] Dados limpos (sem FTS5/PRAGMAs) importados para Turso: `data/ogma_inserts.sql`
+- [x] Sync testado: workspace "Jen" + 2 resources confirmados no remoto e local
 
 ### Passo 7 — Sync no ciclo de vida do app
 
