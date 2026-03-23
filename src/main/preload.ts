@@ -138,6 +138,10 @@ contextBridge.exposeInMainWorld('db', {
     dismiss: (id: number)                  => api('reminders:dismiss', { id }),
     delete:  (id: number)                  => api('reminders:delete',  { id }),
   },
+  dashboardExtra: {
+    projectsProgress: () => api('dashboard:projectsProgress'),
+    randomQuote:      () => api('dashboard:randomQuote'),
+  },
   planner: {
     listTasks:     (project_id: number)               => api('planner:listTasks',     { project_id }),
     createTask:    (d: any)                           => api('planner:createTask',    d),

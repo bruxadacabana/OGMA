@@ -10,12 +10,18 @@ const db = () => (window as any).db
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 export type WidgetSize = 'sm' | 'md' | 'lg'
-type WidgetId = 'stats' | 'projects' | 'recent' | 'prazos' | 'cosmos' | 'wheel' | 'weather' | 'planner'
+type WidgetId =
+  | 'stats' | 'projects' | 'recent' | 'prazos' | 'cosmos' | 'wheel' | 'weather' | 'planner'
+  | 'agenda' | 'reminders' | 'provas' | 'proj_progress' | 'quote'
 
-const DEFAULT_ORDER: WidgetId[] = ['stats', 'projects', 'recent', 'prazos', 'cosmos', 'wheel', 'weather', 'planner']
+const DEFAULT_ORDER: WidgetId[] = [
+  'stats', 'projects', 'recent', 'prazos', 'cosmos', 'wheel', 'weather', 'planner',
+  'agenda', 'reminders', 'provas', 'proj_progress', 'quote',
+]
 const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
   stats: 'md', projects: 'md', recent: 'md', prazos: 'md',
   cosmos: 'md', wheel: 'md', weather: 'md', planner: 'md',
+  agenda: 'lg', reminders: 'md', provas: 'md', proj_progress: 'md', quote: 'md',
 }
 
 interface Props {
@@ -1040,6 +1046,500 @@ interface WeatherData {
   }
 }
 
+// ── AgendaWidget ──────────────────────────────────────────────────────────────
+
+const EVENT_TYPE_ICONS: Record<string, string> = {
+  prova: '📝', trabalho: '📋', seminario: '🎙', defesa: '🎓',
+  prazo: '⏰', reuniao: '👥', outro: '◦',
+}
+const EVENT_TYPE_COLORS: Record<string, string> = {
+  prova: '#8B3A2A', trabalho: '#2C5F8A', seminario: '#6B4F72',
+  defesa: '#b8860b', prazo: '#7A5C2E', reuniao: '#4A6741', outro: '#8B7355',
+}
+
+function AgendaWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+  const [events,  setEvents]  = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+  const accent = dark ? '#D4A820' : '#b8860b'
+  const today  = new Date().toISOString().slice(0, 10)
+
+  useEffect(() => {
+    fromIpc<any[]>(() => db().events.listUpcoming(14), 'agendaEvents')
+      .then(r => { if (r.isOk()) setEvents(r.value); setLoading(false) })
+  }, [])
+
+  // Dias a mostrar: sm=3, md=7, lg=14
+  const days = size === 'sm' ? 3 : size === 'lg' ? 14 : 7
+  const dates: string[] = Array.from({ length: days }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + i)
+    return d.toISOString().slice(0, 10)
+  })
+
+  const DAY_SHORT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+  const MONTH_SHORT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez']
+
+  const eventsByDate: Record<string, any[]> = {}
+  for (const ev of events) {
+    const d = ev.start_dt?.slice(0, 10)
+    if (d) { if (!eventsByDate[d]) eventsByDate[d] = []; eventsByDate[d].push(ev) }
+  }
+
+  return (
+    <div style={{ padding: size === 'sm' ? '10px 12px' : '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
+        AGENDA DA SEMANA
+      </span>
+      {loading ? (
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink2 }}>…</span>
+      ) : (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: size === 'sm' ? 'repeat(3,1fr)' : size === 'lg' ? 'repeat(7,1fr)' : 'repeat(7,1fr)',
+          gap: 4,
+        }}>
+          {dates.map(date => {
+            const d       = new Date(date + 'T12:00:00')
+            const isToday = date === today
+            const evs     = eventsByDate[date] ?? []
+            return (
+              <div key={date} style={{
+                display: 'flex', flexDirection: 'column', gap: 2,
+                background: isToday ? (dark ? '#251F14' : '#EAE2CC') : cardBg,
+                border: `1px solid ${isToday ? accent + '66' : border}`,
+                borderRadius: 3, padding: '5px 5px 6px', minHeight: 60,
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 3 }}>
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 8,
+                    color: isToday ? accent : ink2, letterSpacing: '0.08em',
+                  }}>
+                    {DAY_SHORT[d.getDay()]}
+                  </span>
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: isToday ? 700 : 400,
+                    color: isToday ? accent : ink, lineHeight: 1.2,
+                  }}>
+                    {d.getDate()}
+                  </span>
+                  {size === 'lg' && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: ink2 }}>
+                      {MONTH_SHORT[d.getMonth()]}
+                    </span>
+                  )}
+                </div>
+                {evs.slice(0, size === 'sm' ? 2 : 4).map((ev: any) => {
+                  const color = EVENT_TYPE_COLORS[ev.event_type ?? 'outro'] ?? '#8B7355'
+                  return (
+                    <div key={ev.id} title={ev.title} style={{
+                      background: color + '22', borderLeft: `2px solid ${color}`,
+                      borderRadius: 1, padding: '1px 3px',
+                      fontFamily: 'var(--font-mono)', fontSize: 8, color: ink,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {EVENT_TYPE_ICONS[ev.event_type ?? 'outro']} {ev.title}
+                    </div>
+                  )
+                })}
+                {evs.length > (size === 'sm' ? 2 : 4) && (
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: ink2 }}>
+                    +{evs.length - (size === 'sm' ? 2 : 4)}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── RemindersWidget ───────────────────────────────────────────────────────────
+
+function RemindersWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+  const [reminders, setReminders] = useState<any[]>([])
+  const [loading,   setLoading]   = useState(true)
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  const load = () => {
+    fromIpc<any[]>(() => db().reminders.list(false), 'remindersList')
+      .then(r => { if (r.isOk()) setReminders(r.value); setLoading(false) })
+  }
+  useEffect(() => { load() }, [])
+
+  const dismiss = async (id: number) => {
+    await fromIpc(() => db().reminders.dismiss(id), 'dismissReminder')
+    setReminders(prev => prev.filter(r => r.id !== id))
+  }
+
+  const limit  = size === 'sm' ? 3 : size === 'lg' ? 12 : 6
+  const shown  = reminders.slice(0, limit)
+  const now    = Date.now()
+
+  function relTime(iso: string): { label: string; urgent: boolean } {
+    const ms   = new Date(iso).getTime() - now
+    const mins = Math.round(ms / 60000)
+    const h    = Math.round(ms / 3600000)
+    const d    = Math.round(ms / 86400000)
+    if (ms < 0)       return { label: 'atrasado', urgent: true }
+    if (mins < 60)    return { label: `em ${mins}min`, urgent: mins < 30 }
+    if (h < 24)       return { label: `em ${h}h`, urgent: h < 2 }
+    if (d === 1)      return { label: 'amanhã', urgent: false }
+    return { label: `em ${d}d`, urgent: false }
+  }
+
+  return (
+    <div style={{ padding: size === 'sm' ? '10px 12px' : '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
+          LEMBRETES
+        </span>
+        {reminders.length > 0 && (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent }}>
+            {reminders.length}
+          </span>
+        )}
+      </div>
+      {loading ? (
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink2 }}>…</span>
+      ) : shown.length === 0 ? (
+        <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 13, color: ink2 }}>
+          Nenhum lembrete pendente.
+        </span>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {shown.map(r => {
+            const { label, urgent } = relTime(r.trigger_at)
+            return (
+              <div key={r.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: cardBg, border: `1px solid ${urgent ? '#8B3A2A44' : border}`,
+                borderLeft: `3px solid ${urgent ? '#8B3A2A' : accent}`,
+                borderRadius: 2, padding: '6px 10px',
+              }}>
+                <span style={{ fontSize: 14, flexShrink: 0 }}>🔔</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: 'var(--font-body)', fontSize: 12, color: ink,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {r.title}
+                  </div>
+                  {size !== 'sm' && r.event_type && (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
+                      {EVENT_TYPE_ICONS[r.event_type]} {r.event_type}
+                    </div>
+                  )}
+                </div>
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 9, flexShrink: 0,
+                  color: urgent ? '#8B3A2A' : ink2,
+                }}>
+                  {label}
+                </span>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ padding: '1px 5px', fontSize: 10, color: ink2, flexShrink: 0 }}
+                  onClick={() => dismiss(r.id)}
+                  title="Dispensar"
+                >✕</button>
+              </div>
+            )
+          })}
+          {reminders.length > limit && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, textAlign: 'center' }}>
+              +{reminders.length - limit} mais
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── ProvasWidget ──────────────────────────────────────────────────────────────
+
+const ACADEMIC_TYPES = ['prova', 'trabalho', 'seminario', 'defesa', 'prazo']
+
+function ProvasWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+  const [events,  setEvents]  = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+
+  useEffect(() => {
+    fromIpc<any[]>(() => db().events.listUpcoming(60), 'provasEvents')
+      .then(r => {
+        if (r.isOk()) {
+          setEvents(r.value.filter((e: any) => ACADEMIC_TYPES.includes(e.event_type ?? '')))
+        }
+        setLoading(false)
+      })
+  }, [])
+
+  const limit  = size === 'sm' ? 3 : size === 'lg' ? 10 : 5
+  const shown  = events.slice(0, limit)
+  const today  = new Date(); today.setHours(0,0,0,0)
+
+  function daysUntil(iso: string): number {
+    const d = new Date(iso.slice(0,10) + 'T12:00:00'); d.setHours(0,0,0,0)
+    return Math.round((d.getTime() - today.getTime()) / 86400000)
+  }
+
+  return (
+    <div style={{ padding: size === 'sm' ? '10px 12px' : '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
+        PRÓXIMAS PROVAS
+      </span>
+      {loading ? (
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink2 }}>…</span>
+      ) : shown.length === 0 ? (
+        <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 13, color: ink2 }}>
+          Sem provas ou prazos próximos.
+        </span>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {shown.map(ev => {
+            const d      = daysUntil(ev.start_dt)
+            const color  = EVENT_TYPE_COLORS[ev.event_type ?? 'outro'] ?? '#8B7355'
+            const urgent = d <= 3
+            const dtFmt  = new Date(ev.start_dt.slice(0,10) + 'T12:00:00')
+              .toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+            return (
+              <div key={ev.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: cardBg,
+                border: `1px solid ${urgent ? color + '55' : border}`,
+                borderLeft: `3px solid ${color}`,
+                borderRadius: 2, padding: '6px 10px',
+              }}>
+                <span style={{ fontSize: 14, flexShrink: 0 }}>{EVENT_TYPE_ICONS[ev.event_type ?? 'outro']}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: 'var(--font-body)', fontSize: 12, color: ink,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {ev.title}
+                  </div>
+                  {size !== 'sm' && ev.description && (
+                    <div style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {ev.description}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
+                    color: urgent ? color : ink2,
+                  }}>
+                    {d === 0 ? 'Hoje' : d === 1 ? 'Amanhã' : `${d}d`}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: ink2 }}>{dtFmt}</span>
+                </div>
+              </div>
+            )
+          })}
+          {events.length > limit && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, textAlign: 'center' }}>
+              +{events.length - limit} mais
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── ProjProgressWidget ────────────────────────────────────────────────────────
+
+interface ProjProgress {
+  id: number; name: string; color: string; icon: string; project_type: string
+  total_pages: number; done_pages: number; total_tasks: number; done_tasks: number
+}
+
+function ProjProgressWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+  const [projects, setProjects] = useState<ProjProgress[]>([])
+  const [loading,  setLoading]  = useState(true)
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+
+  useEffect(() => {
+    fromIpc<ProjProgress[]>(() => db().dashboardExtra.projectsProgress(), 'projectsProgress')
+      .then(r => { if (r.isOk()) setProjects(r.value); setLoading(false) })
+  }, [])
+
+  const limit = size === 'sm' ? 3 : size === 'lg' ? 8 : 5
+  const shown = projects.slice(0, limit)
+
+  function calcPct(p: ProjProgress): number {
+    if (p.total_tasks > 0) return Math.round((p.done_tasks / p.total_tasks) * 100)
+    if (p.total_pages > 0) return Math.round((p.done_pages / p.total_pages) * 100)
+    return 0
+  }
+  function calcLabel(p: ProjProgress): string {
+    if (p.total_tasks > 0) return `${p.done_tasks}/${p.total_tasks} tarefas`
+    return `${p.done_pages}/${p.total_pages} páginas`
+  }
+
+  return (
+    <div style={{ padding: size === 'sm' ? '10px 12px' : '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
+        PROGRESSO DOS PROJETOS
+      </span>
+      {loading ? (
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink2 }}>…</span>
+      ) : shown.length === 0 ? (
+        <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 13, color: ink2 }}>
+          Nenhum projeto ativo.
+        </span>
+      ) : (
+        <div style={{
+          display: size === 'lg' ? 'grid' : 'flex',
+          gridTemplateColumns: size === 'lg' ? '1fr 1fr' : undefined,
+          flexDirection: size !== 'lg' ? 'column' : undefined,
+          gap: 6,
+        }}>
+          {shown.map(p => {
+            const pct   = calcPct(p)
+            const color = p.color ?? '#8B7355'
+            return (
+              <div key={p.id} style={{
+                display: 'flex', flexDirection: 'column', gap: 4,
+                background: cardBg, border: `1px solid ${border}`,
+                borderRadius: 3, padding: '7px 10px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 13, flexShrink: 0 }}>{p.icon ?? '◦'}</span>
+                  <span style={{
+                    fontFamily: 'var(--font-body)', fontSize: 12, color: ink,
+                    flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {p.name}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color, flexShrink: 0 }}>
+                    {pct}%
+                  </span>
+                </div>
+                <div style={{ height: 4, background: border, borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${pct}%`, height: '100%', background: color,
+                    borderRadius: 2, transition: 'width 600ms',
+                  }} />
+                </div>
+                {size !== 'sm' && (
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: ink2 }}>
+                    {calcLabel(p)}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {projects.length > limit && (
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, textAlign: 'center' }}>
+          +{projects.length - limit} mais
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ── QuoteWidget ───────────────────────────────────────────────────────────────
+
+function QuoteWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+  const [quote,   setQuote]   = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  const load = () => {
+    setLoading(true)
+    fromIpc<any>(() => db().dashboardExtra.randomQuote(), 'randomQuote')
+      .then(r => { if (r.isOk()) setQuote(r.value); setLoading(false) })
+  }
+  useEffect(() => { load() }, [])
+
+  return (
+    <div style={{
+      padding: size === 'sm' ? '10px 12px' : '16px 18px',
+      display: 'flex', flexDirection: 'column', gap: 10,
+      justifyContent: 'space-between', height: '100%',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
+          CITAÇÃO
+        </span>
+        <button
+          className="btn btn-ghost btn-sm"
+          style={{ color: ink2, padding: '1px 5px', fontSize: 11 }}
+          onClick={load}
+          title="Nova citação"
+        >↻</button>
+      </div>
+      {loading ? (
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink2 }}>…</span>
+      ) : !quote ? (
+        <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 13, color: ink2 }}>
+          Nenhuma citação guardada ainda.
+        </span>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{
+            borderLeft: `3px solid ${accent}`,
+            paddingLeft: 12,
+          }}>
+            <p style={{
+              fontFamily: 'var(--font-display)', fontStyle: 'italic',
+              fontSize: size === 'sm' ? 13 : 15,
+              color: ink, margin: 0, lineHeight: 1.6,
+            }}>
+              "{quote.text}"
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent }}>
+              — {quote.reading_title}
+            </span>
+            {quote.author && size !== 'sm' && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
+                {quote.author}
+              </span>
+            )}
+            {quote.location && size === 'lg' && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, fontStyle: 'italic' }}>
+                {quote.location}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── DayPlanWidget ─────────────────────────────────────────────────────────────
 
 interface TodayBlock {
@@ -1418,9 +1918,14 @@ export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen
       case 'recent':   return <RecentWidget   dark={dark} size={size} onPageOpen={onPageOpen} />
       case 'prazos':   return <PrazosWidget   dark={dark} size={size} onPageOpen={onPageOpen} />
       case 'cosmos':   return <CosmosWidget   dark={dark} size={size} />
-      case 'wheel':    return <WheelOfYearWidget dark={dark} size={size} />
-      case 'weather':  return <WeatherWidget  dark={dark} size={size} />
-      case 'planner':  return <DayPlanWidget  dark={dark} size={size} />
+      case 'wheel':         return <WheelOfYearWidget  dark={dark} size={size} />
+      case 'weather':       return <WeatherWidget     dark={dark} size={size} />
+      case 'planner':       return <DayPlanWidget     dark={dark} size={size} />
+      case 'agenda':        return <AgendaWidget      dark={dark} size={size} />
+      case 'reminders':     return <RemindersWidget   dark={dark} size={size} />
+      case 'provas':        return <ProvasWidget      dark={dark} size={size} />
+      case 'proj_progress': return <ProjProgressWidget dark={dark} size={size} />
+      case 'quote':         return <QuoteWidget       dark={dark} size={size} />
     }
   }
 

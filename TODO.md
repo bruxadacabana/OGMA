@@ -82,14 +82,14 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Widget de Previsão do Tempo (WeatherWidget) — Open-Meteo forecast, layouts por tamanho, WMO codes em PT
 - [x] Roda do Ano com hemisfério real e datas astronómicas (Meeus) por localização configurada
 
-### Widgets novos
+### Widgets novos (Fase 9c)
 
 #### Alta prioridade (dados já disponíveis)
-- [ ] **Agenda da Semana** — faixa de 7 dias com chips de `calendar_events` por dia, coloridos por tipo
-- [ ] **Lembretes Pendentes** — lista de reminders com `is_dismissed = 0` e `trigger_at` próximo, ordenados por data
-- [ ] **Próximas Provas / Defesas** — filtro de `calendar_events` por tipos acadêmicos (`prova`, `defesa`, `trabalho`) com countdown em dias
-- [ ] **Progresso dos Projetos** — barra de progresso por projeto ativo (páginas concluídas / total)
-- [ ] **Leituras Pendentes** — recursos do tipo `book`/`article` ainda não lidos (requer campo `status` em `page_resources`)
+- [x] **Agenda da Semana** — faixa de 7 dias com chips de `calendar_events` por dia, coloridos por tipo
+- [x] **Lembretes Pendentes** — lista de reminders com `is_dismissed = 0` e `trigger_at` próximo, ordenados por data
+- [x] **Próximas Provas / Defesas** — filtro de `calendar_events` por tipos acadêmicos (`prova`, `defesa`, `trabalho`) com countdown em dias
+- [x] **Progresso dos Projetos** — barra de progresso por projeto ativo (tarefas planeadas e páginas)
+- [x] **Citação Aleatória** — citação aleatória de `reading_quotes`, renovável a clique
 
 #### Média prioridade (UI mais rica)
 - [ ] **Mapa de Calor de Atividade** — grid estilo GitHub dos últimos 90 dias com contagem de páginas criadas/editadas

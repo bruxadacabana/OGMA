@@ -1591,4 +1591,39 @@ export function registerIpcHandlers(): void {
       ORDER BY pt.due_date ASC
     `, today)
   })
+
+  // ── Widgets extras ────────────────────────────────────────────────────────
+
+  api('dashboard:projectsProgress', () =>
+    dbAll(`
+      SELECT
+        p.id, p.name, p.color, p.icon, p.project_type,
+        COUNT(DISTINCT pg.id)  AS total_pages,
+        COUNT(DISTINCT CASE
+          WHEN LOWER(ppv.value_text) LIKE '%conclu%'
+            OR LOWER(ppv.value_text) IN ('done','completed','lido','read')
+          THEN pg.id END)      AS done_pages,
+        COUNT(DISTINCT pt.id)  AS total_tasks,
+        COUNT(DISTINCT CASE WHEN pt.status = 'completed' THEN pt.id END) AS done_tasks
+      FROM projects p
+      LEFT JOIN pages           pg  ON pg.project_id  = p.id AND pg.is_deleted = 0 AND pg.parent_id IS NULL
+      LEFT JOIN project_properties pp ON pp.project_id = p.id AND pp.prop_key = 'status'
+      LEFT JOIN page_prop_values ppv  ON ppv.page_id   = pg.id AND ppv.property_id = pp.id
+      LEFT JOIN planned_tasks   pt  ON pt.project_id  = p.id
+      WHERE p.status = 'active'
+      GROUP BY p.id
+      ORDER BY p.sort_order, p.name
+    `)
+  )
+
+  api('dashboard:randomQuote', () =>
+    dbGet(`
+      SELECT rq.id, rq.text, rq.location,
+             r.title AS reading_title, r.author
+      FROM reading_quotes rq
+      JOIN readings r ON r.id = rq.reading_id
+      ORDER BY RANDOM()
+      LIMIT 1
+    `)
+  )
 }
