@@ -22,29 +22,34 @@ function toFileUrl(p: string): string {
 }
 
 // ── Ciclo de vida ──────────────────────────────────────────────────────────────
-
 export async function getClient(): Promise<Client> {
   if (!_client) {
-    const url       = toFileUrl(DB_PATH)
+    const localUrl  = toFileUrl(DB_PATH)
     const syncUrl   = process.env.TURSO_URL
     const authToken = process.env.TURSO_TOKEN
 
-    // Schema init num cliente local puro (sem rede) — rápido
-    const localOnly = createClient({ url })
-    await localOnly.execute('PRAGMA foreign_keys = ON')
-    await initSchema(localOnly)
-    await seedDefaults(localOnly)
-    localOnly.close()
+    if (syncUrl && authToken) {
+      // Embedded replica - o libsql gerencia tudo, não criamos nada antes
+      _client = createClient({
+        url: localUrl,
+        syncUrl: syncUrl,
+        authToken: authToken,
+        syncInterval: 1000,
+      })
+    } else {
+      // Local puro - inicializa schema manualmente
+      _client = createClient({ url: localUrl })
+      await _client.execute('PRAGMA foreign_keys = ON')
+      await initSchema(_client)
+      await seedDefaults(_client)
+    }
 
-    // Cliente de sync (embedded replica) — sem bloquear no sync inicial
-    _client = createClient(
-      syncUrl
-        ? { url, syncUrl, authToken }
-        : { url }
-    )
     await _client.execute('PRAGMA foreign_keys = ON')
-
-    log.info('Cliente libsql aberto', { local: DB_PATH, sync: syncUrl ?? 'local-only' })
+    log.info('Cliente libsql aberto', { 
+      local: DB_PATH, 
+      sync: syncUrl ?? 'local-only',
+      mode: syncUrl ? 'embedded-replica' : 'local'
+    })
     log.info('Banco pronto')
   }
   return _client
