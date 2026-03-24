@@ -2,6 +2,7 @@
   "name": "ogma",
   "version": "0.1.0",
   "description": "Gerenciador unificado de projetos, estudos e leituras",
+  "author": "Jenifer Angelo",
   "main": "dist/main/main.js",
   "scripts": {
     "dev": "concurrently --kill-others \"npm run dev:vite\" \"npm run dev:electron\"",
@@ -70,9 +71,6 @@
       "target": [
         "AppImage",
         "deb"
-      ],
-      "arch": [
-        "x64"
       ],
       "category": "Office"
     },
