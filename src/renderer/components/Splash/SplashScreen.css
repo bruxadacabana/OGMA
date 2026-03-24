@@ -1,107 +1,111 @@
+/* ── Overlay que cobre toda a janela ── */
 .splash-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999; /* Garante que fica por cima de ABSOLUTAMENTE TUDO */
   display: flex;
-  align-items: center;
   justify-content: center;
-  z-index: 9999;
-  background: rgba(26, 22, 16, 0.85);
-  backdrop-filter: blur(2px);
-  opacity: 0;
-  transition: opacity 0.55s ease;
+  align-items: center;
+  background-color: var(--bg-primary, #1a1610a6);
+  
+  /* Animação suave de entrada */
+  animation: fadeIn 0.5s ease-out forwards;
 }
 
-.splash-overlay.splash-show { opacity: 1; }
-.splash-overlay.splash-out  { opacity: 0; pointer-events: none; }
-
+/* ── O "Cartão" / Documento Místico ── */
 .splash-card {
   position: relative;
   width: 520px;
   height: 340px;
-  border: 1px solid;
-  border-radius: 2px;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   overflow: hidden;
-  box-shadow: 8px 8px 0 rgba(44,36,22,0.3);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
 }
 
+/* ── Detalhe estético: Margem de documento antigo ── */
 .splash-margin {
   position: absolute;
-  left: 44px;
+  left: 40px;
   top: 0;
   bottom: 0;
-  width: 1px;
-  pointer-events: none;
+  width: 2px;
   z-index: 1;
 }
 
+/* ── Textos e Layout ── */
 .splash-logo {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: -30px;
-  font-family: 'IM Fell English', Georgia, serif;
-  font-size: 68px;
-  font-style: italic;
-  letter-spacing: 0.06em;
-  z-index: 2;
-  pointer-events: none;
-  text-shadow: 2px 2px 0 rgba(44,36,22,0.1);
+  font-family: var(--font-display, serif);
+  font-size: 42px;
+  letter-spacing: 0.1em;
+  position: relative;
+  z-index: 10;
+  margin-bottom: 4px;
 }
 
 .splash-sub {
-  position: absolute;
-  bottom: 120px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-family: 'Special Elite', 'Courier New', monospace;
-  font-size: 9px;
-  letter-spacing: 0.22em;
-  z-index: 2;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  position: relative;
+  z-index: 10;
+  margin-bottom: 24px;
 }
 
 .splash-divider {
-  position: absolute;
-  left: 160px;
-  right: 160px;
-  bottom: 107px;
+  width: 60px;
   height: 1px;
-  z-index: 2;
+  position: relative;
+  z-index: 10;
+  margin-bottom: 24px;
 }
 
 .splash-status {
-  position: absolute;
-  bottom: 75px;
-  left: 0;
-  right: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  position: relative;
+  z-index: 10;
+  margin-bottom: 16px;
   text-align: center;
-  font-family: 'Special Elite', 'Courier New', monospace;
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  z-index: 2;
+  
+  /* Animação de pulsar para dar ideia de processamento */
+  animation: pulse 2s infinite ease-in-out;
 }
 
 .splash-dots {
-  position: absolute;
-  bottom: 48px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-family: 'Special Elite', monospace;
-  font-size: 18px;
-  letter-spacing: 0.5em;
-  z-index: 2;
-  animation: blink 1.2s infinite;
+  font-size: 24px;
+  line-height: 0.5;
+  position: relative;
+  z-index: 10;
+  margin-bottom: 20px;
 }
 
 .splash-version {
   position: absolute;
-  bottom: 10px;
-  right: 14px;
-  font-family: 'Special Elite', monospace;
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  z-index: 2;
+  bottom: 16px;
+  right: 20px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  z-index: 10;
+}
+
+/* ── Keyframes (Animações) ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
 }

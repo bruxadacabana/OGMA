@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { useAppStore } from '../../store/useAppStore'
-import { PROJECT_TYPE_ICONS, AppSettings, appSettings, StoredLocation } from '../../types'
+import { PROJECT_TYPE_ICONS, AppSettings, StoredLocation } from '../../types'
 import { fromIpc } from '../../types/errors'
 
 const db = () => (window as any).db
@@ -393,7 +393,7 @@ interface StatsData {
   total_pages: number; pages_this_week: number; active_projects: number; total_projects: number
 }
 
-function StatsWidget({ dark, size, isActive }: { dark: boolean; size: WidgetSize }) {
+function StatsWidget({ dark, size, isActive }: { dark: boolean; size: WidgetSize; isActive: boolean }) {
   const [stats, setStats] = useState<StatsData | null>(null)
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
@@ -633,7 +633,7 @@ function RecentWidget({ dark, size, onPageOpen, isActive }: { dark: boolean; siz
 
 // ── Widget: Prazos Próximos ───────────────────────────────────────────────────
 
-function PrazosWidget({ dark, size, onPageOpen, isActive }: { dark: boolean; size: WidgetSize; onPageOpen: (projectId: number, pageId: number) => void }) {
+function PrazosWidget({ dark, size, onPageOpen, isActive }: { dark: boolean; size: WidgetSize; onPageOpen: (projectId: number, pageId: number) => void; isActive: boolean }) {
   const [items, setItems] = useState<any[]>([])
   const days = size === 'lg' ? 30 : size === 'sm' ? 7 : 14
 
@@ -2062,22 +2062,28 @@ export const DashboardView: React.FC<Props> = ({ dark, isActive, onProjectOpen, 
     })
   }
 
-  // 4. RENDERIZAÇÃO DOS WIDGETS (Certifique-se de passar isActive para os que precisam)
+  // 4. RENDERIZAÇÃO DOS WIDGETS
+  // 4. RENDERIZAÇÃO DOS WIDGETS
   const renderWidget = (id: WidgetId, size: WidgetSize): React.ReactNode => {
     switch (id) {
-      case 'stats':         return <StatsWidget    dark={dark} size={size} isActive={isActive} />
-      case 'projects':      return <ProjectsWidget dark={dark} size={size} onProjectOpen={onProjectOpen} isActive={isActive} />
-      case 'recent':        return <RecentWidget   dark={dark} size={size} onPageOpen={onPageOpen} isActive={isActive} />
-      case 'prazos':        return <PrazosWidget   dark={dark} size={size} onPageOpen={onPageOpen} isActive={isActive} />
-      case 'cosmos':        return <CosmosWidget   dark={dark} size={size} />
+      // Já atualizados e exigem o isActive:
+      case 'stats':         return <StatsWidget        dark={dark} size={size} isActive={isActive} />
+      case 'projects':      return <ProjectsWidget     dark={dark} size={size} onProjectOpen={onProjectOpen} isActive={isActive} />
+      case 'recent':        return <RecentWidget       dark={dark} size={size} onPageOpen={onPageOpen} isActive={isActive} />
+      case 'prazos':        return <PrazosWidget       dark={dark} size={size} onPageOpen={onPageOpen} isActive={isActive} />
+      
+      // Estáticos (Não buscam dados contínuos do banco, não precisam de isActive):
+      case 'cosmos':        return <CosmosWidget       dark={dark} size={size} />
       case 'wheel':         return <WheelOfYearWidget  dark={dark} size={size} location={location} />
       case 'weather':       return <WeatherWidget      dark={dark} size={size} location={location} />
-      case 'planner':       return <DayPlanWidget      dark={dark} size={size} isActive={isActive} />
-      case 'agenda':        return <AgendaWidget       dark={dark} size={size} isActive={isActive} />
-      case 'reminders':     return <RemindersWidget    dark={dark} size={size} isActive={isActive} />
-      case 'provas':        return <ProvasWidget       dark={dark} size={size} isActive={isActive} />
-      case 'proj_progress': return <ProjProgressWidget dark={dark} size={size} isActive={isActive} />
       case 'quote':         return <QuoteWidget        dark={dark} size={size} />
+
+      // Faltam atualizar (Ainda usam a lógica antiga sem isActive):
+      case 'planner':       return <DayPlanWidget      dark={dark} size={size} />
+      case 'agenda':        return <AgendaWidget       dark={dark} size={size} />
+      case 'reminders':     return <RemindersWidget    dark={dark} size={size} />
+      case 'provas':        return <ProvasWidget       dark={dark} size={size} />
+      case 'proj_progress': return <ProjProgressWidget dark={dark} size={size} />
     }
   }
 

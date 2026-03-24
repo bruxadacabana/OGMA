@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('db', {
   workspace: {
     get:    ()       => api('workspace:get'),
     update: (d: any) => api('workspace:update', d),
+    updateSettings: (d: any) => api('workspace:updateSettings', d),
   },
   projects: {
     list:          ()            => api('projects:list'),
@@ -172,11 +173,13 @@ contextBridge.exposeInMainWorld('appSettings', {
 
 contextBridge.exposeInMainWorld('electron', {
   ipcRenderer: {
-    on: (channel: string, func: (...args: any[]) => void) => {
-      const subscription = (_event: any, ...args: any[]) => func(...args)
+    on: (channel: string, listener: (...args: any[]) => void) => {
+      const subscription = (_event: any, ...args: any[]) => listener(...args)
       ipcRenderer.on(channel, subscription)
-      // Retorna uma função para remover o listener (limpeza de memória)
-      return () => ipcRenderer.removeListener(channel, subscription)
+      // Retorna a função de limpeza para o React usar no useEffect
+      return () => {
+        ipcRenderer.removeListener(channel, subscription)
+      }
     }
   }
 })

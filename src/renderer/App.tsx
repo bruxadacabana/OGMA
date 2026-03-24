@@ -16,7 +16,9 @@ import { LibraryView } from './views/Library/LibraryView'
 import { GlobalCalendarView } from './views/GlobalCalendar/GlobalCalendarView'
 import { GlobalPlannerView } from './views/GlobalPlanner/GlobalPlannerView'
 import { useAppStore } from './store/useAppStore'
-import { Project, Page, PROJECT_TYPE_ICONS, AppSettings, appSettings } from './types'
+import { Project, Page, PROJECT_TYPE_ICONS, AppSettings } from './types'
+
+const appSettings = () => (window as any).appSettings
 
 type View = Section | 'project' | 'page'
 
@@ -60,7 +62,7 @@ export default function App() {
 
   // Carregar settings ao iniciar (antes do splash terminar)
   useEffect(() => {
-    appSettings().getAll().then(s => {
+    appSettings().getAll().then((s: AppSettings) => {
       setInitialSettings(s)
       if (s.theme === 'dark') {
         setDark(true)
@@ -87,7 +89,6 @@ export default function App() {
     if (!splashDone) return
     loadWorkspace()
     loadProjects()
-    ;(window as any).db.pages.reindexAll()
   }, [splashDone, loadWorkspace, loadProjects])
 
   useEffect(() => {
@@ -248,7 +249,13 @@ export default function App() {
         {/* DashboardView mantém-se sempre montado para preservar o estado dos widgets */}
         <div style={{ display: view === 'dashboard' ? 'contents' : 'none' }}>
           {initialSettings && (
-            <DashboardView dark={dark} onProjectOpen={handleProjectSelect} onPageOpen={handleSearchOpen} initialSettings={initialSettings} />
+            <DashboardView 
+              dark={dark} 
+              isActive={view === 'dashboard'} // <--- ADICIONE ESTA LINHA
+              onProjectOpen={handleProjectSelect} 
+              onPageOpen={handleSearchOpen} 
+              initialSettings={initialSettings} 
+            />
           )}
         </div>
 

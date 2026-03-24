@@ -13,7 +13,7 @@ export const SplashScreen: React.FC<Props> = ({ onDone, dark = true }) => {
 
   useEffect(() => {
     // ESCUTA O ELECTRON: Aqui recebemos as frases do main.ts
-    const removeListener = window.electron.ipcRenderer.on('splash-status', (msg: string) => {
+    const removeListener = (window as any).electron.ipcRenderer.on('splash-status', (msg: string) => {
       setStatus(msg)
       
       // Se a mensagem for a de finalização, entramos no app
