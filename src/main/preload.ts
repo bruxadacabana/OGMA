@@ -169,3 +169,14 @@ contextBridge.exposeInMainWorld('appSettings', {
   set:    <K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<void> =>
     ipcRenderer.invoke('appSettings:set', { key, value }),
 })
+
+contextBridge.exposeInMainWorld('electron', {
+  ipcRenderer: {
+    on: (channel: string, func: (...args: any[]) => void) => {
+      const subscription = (_event: any, ...args: any[]) => func(...args)
+      ipcRenderer.on(channel, subscription)
+      // Retorna uma função para remover o listener (limpeza de memória)
+      return () => ipcRenderer.removeListener(channel, subscription)
+    }
+  }
+})

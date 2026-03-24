@@ -8,7 +8,6 @@ import { createLogger, setupGlobalErrorHandlers } from './logger'
 import { initSettings } from './settings'
 
 const log = createLogger('main')
-
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 const ICON_PATH = app.isPackaged
@@ -17,8 +16,9 @@ const ICON_PATH = app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
 
-function createWindow(): void {
-  mainWindow = new BrowserWindow({
+// MUDANÇA 1: Agora a função retorna o BrowserWindow criado
+function createWindow(): BrowserWindow {
+  const win = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
@@ -35,21 +35,24 @@ function createWindow(): void {
     },
   })
 
+  mainWindow = win
+
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173')
-    // mainWindow.webContents.openDevTools()
+    win.loadURL('http://localhost:5173')
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
+    win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
   }
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show()
+  win.once('ready-to-show', () => {
+    win.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+
+  return win
 }
 
 // Compatibilidade no Linux
@@ -60,40 +63,68 @@ app.whenReady().then(async () => {
   ensureDirs()
   log.info('OGMA iniciando', { version: '0.1.0', platform: process.platform })
 
-  // Carregar variáveis de ambiente (credenciais Turso)
+  // Carregar credenciais Turso
   try {
     const dotenv = await import('dotenv')
-    const path   = await import('path')
     const { DATA_DIR } = await import('./paths')
     dotenv.config({ path: path.join(DATA_DIR, '.env') })
   } catch { /* dotenv opcional */ }
 
-  log.info('Carregando settings')
   initSettings()
-
-  log.info('Inicializando banco de dados')
-  await getClient()
-
-  log.info('Registrando handlers IPC')
   registerIpcHandlers()
-
-  log.info('Iniciando scheduler de lembretes')
   startReminderScheduler()
 
+  // Iniciar janela e fluxo de sincronia
   log.info('Criando janela principal')
-  createWindow()
+  const mainWin = createWindow()
+  iniciarFluxoSincronia(mainWin)
+})
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
+// FUNÇÃO DE SINCRONIA: Envia o status para o Splash no Renderer
+async function iniciarFluxoSincronia(win: BrowserWindow) {
+  const notifySplash = (msg: string) => {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('splash-status', msg)
+    }
+  }
+
+  // Espera o React carregar para começar a narrar
+  setTimeout(async () => {
+    try {
+      notifySplash("Conectando ao repositório local...")
+      await getClient() 
+
+      notifySplash("Alinhando registros com o tecido do tempo...")
+      
+      // MUDANÇA 2: Erro encapsulado em objeto para o logger
+      await syncClient().catch(err => {
+        log.error('Erro na sincronia inicial:', { error: String(err) })
+        notifySplash("Modo offline: operando em luz estelar local.")
+      })
+
+      notifySplash("A biblioteca universal está atualizada.")
+    } catch (dbError) {
+      log.error('Falha crítica no banco:', { error: String(dbError) })
+      notifySplash("Erro ao acessar a sabedoria local.")
+    }
+  }, 500)
+}
+
+// --- EVENTOS DE CICLO DE VIDA ---
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    const newWin = createWindow()
+    iniciarFluxoSincronia(newWin)
+  }
+})
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('before-quit', async () => {
   log.info('OGMA encerrando')
   await syncClient().catch(() => {})
   closeClient()
-})
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
 })

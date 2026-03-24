@@ -21,11 +21,21 @@ export interface AppSettings {
   sync_enabled?:    boolean
 }
 
-/** Helper tipado para aceder ao bridge window.appSettings */
-export const appSettings = () => (window as any).appSettings as {
-  getAll: ()                                                      => Promise<AppSettings>
-  get:    <K extends keyof AppSettings>(key: K)                   => Promise<AppSettings[K]>
-  set:    <K extends keyof AppSettings>(key: K, v: AppSettings[K]) => Promise<void>
+/** Definições globais para o bridge do Electron */
+declare global {
+  interface Window {
+    db: any; // Pode tipar isto melhor no futuro para remover o 'any'
+    appSettings: {
+      getAll: () => Promise<AppSettings>
+      get: <K extends keyof AppSettings>(key: K) => Promise<AppSettings[K]>
+      set: <K extends keyof AppSettings>(key: K, v: AppSettings[K]) => Promise<void>
+    }
+    electron: {
+      ipcRenderer: {
+        on: (channel: string, func: (...args: any[]) => void) => () => void
+      }
+    }
+  }
 }
 
 // ── Projeto ───────────────────────────────────────────────────────────────────

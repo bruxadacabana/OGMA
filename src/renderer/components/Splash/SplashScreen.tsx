@@ -7,38 +7,31 @@ interface Props {
   dark?: boolean
 }
 
-const MESSAGES = [
-  'Abrindo o grimório...',
-  'Alinhando os astros...',
-  'Preparando a jornada...',
-  'Bem-vinda ao OGMA...',
-]
-
-export const SplashScreen: React.FC<Props> = ({ onDone, dark = false }) => {
-  const [phase, setPhase]   = useState<'in' | 'show' | 'out'>('in')
-  const [msgIdx, setMsgIdx] = useState(0)
-  const [dots, setDots]     = useState(1)
+export const SplashScreen: React.FC<Props> = ({ onDone, dark = true }) => {
+  // Estado para a mensagem cósmica vinda do processo principal
+  const [status, setStatus] = useState('Despertando a consciência do sistema...')
 
   useEffect(() => {
-    // Fade in
-    const t1 = setTimeout(() => setPhase('show'), 50)
+    // ESCUTA O ELECTRON: Aqui recebemos as frases do main.ts
+    const removeListener = window.electron.ipcRenderer.on('splash-status', (msg: string) => {
+      setStatus(msg)
+      
+      // Se a mensagem for a de finalização, entramos no app
+      if (msg === "A biblioteca universal está atualizada.") {
+        setTimeout(onDone, 1500)
+      }
+    })
 
-    // Rotacionar mensagens
-    const msgTimer = setInterval(() => {
-      setMsgIdx(i => (i + 1) % MESSAGES.length)
-      setDots(d => d < 5 ? d + 1 : 1)
-    }, 700)
-
-    // Fade out após 3.2s
-    const t2 = setTimeout(() => setPhase('out'), 3200)
-    const t3 = setTimeout(() => onDone(), 3800)
+    // SEGURANÇA: Se a sincronização falhar, entra no app após 15s
+    const timeout = setTimeout(onDone, 15000)
 
     return () => {
-      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3)
-      clearInterval(msgTimer)
+      removeListener()
+      clearTimeout(timeout)
     }
   }, [onDone])
 
+  // --- Suas Definições de Cores e Estética ---
   const paperBg = dark ? '#1A1610' : '#F5F0E8'
   const border  = dark ? '#3A3020' : '#C4B9A8'
   const ink     = dark ? '#E8DFC8' : '#2C2416'
@@ -46,19 +39,24 @@ export const SplashScreen: React.FC<Props> = ({ onDone, dark = false }) => {
   const accent  = dark ? '#D4A820' : '#b8860b'
 
   return (
-    <div className={`splash-overlay splash-${phase}`}>
+    <div className="splash-overlay">
       <div
         className="splash-card"
         style={{ background: paperBg, borderColor: border }}
       >
-        {/* Cosmos de fundo */}
-        <CosmosLayer width={520} height={340} seed="ogma_splash"
-          density="high" dark={dark} />
+        {/* Camada Cosmos */}
+        <CosmosLayer 
+          width={520} 
+          height={340} 
+          seed="ogma_splash"
+          density="high" 
+          dark={dark} 
+        />
 
-        {/* Linha de margem */}
+        {/* Linha de margem decorativa */}
         <div className="splash-margin" style={{ background: 'rgba(160,50,30,0.22)' }} />
 
-        {/* Logo */}
+        {/* Logo Estilizada */}
         <div className="splash-logo" style={{ color: ink }}>
           OGMA
         </div>
@@ -71,14 +69,14 @@ export const SplashScreen: React.FC<Props> = ({ onDone, dark = false }) => {
         {/* Divisor */}
         <div className="splash-divider" style={{ background: border }} />
 
-        {/* Mensagem de loading */}
-        <div className="splash-status" style={{ color: ink2 }}>
-          {MESSAGES[msgIdx]}
+        {/* MENSAGEM DINÂMICA: Exibe o status que vem do main.ts */}
+        <div className="splash-status" style={{ color: ink, fontWeight: 'bold' }}>
+          {status}
         </div>
 
-        {/* Dots animados */}
+        {/* Pontos de animação (opcional) */}
         <div className="splash-dots" style={{ color: accent }}>
-          {'· '.repeat(dots).trim()}
+          · · ·
         </div>
 
         {/* Versão */}
