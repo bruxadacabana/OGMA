@@ -1978,10 +1978,12 @@ export const DashboardView: React.FC<Props> = ({ dark, isActive, onProjectOpen, 
   const [hidden,   setHidden]   = useState<Set<WidgetId>>(initHidden)
   const [dragging, setDragging] = useState<WidgetId | null>(null)
   
-  // Inicializamos a localização com a propriedade global do DB (passada via store/App)
   const [location, setLocation] = useState<StoredLocation | null | undefined>(initialSettings.location)
 
-  // 1. RECARREGAR LOCALIZAÇÃO (e layout futuro) QUANDO A ABA FICAR ATIVA
+  // Pegamos o workspace para ter o ID do banco
+  const workspace = useAppStore(s => s.workspace)
+
+  // 1. RECARREGAR LOCALIZAÇÃO QUANDO A ABA FICAR ATIVA
   useEffect(() => {
     if (isActive) {
       fromIpc<any>(() => db().config.get('user_location'), 'getLocation').then(r => {
@@ -1994,6 +1996,22 @@ export const DashboardView: React.FC<Props> = ({ dark, isActive, onProjectOpen, 
     }
   }, [isActive])
 
+  // 2. FUNÇÃO PARA SALVAR NO TURSO (Banco de Dados)
+  const persistLayout = async (newOrder: WidgetId[], newSizes: any, newHidden: Set<WidgetId>) => {
+    if (!workspace) return
+    const dashboard_settings = JSON.stringify({
+      order: newOrder,
+      sizes: newSizes,
+      hidden: Array.from(newHidden)
+    })
+    
+    await fromIpc(() => db().workspace.updateSettings({ 
+      id: workspace.id, 
+      dashboard_settings 
+    }), 'updateLayout')
+  }
+
+  // 3. HANDLERS DE DRAG & DROP E REDIMENSIONAMENTO
   const handleDragStart = (id: WidgetId) => setDragging(id)
 
   const handleDragEnter = (id: WidgetId) => {
@@ -2006,60 +2024,60 @@ export const DashboardView: React.FC<Props> = ({ dark, isActive, onProjectOpen, 
   }
 
   const handleDrop = () => {
-    setOrder(prev => { appSettings().set('dashboard_order', prev); return prev })
+    persistLayout(order, sizes, hidden)
     setDragging(null)
   }
 
   const handleSizeChange = (id: WidgetId, s: WidgetSize) => {
     setSizes(prev => {
       const next = { ...prev, [id]: s }
-      appSettings().set('widget_sizes', next)
+      persistLayout(order, next, hidden)
       return next
     })
   }
 
   const handleRemove = (id: WidgetId) => {
     setHidden(prev => {
-      const next = new Set(prev); next.add(id)
-      appSettings().set('hidden_widgets', [...next])
-      return next
-    })
-    setOrder(prev => {
-      const next = prev.filter(w => w !== id)
-      appSettings().set('dashboard_order', next)
-      return next
+      const nextHidden = new Set(prev); 
+      nextHidden.add(id)
+      const nextOrder = order.filter(w => w !== id)
+      setOrder(nextOrder)
+      persistLayout(nextOrder, sizes, nextHidden)
+      return nextHidden
     })
   }
 
   const handleAdd = (id: WidgetId) => {
     setHidden(prev => {
-      const next = new Set(prev); next.delete(id)
-      appSettings().set('hidden_widgets', [...next])
-      return next
-    })
-    setOrder(prev => {
-      if (prev.includes(id)) return prev
-      const next = [...prev, id]
-      appSettings().set('dashboard_order', next)
-      return next
+      const nextHidden = new Set(prev); 
+      nextHidden.delete(id)
+      if (!order.includes(id)) {
+        const nextOrder = [...order, id]
+        setOrder(nextOrder)
+        persistLayout(nextOrder, sizes, nextHidden)
+      } else {
+        persistLayout(order, sizes, nextHidden)
+      }
+      return nextHidden
     })
   }
 
+  // 4. RENDERIZAÇÃO DOS WIDGETS (Certifique-se de passar isActive para os que precisam)
   const renderWidget = (id: WidgetId, size: WidgetSize): React.ReactNode => {
     switch (id) {
-      case 'stats':    return <StatsWidget    dark={dark} size={size} />
-      case 'projects': return <ProjectsWidget dark={dark} size={size} onProjectOpen={onProjectOpen} />
-      case 'recent':   return <RecentWidget   dark={dark} size={size} onPageOpen={onPageOpen} />
-      case 'prazos':   return <PrazosWidget   dark={dark} size={size} onPageOpen={onPageOpen} />
-      case 'cosmos':   return <CosmosWidget   dark={dark} size={size} />
+      case 'stats':         return <StatsWidget    dark={dark} size={size} isActive={isActive} />
+      case 'projects':      return <ProjectsWidget dark={dark} size={size} onProjectOpen={onProjectOpen} isActive={isActive} />
+      case 'recent':        return <RecentWidget   dark={dark} size={size} onPageOpen={onPageOpen} isActive={isActive} />
+      case 'prazos':        return <PrazosWidget   dark={dark} size={size} onPageOpen={onPageOpen} isActive={isActive} />
+      case 'cosmos':        return <CosmosWidget   dark={dark} size={size} />
       case 'wheel':         return <WheelOfYearWidget  dark={dark} size={size} location={location} />
-      case 'weather':       return <WeatherWidget     dark={dark} size={size} location={location} />
-      case 'planner':       return <DayPlanWidget     dark={dark} size={size} />
-      case 'agenda':        return <AgendaWidget      dark={dark} size={size} />
-      case 'reminders':     return <RemindersWidget   dark={dark} size={size} />
-      case 'provas':        return <ProvasWidget      dark={dark} size={size} />
-      case 'proj_progress': return <ProjProgressWidget dark={dark} size={size} />
-      case 'quote':         return <QuoteWidget       dark={dark} size={size} />
+      case 'weather':       return <WeatherWidget      dark={dark} size={size} location={location} />
+      case 'planner':       return <DayPlanWidget      dark={dark} size={size} isActive={isActive} />
+      case 'agenda':        return <AgendaWidget       dark={dark} size={size} isActive={isActive} />
+      case 'reminders':     return <RemindersWidget    dark={dark} size={size} isActive={isActive} />
+      case 'provas':        return <ProvasWidget       dark={dark} size={size} isActive={isActive} />
+      case 'proj_progress': return <ProjProgressWidget dark={dark} size={size} isActive={isActive} />
+      case 'quote':         return <QuoteWidget        dark={dark} size={size} />
     }
   }
 
