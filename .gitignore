@@ -9,17 +9,7 @@ out/
 src/editor/web/editor.bundle.js
 
 # ── Dados do app (banco, logs, uploads, settings local) ──────────────────────
-data/ogma.db
-data/ogma.db-shm
-data/ogma.db-wal
-data/ogma.db-info
-data/ogma_backup.db
-data/*.sql
-data/logs/
-data/uploads/
-data/exports/
-data/settings.json
-data/.env
+data/
 dev_files/
 
 # ── Ambiente ──────────────────────────────────────────────────────────────────
