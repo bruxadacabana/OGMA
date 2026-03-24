@@ -29,28 +29,22 @@ export async function getClient(): Promise<Client> {
     const syncUrl   = process.env.TURSO_URL
     const authToken = process.env.TURSO_TOKEN
 
+    // Schema init num cliente local puro (sem rede) — rápido
+    const localOnly = createClient({ url })
+    await localOnly.execute('PRAGMA foreign_keys = ON')
+    await initSchema(localOnly)
+    await seedDefaults(localOnly)
+    localOnly.close()
+
+    // Cliente de sync (embedded replica) — sem bloquear no sync inicial
     _client = createClient(
       syncUrl
         ? { url, syncUrl, authToken }
         : { url }
     )
+    await _client.execute('PRAGMA foreign_keys = ON')
 
     log.info('Cliente libsql aberto', { local: DB_PATH, sync: syncUrl ?? 'local-only' })
-
-    // Sync inicial: trazer dados do remoto antes de inicializar o schema local
-    if (syncUrl) {
-      try {
-        await _client.sync()
-        log.info('Sync inicial concluído')
-      } catch (e: any) {
-        log.warn('Sync inicial falhou — continuando em modo local', e?.message)
-      }
-    }
-
-    await _client.execute('PRAGMA foreign_keys = ON')
-    await initSchema(_client)
-    await seedDefaults(_client)
-
     log.info('Banco pronto')
   }
   return _client
@@ -330,9 +324,11 @@ async function createTables(client: Client): Promise<void> {
     )`,
   ]
 
-  for (const sql of statements) {
-    await client.execute(sql)
-  }
+  // Separar FTS5 (virtual table) do resto — batch DDL pode rejeitar virtual tables
+  const fts5 = statements.find(s => s.includes('fts5'))
+  const regular = statements.filter(s => !s.includes('fts5'))
+  await client.batch(regular.map(sql => ({ sql, args: [] })), 'write')
+  if (fts5) try { await client.execute(fts5) } catch { /* já existe */ }
 }
 
 async function runIncrementalMigrations(client: Client): Promise<void> {

@@ -84,7 +84,6 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] PageEventsPanel — criar actividades/lembretes dentro de cada página
 - [x] UpcomingEventsPanel — painel de próximas actividades no dashboard do projecto
 - [x] GlobalCalendarView — eventos no grid + aba Agenda (próximos 60 dias) + aba Lembretes
-- [ ] Analytics de tempo por página e projeto (requer Pomodoro/time_sessions)
 
 ---
 
