@@ -33,6 +33,10 @@ Fazer `git commit` após cada funcionalidade ou mudança implementada, com mensa
 - [x] Atividades do Planner não aparecem no Calendário Global nem no widget de Agenda (UNION planned_tasks nas queries events:listForMonth e events:listUpcoming)
 - [ ] Algoritmo de agendamento automático do Planner precisa de melhoria + edição manual
 - [ ] Lembretes: mover para dentro do Planner do projeto; adicionar múltiplos lembretes, opções de tempo e prioridade
+- [ ] Melhorar algoritmo de planejamento automático
+- [ ] Criar planejamento de revisão com repetição espaçada
+- [ ] Ao invés da aba TEMPO em cada página, o timer e pomodoro deveriam estar em Planner
+- [ ] Bug: ao criar atividade através do Planner, não aparece a opção de conectar a atividade a uma página, apenas a um projeto
 
 ---
 
@@ -50,7 +54,6 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [ ] Histórico de versões de página (tabela `page_versions` já existe no schema)
 - [x] Backlinks: mostrar no PageView as páginas que referenciam a atual
 - [ ] Pomodoro / timer com histórico por página (tabela `time_sessions`) — aba "Tempo" no ProjectDashboardView: relógio SVG animado, modo Pomodoro (25/5min), registo manual de sessões (página, duração, data, notas, tags); independente do Planner; sessões ligadas a project_id + page_id, disponíveis globalmente para analytics
-- [ ] Exportar página como PDF ou Markdown
 
 ---
 
@@ -118,10 +121,6 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [ ] Widget "Plano do Dia" no Dashboard — consolidado de todos os projetos para hoje, com checkbox de sessão concluída
 - [ ] Campo "Capacidade diária (horas)" em Settings (padrão 4h)
 - [x] Criar uma aba para o planner global no menu lateral (GlobalPlannerView: fundo pontilhado + cosmos, estética bullet journal, mini calendário, urgente/hoje à esquerda, log completo com agrupamento/criação/detalhe inline à direita)
-- [ ] Melhorar algoritmo de planejamento automático
-- [ ] Criar planejamento de revisão com repetição espaçada
-- [ ] Ao invés da aba TEMPO em cada página, o timer e pomodoro deveriam estar em Planner
-- [ ] Bug: ao criar atividade através do Planner, não aparece a opção de conectar a atividade a uma página, apenas a um projeto
 
 ---
 
@@ -277,6 +276,7 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 
 ## Fase 50 — Futuro
 
+- [ ] Exportar página como PDF ou Markdown
 - [ ] Pomodoro Timer completo com estatísticas
 - [ ] Templates customizados de projeto
 - [ ] IA: integração com Ollama e APIs externas
