@@ -87,4 +87,3 @@ data/
   uploads/        ← imagens e arquivos inseridos no editor
   logs/           ← logs de execução da aplicação
 ```
-```
