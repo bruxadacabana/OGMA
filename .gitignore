@@ -10,6 +10,7 @@ src/editor/web/editor.bundle.js
 
 # ── Dados do app (banco, logs, uploads, settings local) ──────────────────────
 data/
+!data/.gitkeep
 dev_files/
 
 # ── Ambiente ──────────────────────────────────────────────────────────────────
