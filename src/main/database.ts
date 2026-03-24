@@ -110,12 +110,13 @@ async function createTables(client: Client): Promise<void> {
   const statements = [
     // ── Core ────────────────────────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS workspaces (
-      id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      name         TEXT NOT NULL DEFAULT 'Meu Workspace',
-      icon         TEXT DEFAULT '✦',
-      accent_color TEXT DEFAULT '#b8860b',
-      created_at   TEXT DEFAULT (datetime('now')),
-      updated_at   TEXT DEFAULT (datetime('now'))
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      name               TEXT NOT NULL DEFAULT 'Meu Workspace',
+      icon               TEXT DEFAULT '✦',
+      accent_color       TEXT DEFAULT '#b8860b',
+      dashboard_settings TEXT, -- <--- NOVA COLUNA AQUI
+      created_at         TEXT DEFAULT (datetime('now')),
+      updated_at         TEXT DEFAULT (datetime('now'))
     )`,
     `CREATE TABLE IF NOT EXISTS projects (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -339,6 +340,7 @@ async function createTables(client: Client): Promise<void> {
 async function runIncrementalMigrations(client: Client): Promise<void> {
   // Cada migration é idempotente — falha silenciosa se já existir
   const migrations = [
+    `ALTER TABLE workspaces ADD COLUMN dashboard_settings TEXT`, // <--- NOVA MIGRATION AQUI
     `ALTER TABLE readings ADD COLUMN resource_id INTEGER REFERENCES resources(id) ON DELETE SET NULL`,
     `ALTER TABLE resources ADD COLUMN metadata_json TEXT`,
     `ALTER TABLE projects ADD COLUMN semester TEXT`,

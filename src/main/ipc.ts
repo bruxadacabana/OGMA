@@ -504,6 +504,14 @@ export function registerIpcHandlers(): void {
     )
     return dbGet('SELECT * FROM workspaces WHERE id = ?', data.id)
   })
+  
+  api('workspace:updateSettings', async (data) => {
+    await dbRun(
+      "UPDATE workspaces SET dashboard_settings = ?, updated_at=datetime('now') WHERE id=?",
+      data.dashboard_settings, data.id
+    )
+    return { ok: true }
+  })
 
   // ── Projetos ─────────────────────────────────────────────────────────────
   api('projects:list', async () =>
