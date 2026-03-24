@@ -1,6 +1,6 @@
 # OGMA — TODO
 
-> Atualizado: 2026-03-23
+> Atualizado: 2026-03-24
 > Sequência de desenvolvimento pós-Fases 1–3. Executar em ordem, fase a fase.
 
 ---
@@ -36,7 +36,7 @@ Fazer `git commit` após cada funcionalidade ou mudança implementada, com mensa
 
 ---
 
-## Fase Extra — Prioridade Imediata
+## Fase Extra — Prioridade Alta
 
 Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Editor, Produtividade).
 
@@ -74,6 +74,8 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Gerador de código `PREFIX###` automático (IPC pages:create, propriedade built-in `codigo`)
 - [x] Pré-requisitos entre páginas com detecção de ciclo (IPC + UI no PageView para projetos académicos)
 - ~~Script de migração do StudyFlow~~ (cancelado)
+- [ ] Deve ter uma forma de adicionar projetos de forma mais simplificada como ideias futuras e criar um widget que exibe esse tipo específico de ideias para eu relembrá-las
+- [ ] Já tem uma opção de criar projetos do tipo "hobbies"? Esse vai servir para organizar hobbies manuais como crochê, desenho, bijuterias, moda e resina (entre outros) e deve ser configurado como.
 
 ---
 
@@ -104,24 +106,6 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Adicionar widget oculto de volta (card "+ Adicionar widget" no final do grid)
 - [x] Persistência de widgets ocultos (`localStorage ogma_hidden_widgets`)
 
-### Widgets novos (Fase 9c)
-
-#### Alta prioridade (dados já disponíveis)
-- [x] **Agenda da Semana** — faixa de 7 dias com chips de `calendar_events` por dia, coloridos por tipo
-- [x] **Lembretes Pendentes** — lista de reminders com `is_dismissed = 0` e `trigger_at` próximo, ordenados por data
-- [x] **Próximas Provas / Defesas** — filtro de `calendar_events` por tipos acadêmicos (`prova`, `defesa`, `trabalho`) com countdown em dias
-- [x] **Progresso dos Projetos** — barra de progresso por projeto ativo (tarefas planeadas e páginas)
-- [x] **Citação Aleatória** — citação aleatória de `reading_quotes`, renovável a clique
-
-#### Média prioridade (UI mais rica)
-- [ ] **Mapa de Calor de Atividade** — grid estilo GitHub de horas estudadas por matéria/página/tag (não por páginas criadas; requer Pomodoro/time_sessions)
-- [ ] **Sumário do Dia** — briefing textual: eventos hoje, prazos próximos, lembretes ativos
-
-#### Futuros (dependem de features pendentes)
-- [ ] **Meta de Leitura Anual** — gauge circular de progresso da meta (depende de `reading_goals`)
-- [ ] **Tempo de Foco Hoje** — sessões Pomodoro do dia (depende de Pomodoro/`time_sessions`)
-- [ ] **Grafo de Conexões** — mini grafo de força com páginas mais interligadas via backlinks (requer lib de visualização)
-
 ---
 
 ## Fase 9b — Planejador Acadêmico (Planner)
@@ -134,10 +118,14 @@ Agendamento de tarefas com horas estimadas, replanejamento automático e víncul
 - [ ] Widget "Plano do Dia" no Dashboard — consolidado de todos os projetos para hoje, com checkbox de sessão concluída
 - [ ] Campo "Capacidade diária (horas)" em Settings (padrão 4h)
 - [x] Criar uma aba para o planner global no menu lateral (GlobalPlannerView: fundo pontilhado + cosmos, estética bullet journal, mini calendário, urgente/hoje à esquerda, log completo com agrupamento/criação/detalhe inline à direita)
+- [ ] Melhorar algoritmo de planejamento automático
+- [ ] Criar planejamento de revisão com repetição espaçada
+- [ ] Ao invés da aba TEMPO em cada página, o timer e pomodoro deveriam estar em Planner
+- [ ] Bug: ao criar atividade através do Planner, não aparece a opção de conectar a atividade a uma página, apenas a um projeto
 
 ---
 
-## Sincronização entre dispositivos — Turso / libsql
+## Fase 10 - Sincronização entre dispositivos — Turso / libsql
 
 Migração de `better-sqlite3-multiple-ciphers` → `@libsql/client` com embedded replica.
 A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arrancar.
@@ -148,13 +136,13 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 
 ### Passo 1 — Conta Turso e credenciais
 
-- [ ] Criar conta em turso.tech (plano free: 500 DBs, 1 GB)
-- [ ] Instalar CLI Turso: `curl -sSfL https://get.tur.so/install.sh | bash`
-- [ ] `turso auth login`
-- [ ] `turso db create ogma` — criar a BD remota
-- [ ] `turso db show ogma` — copiar URL (`libsql://ogma-....turso.io`)
-- [ ] `turso db tokens create ogma` — gerar auth token
-- [ ] Guardar em `data/.env` (já no `.gitignore`):
+- [x] Criar conta em turso.tech (plano free: 500 DBs, 1 GB)
+- [x] Instalar CLI Turso: `curl -sSfL https://get.tur.so/install.sh | bash
+- [x] `turso auth login`
+- [x] `turso db create ogma` — criar a BD remota
+- [x] `turso db show ogma` — copiar URL (`libsql://ogma-....turso.io`)
+- [x] `turso db tokens create ogma` — gerar auth token
+- [x] Guardar em `data/.env` (já no `.gitignore`):
   ```
   TURSO_URL=libsql://ogma-....turso.io
   TURSO_TOKEN=ey...
@@ -224,57 +212,23 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 
 ---
 
-## Fase 10 — Polimento
+## Fase 11 — Polimento
 
 - [x] Ícone do app (temporário) — ver secção "Ícone da aplicação" acima
 - [ ] Decoração cósmica completa, animações, ícone final definitivo
 
 ---
 
-## Fase 11 — Futuro
+## Fase 12 — Analytics (todos vem desativados por padrão e são ativados nas configurações: vai abrir uma janela centralizada com um checkbox para marcar os que deseja ativar)
 
-- [ ] Pomodoro Timer completo com estatísticas
-- [ ] Templates customizados de projeto
-- [ ] IA: integração com Ollama e APIs externas
-
----
-
-# IDEIAS
-
-## Widgets
-
-### Alta prioridade (dados já disponíveis)
-- [ ] **Agenda da Semana** — faixa de 7 dias com chips de `calendar_events` coloridos por tipo
-- [ ] **Lembretes Pendentes** — lista de `reminders` não dispensados com countdown
-- [ ] **Próximas Provas** — eventos do tipo prova/defesa/trabalho com dias restantes em destaque
-- [ ] **Progresso dos Projetos** — barra de progresso por projeto activo (páginas concluídas / total)
-- [ ] **Citação Aleatória** — uma citação aleatória de `reading_quotes`, renovável a clique
-- [ ] **Decoração de estação do ano atual com animação no card de boas vindas do dashboard**
-
-### Média prioridade (UI mais rica)
-- [ ] **Mapa de Calor** — grid estilo GitHub dos últimos 90 dias (páginas criadas/editadas)
-- [ ] **Nuvem de Tags** — tags com tamanho proporcional à frequência, clicáveis
-- [ ] **Leituras em Progresso** — livros com barra de progresso e % concluída
-- [ ] **Meta de Leitura Anual** — gauge circular de progresso (depende de `reading_goals`)
-- [ ] **Sumário do Dia** — briefing textual: eventos hoje + prazos + planner
-
-### Futuros (dependem de features pendentes)
-- [ ] **Tempo de Foco Hoje** — sessões Pomodoro do dia (depende de `time_sessions`)
-- [ ] **Streak de Estudo** — dias consecutivos com blocos concluídos (`work_blocks`)
-- [ ] **Grafo de Conexões** — mini grafo de força com `page_backlinks` (requer lib de visualização)
-
-## Sincronização
-
-Alternativas ao rclone + Proton Drive (para avaliar):
-
-- **Syncthing** — P2P, sem cloud, funciona em LAN ou via relay; suporta SQLite se a BD estiver fechada no momento da sync
-- **Restic + B2/S3** — backup incremental com dedup; adequado para BD; requer script de backup periódico em vez de sync contínuo
-- **Git LFS** — versionar a BD com LFS; útil se quiser histórico de versões dos dados
-- **SQLite Cloud** — substituir ficheiro local por base de dados remota (libsql/Turso); muda a arquitectura fundamentalmente
-- **Electron-store com cifra + iCloud/OneDrive** — mais simples para ficheiros pequenos (settings); iCloud tem conflito automático
-- **Custom HTTP sync** — endpoint próprio com autenticação; controlo total mas requer servidor
-
-## Analytics
+- [ ] Pico de Produtividade: "Você é uma criatura da [Manhã/Noite]", baseado no horário em que a maioria das páginas é editada.
+- [ ] Taxa de Absorção Literária: Quantos recursos (livros/artigos) foram concluídos no mês vs. adicionados à lista de leitura.
+- [ ] Páginas por "Área do Conhecimento": Um gráfico de pizza ou barras mostrando se você está dedicando mais tempo a Letras, Cibersegurança ou Hobbies Manuais.
+- [ ] Produtividade por Fase Lunar: Uma estatística curiosa mostrando em qual fase da lua você costuma concluir mais tarefas (ex: "Sua produtividade aumenta 20% na Lua Crescente").
+- [ ] Progresso da Estação: Quanto falta para o próximo Sabá (já existe na Roda, mas pode ser um valor percentual de "Preparação para o Equinócio/Solstício").
+- [ ] Horas de Voo (Deep Work): Total de horas logadas nos work_blocks do Planner.
+- [ ] Velocidade de Leitura: Média de páginas lidas por dia nos últimos 7 dias.
+- [ ] Radar de Polímata (Equilíbrio de Áreas): Já que você tem diferentes project_type (Acadêmico, Escrita, Cibersegurança, etc.), essa métrica mostra para onde sua energia está indo. **O que medir:** Porcentagem de tarefas concluídas ou tempo logado por categoria de projeto. **Estética**: Um gráfico de radar ou uma lista simples: "Este mês, sua mente esteve 40% em Letras, 30% em Cibersegurança e 30% em Hobbies" **Objetivo**: Garantir que nenhum pilar seja esquecido.
 
 ### Por projeto / académico
 - [ ] **Horas por projecto** — gráfico de barras com `work_blocks` agrupados por projecto
@@ -291,3 +245,40 @@ Alternativas ao rclone + Proton Drive (para avaliar):
 - [ ] **Páginas mais conectadas** — top backlinks (hubs de conhecimento)
 - [ ] **Tags mais usadas** — evolução temporal
 - [ ] **Actividade por dia da semana** — padrão de produtividade
+
+---
+
+## Fase 13 - Widgets
+
+#### IDEIAS
+- [ ] **Terminal de Cibersegurança (Status de Lab)** - O que faz: Um widget com estética de terminal (letras verdes/amber sobre fundo escuro) mostrando o progresso em certificações ou máquinas de lab. Por que é legal: Cria um contraste visual interessante com o resto do dashboard de "papel envelhecido". É o seu lado tecnológico pulsando no meio do cosmos.
+- [ ] **Widget de "Rituais de Estação** - **O que faz**: Cruzando a fase da lua e a Roda do Ano, ele sugere uma atividade de "autocuidado polímata". **Exemplos**: "Lua Minguante no Outono: Momento de revisar e descartar notas obsoletas (Pilar Organizada)" / "Lua Crescente: Ideal para iniciar um novo conto ou projeto de escrita (Pilar Talentosa)". **Por que é legal**: Dá um propósito prático para os widgets astronômicos que você já construiu.
+- [ ] **Provocador de Pesquisa** (Pergunta em Aberto): Como você quer ser pesquisadora e polímata, muitas vezes anotamos dúvidas no meio dos textos. O que faz: Varre o conteúdo das suas páginas em busca de frases que terminam com ? ou marcadas com um símbolo específico (ex: [?]) e exibe uma delas aleatoriamente. A "Mágica": Te confronta com uma curiosidade que você teve no passado, incentivando o "instinto de busca" constante do Da Vinci.
+- [ ] **Mapa do Próximo Passo** (Manual Arts): Para manter o pilar Talentosa (hobbies manuais) visível sem ser uma cobrança. **O que faz**: Mostra apenas o título e a última atualização de um projeto na subcategoria "Hobbies" ou "Artes Manuais".**A "Mágica":** Ao ver "Resina: Pendente há 3 dias", o widget te lembra visualmente de que existe um projeto físico esperando o seu talento, equilibrando o tempo gasto na tela.
+
+#### Alta prioridade (dados já disponíveis)
+- [x] **Agenda da Semana** — faixa de 7 dias com chips de `calendar_events` por dia, coloridos por tipo
+- [x] **Lembretes Pendentes** — lista de reminders com `is_dismissed = 0` e `trigger_at` próximo, ordenados por data
+- [x] **Próximas Provas / Defesas** — filtro de `calendar_events` por tipos acadêmicos (`prova`, `defesa`, `trabalho`) com countdown em dias
+- [x] **Progresso dos Projetos** — barra de progresso por projeto ativo (tarefas planeadas e páginas)
+- [ ] **Citação Aleatória** — citação aleatória de `reading_quotes`, renovável a clique. Inserir a funcionalidade de buscar quotes online de temas a definir nas contigurações do widget.
+- [ ] **POMODORO** - Pomodoro com duas visualizações: relógio visual e relógio de areia. A cor principal da animação é a cor de acento definida nas configurações
+
+#### Média prioridade (UI mais rica)
+- [ ] **Mapa de Calor de Atividade** — grid estilo GitHub de horas estudadas por matéria/página/tag (não por páginas criadas; requer Pomodoro/time_sessions)
+- [ ] **Sumário do Dia** — briefing textual: eventos hoje, prazos próximos, lembretes ativos
+
+#### Futuros (dependem de features pendentes)
+- [ ] **Meta de Leitura Anual** — gauge circular de progresso da meta (depende de `reading_goals`)
+- [ ] **Tempo de Foco Hoje** — sessões Pomodoro do dia (depende de Pomodoro/`time_sessions`)
+- [ ] **Grafo de Conexões** — mini grafo de força com páginas mais interligadas via backlinks (requer lib de visualização)
+
+---
+
+## Fase 50 — Futuro
+
+- [ ] Pomodoro Timer completo com estatísticas
+- [ ] Templates customizados de projeto
+- [ ] IA: integração com Ollama e APIs externas
+
+---
