@@ -1,7 +1,6 @@
 # OGMA — TODO
 
 > Atualizado: 2026-03-24
-> Sequência de desenvolvimento pós-Fases 1–3. Executar em ordem, fase a fase.
 
 ---
 
