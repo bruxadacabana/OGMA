@@ -88,5 +88,3 @@ data/
   logs/           ← logs de execução da aplicação
 ```
 ```
-
-O que achou? Se quiser adicionar mais alguma seção sobre funcionalidades específicas que já estão prontas (como o Planner, Calendário Global ou os Widgets Astronômicos), é só falar que a gente inclui!
