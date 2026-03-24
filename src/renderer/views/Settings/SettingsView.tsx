@@ -54,8 +54,13 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
   const [locSearching, setLocSearching] = useState(false)
   const [savedLoc,     setSavedLoc]     = useState<StoredLocation | null>(null)
 
+  // 1. LER do Banco de Dados ao iniciar
   useEffect(() => {
-    appSettings().get('location').then(loc => setSavedLoc(loc ?? null))
+    fromIpc<any>(() => db().config.get('user_location'), 'getLocation').then(r => {
+      if (r.isOk() && r.value) {
+        try { setSavedLoc(JSON.parse(r.value)) } catch {}
+      }
+    })
   }, [])
 
   const searchLocation = async () => {
@@ -72,7 +77,8 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
     setLocSearching(false)
   }
 
-  const saveLocation = (r: GeoResult) => {
+  // 2. GRAVAR no Banco de Dados
+  const saveLocation = async (r: GeoResult) => {
     const loc: StoredLocation = {
       city:         r.name,
       admin1:       r.admin1 ?? '',
@@ -83,16 +89,18 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
       hemisphere:   r.latitude >= 0 ? 'north' : 'south',
       timezone:     r.timezone ?? 'UTC',
     }
-    appSettings().set('location', loc)
+    await fromIpc(() => db().config.set('user_location', JSON.stringify(loc)), 'setLocation')
     setSavedLoc(loc)
     setLocResults([])
     setLocQuery('')
   }
 
-  const clearLocation = () => {
-    appSettings().set('location', null)
+  // 3. APAGAR do Banco de Dados
+  const clearLocation = async () => {
+    await fromIpc(() => db().config.set('user_location', ''), 'clearLocation')
     setSavedLoc(null)
   }
+
 
   // Sincronizar com store
   useEffect(() => {

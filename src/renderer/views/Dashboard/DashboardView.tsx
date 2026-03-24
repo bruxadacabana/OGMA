@@ -41,6 +41,7 @@ const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
 
 interface Props {
   dark:            boolean
+  isActive:        boolean
   onProjectOpen:   (id: number) => void
   onPageOpen:      (projectId: number, pageId: number) => void
   initialSettings: AppSettings
@@ -392,7 +393,7 @@ interface StatsData {
   total_pages: number; pages_this_week: number; active_projects: number; total_projects: number
 }
 
-function StatsWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+function StatsWidget({ dark, size, isActive }: { dark: boolean; size: WidgetSize }) {
   const [stats, setStats] = useState<StatsData | null>(null)
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
@@ -402,9 +403,11 @@ function StatsWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   const cardBg = dark ? '#211D16' : '#EDE7D9'
 
   useEffect(() => {
-    fromIpc<StatsData>(() => db().dashboard.stats(), 'dashboardStats')
-      .then(r => r.match(data => setStats(data), _e => {}))
-  }, [])
+    if (isActive) {
+      fromIpc<StatsData>(() => db().dashboard.stats(), 'dashboardStats')
+        .then(r => r.match(data => setStats(data), _e => {}))
+    }
+  }, [isActive])
 
   const label = (
     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
@@ -472,7 +475,7 @@ function StatsWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
 
 // ── Widget: Projetos Ativos ───────────────────────────────────────────────────
 
-function ProjectsWidget({ dark, size, onProjectOpen }: { dark: boolean; size: WidgetSize; onProjectOpen: (id: number) => void }) {
+function ProjectsWidget({ dark, size, onProjectOpen, isActive }: { dark: boolean; size: WidgetSize; onProjectOpen: (id: number) => void; isActive: boolean }) {
   const projects   = useAppStore(s => s.projects)
   const [counts, setCounts] = useState<Record<number, number>>({})
 
@@ -482,14 +485,16 @@ function ProjectsWidget({ dark, size, onProjectOpen }: { dark: boolean; size: Wi
   const cardBg = dark ? '#211D16' : '#EDE7D9'
 
   useEffect(() => {
-    fromIpc<StatsData & { page_counts?: { project_id: number; count: number }[] }>(
-      () => db().dashboard.stats(), 'dashboardStatsProjects'
-    ).then(r => r.match(data => {
-      const map: Record<number, number> = {}
-      for (const { project_id, count } of (data.page_counts ?? [])) map[project_id] = count
-      setCounts(map)
-    }, _e => {}))
-  }, [])
+    if (isActive) {
+      fromIpc<StatsData & { page_counts?: { project_id: number; count: number }[] }>(
+        () => db().dashboard.stats(), 'dashboardStatsProjects'
+      ).then(r => r.match(data => {
+        const map: Record<number, number> = {}
+        for (const { project_id, count } of (data.page_counts ?? [])) map[project_id] = count
+        setCounts(map)
+      }, _e => {}))
+    }
+  }, [isActive])
 
   const active = projects.filter(p => p.status === 'active')
   const limit  = size === 'sm' ? 3 : size === 'md' ? 6 : 10
@@ -554,14 +559,16 @@ function ProjectsWidget({ dark, size, onProjectOpen }: { dark: boolean; size: Wi
 
 // ── Widget: Atividade Recente ─────────────────────────────────────────────────
 
-function RecentWidget({ dark, size, onPageOpen }: { dark: boolean; size: WidgetSize; onPageOpen: (projectId: number, pageId: number) => void }) {
+function RecentWidget({ dark, size, onPageOpen, isActive }: { dark: boolean; size: WidgetSize; onPageOpen: (projectId: number, pageId: number) => void; isActive: boolean }) {
   const [pages, setPages] = useState<any[]>([])
   const limit = size === 'sm' ? 4 : size === 'md' ? 8 : 12
 
   useEffect(() => {
-    fromIpc<any[]>(() => db().pages.listRecent(limit), 'listRecent')
-      .then(r => r.match(data => setPages(data), _e => {}))
-  }, [limit])
+    if (isActive) {
+      fromIpc<any[]>(() => db().pages.listRecent(limit), 'listRecent')
+        .then(r => r.match(data => setPages(data), _e => {}))
+    }
+  }, [limit, isActive]) // <-- limit e isActive como dependências
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
@@ -626,14 +633,16 @@ function RecentWidget({ dark, size, onPageOpen }: { dark: boolean; size: WidgetS
 
 // ── Widget: Prazos Próximos ───────────────────────────────────────────────────
 
-function PrazosWidget({ dark, size, onPageOpen }: { dark: boolean; size: WidgetSize; onPageOpen: (projectId: number, pageId: number) => void }) {
+function PrazosWidget({ dark, size, onPageOpen, isActive }: { dark: boolean; size: WidgetSize; onPageOpen: (projectId: number, pageId: number) => void }) {
   const [items, setItems] = useState<any[]>([])
   const days = size === 'lg' ? 30 : size === 'sm' ? 7 : 14
 
   useEffect(() => {
-    fromIpc<any[]>(() => db().pages.listUpcoming(days), 'listUpcoming')
-      .then(r => r.match(data => setItems(data), _e => {}))
-  }, [days])
+    if (isActive) {
+      fromIpc<any[]>(() => db().pages.listUpcoming(days), 'listUpcoming')
+        .then(r => r.match(data => setItems(data), _e => {}))
+    }
+  }, [days, isActive]) // <-- days e isActive como dependências
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
@@ -1962,20 +1971,28 @@ function AddWidgetCard({ dark, hiddenWidgets, onAdd }: {
 
 // ── Dashboard principal ───────────────────────────────────────────────────────
 
-export const DashboardView: React.FC<Props> = ({ dark, onProjectOpen, onPageOpen, initialSettings }) => {
+export const DashboardView: React.FC<Props> = ({ dark, isActive, onProjectOpen, onPageOpen, initialSettings }) => {
   const initHidden = parseHidden(initialSettings.hidden_widgets)
   const [order,    setOrder]    = useState<WidgetId[]>(() => parseOrder(initialSettings.dashboard_order, initHidden))
   const [sizes,    setSizes]    = useState<Record<WidgetId, WidgetSize>>(() => parseSizes(initialSettings.widget_sizes))
   const [hidden,   setHidden]   = useState<Set<WidgetId>>(initHidden)
   const [dragging, setDragging] = useState<WidgetId | null>(null)
+  
+  // Inicializamos a localização com a propriedade global do DB (passada via store/App)
   const [location, setLocation] = useState<StoredLocation | null | undefined>(initialSettings.location)
 
-  // Re-ler localização sempre que o dashboard montar (pode ter sido configurada após o arranque)
+  // 1. RECARREGAR LOCALIZAÇÃO (e layout futuro) QUANDO A ABA FICAR ATIVA
   useEffect(() => {
-    appSettings().get('location').then((loc: StoredLocation | null | undefined) => {
-      if (loc) setLocation(loc)
-    })
-  }, [])
+    if (isActive) {
+      fromIpc<any>(() => db().config.get('user_location'), 'getLocation').then(r => {
+        if (r.isOk() && r.value) {
+          try { setLocation(JSON.parse(r.value)) } catch {}
+        } else {
+          setLocation(null)
+        }
+      })
+    }
+  }, [isActive])
 
   const handleDragStart = (id: WidgetId) => setDragging(id)
 
