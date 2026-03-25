@@ -86,6 +86,7 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - ~~Script de migração do StudyFlow~~ (cancelado)
 - [ ] Deve ter uma forma de adicionar projetos de forma mais simplificada como ideias futuras e criar um widget que exibe esse tipo específico de ideias para eu relembrá-las
 - [ ] Já tem uma opção de criar projetos do tipo "hobbies"? Esse vai servir para organizar hobbies manuais como crochê, desenho, bijuterias, moda e resina (entre outros) e deve ser configurado como.
+- [ ] eu quero que o planner global seja responsável pelo algoritmo que define quando uma tarefa deve ser realizada levando em conta prioridade, prazo e limite de horas disponíveis/dia e que, quando acrescendo atividades, independente de ser na aba planner global ou na aba planner do projeto, ele deve organizar automaticamente (com a opção aberta caso eu queira reagendar). eu já consigo colocar o limite de horas nas configurações e esse algoritmo já está meio funcionando, só não está sendo organizado no global. além disso, na agenda, quero que a separação de cada dia/cabeçario seja igual em tamanho, fonte, cor e texto de onde está escrito "Agenda (data)" e ainda não está funcionando eu conseguir filtrar tarefas por data ao clicar no calendário... alias, essas atividades devem constar no calendário!!! inclusive na aba do calendário global!
 
 ---
 
