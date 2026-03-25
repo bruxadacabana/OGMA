@@ -84,6 +84,7 @@ async function seedProjectProperties(projectId: number, projectType: string): Pr
       await addProp('Créditos',      'creditos',     'number')
       await addProp('Carga Horária', 'carga_horaria','number')
       await addProp('Professor',     'professor',    'text')
+      await addProp('Instituição',   'instituicao',  'text')
       await addProp('Código',        'codigo',       'text')
       await addProp('Data Início',   'data_inicio',  'date')
       await addProp('Data Fim',      'data_fim',     'date')
