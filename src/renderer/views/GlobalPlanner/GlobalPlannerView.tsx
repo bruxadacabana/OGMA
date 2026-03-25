@@ -281,26 +281,23 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
 
   const loadData = useCallback(async () => {
     setLoading(true)
+    const tasksPromise = fromIpc<GlobalTask[]>(() => db().planner.listAllTasks({ include_completed: showCompleted }), 'listAllTasks')
     
-    // 1. Calcula os dias que vamos buscar no banco de dados
+    // Se clicou no calendário, exibe só 1 dia. Se não, exibe 3 dias empilhados.
     const baseDate = filterDate || new Date().toISOString().slice(0, 10);
-    const datesToFetch = Array.from({ length: daysToShow }).map((_, i) => {
+    const daysToFetch = filterDate ? 1 : 3;
+    
+    const dates = Array.from({ length: daysToFetch }).map((_, i) => {
       const d = new Date(baseDate + 'T12:00:00');
       d.setDate(d.getDate() + i);
       return d.toISOString().slice(0, 10);
     });
 
-    // 2. Prepara as requisições (1 para as tarefas gerais, várias para os dias da agenda)
-    const tasksPromise = fromIpc<GlobalTask[]>(() => db().planner.listAllTasks({ include_completed: showCompleted }), 'listAllTasks');
-    const blocksPromises = datesToFetch.map(d => fromIpc<AgendaBlock[]>(() => db().planner.todayBlocks(d), 'todayBlocks'));
-
-    // 3. Dispara tudo ao mesmo tempo no banco de dados
+    const blocksPromises = dates.map(d => fromIpc<AgendaBlock[]>(() => db().planner.todayBlocks(d), 'todayBlocks'));
     const [tasksRes, ...blocksResArray] = await Promise.all([tasksPromise, ...blocksPromises]);
     
-    // 4. Salva as tarefas
     tasksRes.match(d => setTasks(d), () => {})
     
-    // 5. Junta os blocos de todos os dias num único array
     const allBlocks: AgendaBlock[] = [];
     for (const res of blocksResArray) {
       res.match(d => allBlocks.push(...d), () => {});
@@ -308,11 +305,8 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
     
     setAgendaBlocks(allBlocks);
     if(activeFocus && !allBlocks.find(b=>b.id===activeFocus.id)) setActiveFocus(null);
-    
     setLoading(false)
-  }, [showCompleted, filterDate, daysToShow]) // daysToShow adicionado aqui nas dependências!
-
-  useEffect(() => { loadData() }, [loadData])
+  }, [showCompleted, filterDate, activeFocus])
 
   // Lógica do Log Manual do Pomodoro
   const handleLogWork = async (hours: number, startTime?: string, endTime?: string) => {
@@ -402,46 +396,56 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
              
              rightTab === 'agenda' ? (
               /* MODO AGENDA */
-              <>
-                {/* Botões para escolher 1, 2 ou 3 dias */}
-                <div style={{ display:'flex', justifyContent:'flex-end', gap:6, marginBottom: 16 }}>
-                  <div className="bj-group-toggle" style={{ borderColor: border }}>
-                    <button className={daysToShow === 1 ? 'active' : ''} style={{ color: daysToShow === 1 ? accent : ink2 }} onClick={() => setDaysToShow(1)}>1 dia</button>
-                    <button className={daysToShow === 2 ? 'active' : ''} style={{ color: daysToShow === 2 ? accent : ink2 }} onClick={() => setDaysToShow(2)}>2 dias</button>
-                    <button className={daysToShow === 3 ? 'active' : ''} style={{ color: daysToShow === 3 ? accent : ink2 }} onClick={() => setDaysToShow(3)}>3 dias</button>
-                  </div>
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+                {(() => {
+                  // Agrupa os blocos pelas datas buscadas
+                  const baseDate = filterDate || new Date().toISOString().slice(0, 10);
+                  const daysToRender = filterDate ? 1 : 3;
+                  const renderDates = Array.from({ length: daysToRender }).map((_, i) => {
+                    const d = new Date(baseDate + 'T12:00:00');
+                    d.setDate(d.getDate() + i);
+                    return d.toISOString().slice(0, 10);
+                  });
 
-                {/* Renderização Agrupada com Divisores */}
-                {Array.from({ length: daysToShow }).map((_, i) => {
-                  // Calcula a data exata deste grupo
-                  const baseRenderDate = filterDate || new Date().toISOString().slice(0, 10);
-                  const d = new Date(baseRenderDate + 'T12:00:00');
-                  d.setDate(d.getDate() + i);
-                  const dateStr = d.toISOString().slice(0, 10);
-                  
-                  // Filtra apenas os blocos desta data
-                  const dayBlocks = agendaBlocks.filter(b => b.date === dateStr);
-                  
-                  return (
-                    <div key={dateStr} className="bj-group">
-                      <div className="bj-group-label" style={{ color: ink2, borderColor: border }}>
-                        {fmtDate(dateStr)} <span style={{ opacity:0.5, marginLeft:6, fontWeight:'normal' }}>({dayBlocks.length})</span>
-                      </div>
-                      
-                      {dayBlocks.length === 0 ? (
-                        <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:ink2, padding:'16px 0', textAlign:'center', fontStyle:'italic', opacity:0.5 }}>
-                          Sem blocos para este dia.
+                  return renderDates.map(date => {
+                    const blocks = agendaBlocks.filter(b => b.date === date);
+                    const dateObj = new Date(date + 'T12:00:00');
+                    const dayLabel = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+                    const isToday = date === new Date().toISOString().slice(0,10);
+                    
+                    return (
+                      <div key={date}>
+                        {/* ESTE É O CABEÇALHO EXATAMENTE IGUAL À ABA SUPERIOR */}
+                        <div style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 12,
+                          letterSpacing: '0.1em',
+                          color: accent,
+                          borderBottom: `2px solid ${accent}`,
+                          paddingBottom: 4,
+                          marginBottom: 16,
+                          display: 'inline-block',
+                          textTransform: 'uppercase'
+                        }}>
+                          AGENDA ({dayLabel}){isToday ? ' · HOJE' : ''}
                         </div>
-                      ) : (
-                        dayBlocks.map(b => <AgendaBlockItem key={b.id} block={b} dark={dark} onStartFocus={setActiveFocus} />)
-                      )}
-                    </div>
-                  )
-                })}
-              </>
+                        
+                        {blocks.length === 0 ? (
+                          <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:ink2, padding:'16px 0', fontStyle:'italic', opacity:0.5 }}>
+                            Livre. Sem tarefas agendadas.
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {blocks.map(b => <AgendaBlockItem key={b.id} block={b} dark={dark} onStartFocus={setActiveFocus} />)}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                })()}
+              </div>
              ) : (
-              
+
               /* MODO TAREFAS (LOG COMPLETO) */
               <>
                 <div style={{ display:'flex', justifyContent:'flex-end', gap:6, marginBottom: 16 }}>
