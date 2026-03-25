@@ -409,6 +409,7 @@ async function runIncrementalMigrations(client: Client): Promise<void> {
     `ALTER TABLE planned_tasks ADD COLUMN parent_task_id INTEGER REFERENCES planned_tasks(id) ON DELETE SET NULL`,
     `ALTER TABLE reminders ADD COLUMN priority TEXT DEFAULT 'medium'`,
     `ALTER TABLE reminders ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE`,
+    `ALTER TABLE projects ADD COLUMN institution TEXT`,
   ]
 
   for (const sql of migrations) {
@@ -435,24 +436,6 @@ async function ensureAcademicProperties(client: Client): Promise<void> {
         await client.execute({
           sql:  `INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order) VALUES (?, 'Código', 'codigo', 'text', 1, 0)`,
           args: [pid],
-        })
-      }
-
-      // Propriedade "Instituição"
-      const hasInstituicao = await client.execute({
-        sql:  `SELECT id FROM project_properties WHERE project_id = ? AND prop_key = 'instituicao'`,
-        args: [pid],
-      })
-      if (hasInstituicao.rows.length === 0) {
-        // sort_order 7 fica entre carga_horaria(5) e professor(6)... usa valor alto para cair no fim
-        const maxOrder = await client.execute({
-          sql:  `SELECT COALESCE(MAX(sort_order), 0) FROM project_properties WHERE project_id = ?`,
-          args: [pid],
-        })
-        const nextOrder = Number(maxOrder.rows[0]?.[0] ?? 0) + 1
-        await client.execute({
-          sql:  `INSERT INTO project_properties (project_id, name, prop_key, prop_type, is_built_in, sort_order) VALUES (?, 'Instituição', 'instituicao', 'text', 1, ?)`,
-          args: [pid, nextOrder],
         })
       }
 

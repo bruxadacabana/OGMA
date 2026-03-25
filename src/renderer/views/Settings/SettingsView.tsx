@@ -46,14 +46,20 @@ export function SettingsView({ dark, onToggleTheme, fontSizeValue, onFontSize }:
   const handleSync = async () => {
     setSyncing(true)
     setSyncResult(null)
-    const r = await fromIpc<{ ok: boolean; error?: string }>(() => db().sync.now(), 'dbSync')
-    setSyncing(false)
-    if (r.isOk() && r.value.ok) {
-      setSyncResult('ok')
-      pushToast({ type: 'success', message: 'Sincronizado com Turso.' })
-    } else {
+    try {
+      const r = await db().sync.now()
+      setSyncing(false)
+      if (r?.ok) {
+        setSyncResult('ok')
+        pushToast({ kind: 'success', title: 'Sincronizado com Turso.' })
+      } else {
+        setSyncResult('error')
+        pushToast({ kind: 'error', title: r?.error ?? 'Falha na sincronização' })
+      }
+    } catch (e: any) {
+      setSyncing(false)
       setSyncResult('error')
-      pushToast({ type: 'error', message: r.isOk() ? (r.value.error ?? 'Falha no sync') : 'Falha no sync' })
+      pushToast({ kind: 'error', title: e?.message ?? 'Falha na sincronização' })
     }
     setTimeout(() => setSyncResult(null), 3000)
   }
@@ -412,7 +418,7 @@ export function SettingsView({ dark, onToggleTheme, fontSizeValue, onFontSize }:
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
-              className="btn-outline"
+              className="btn btn-sm"
               onClick={handleSync}
               disabled={syncing}
             >

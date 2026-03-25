@@ -57,6 +57,7 @@ export interface Project {
   project_type: ProjectType
   subcategory:  string | null
   semester:     string | null
+  institution:  string | null
   status:       ProjectStatus
   date_start:   string | null
   date_end:     string | null
@@ -73,6 +74,7 @@ export interface ProjectCreateInput {
   color?:        string
   project_type:  ProjectType
   subcategory?:  string
+  institution?:  string
   status?:       ProjectStatus
   date_start?:   string
   date_end?:     string

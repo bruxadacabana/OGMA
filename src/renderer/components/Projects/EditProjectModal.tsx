@@ -13,12 +13,13 @@ interface Props {
 export const EditProjectModal: React.FC<Props> = ({ project, onClose, onDeleted }) => {
   const { dark, updateProject, deleteProject } = useAppStore()
 
-  const [name,        setName]   = useState(project.name)
-  const [description, setDesc]   = useState(project.description ?? '')
-  const [icon,        setIcon]   = useState(project.icon ?? '✦')
-  const [color,       setColor]  = useState(project.color ?? PROJECT_COLORS[0])
-  const [subcategory, setSub]    = useState(project.subcategory ?? '')
-  const [status,      setStatus] = useState(project.status)
+  const [name,        setName]        = useState(project.name)
+  const [description, setDesc]        = useState(project.description ?? '')
+  const [institution, setInstitution] = useState(project.institution ?? '')
+  const [icon,        setIcon]        = useState(project.icon ?? '✦')
+  const [color,       setColor]       = useState(project.color ?? PROJECT_COLORS[0])
+  const [subcategory, setSub]         = useState(project.subcategory ?? '')
+  const [status,      setStatus]      = useState(project.status)
   const [submitting,  setSubmit] = useState(false)
   const [confirmDel,  setConfirmDel] = useState(false)
   const [error,       setError]  = useState('')
@@ -37,6 +38,7 @@ export const EditProjectModal: React.FC<Props> = ({ project, onClose, onDeleted 
       ...project,
       name: name.trim(),
       description: description.trim() || null,
+      institution: project.project_type === 'academic' ? (institution.trim() || null) : null,
       icon, color, subcategory: subcategory || null,
       status,
     })
@@ -75,6 +77,15 @@ export const EditProjectModal: React.FC<Props> = ({ project, onClose, onDeleted 
           onChange={e => setDesc(e.target.value)} rows={2}
           style={{ resize: 'none' }} placeholder="Opcional..." />
       </div>
+
+      {project.project_type === 'academic' && (
+        <div className="form-group" style={{ marginBottom: 14 }}>
+          <label className="form-label" style={{ color: ink2 }}>Instituição</label>
+          <input className="input" value={institution}
+            onChange={e => setInstitution(e.target.value)}
+            placeholder="Ex: USP, UNICAMP, IFSP..." />
+        </div>
+      )}
 
       {subs.length > 0 && (
         <div className="form-group" style={{ marginBottom: 14 }}>

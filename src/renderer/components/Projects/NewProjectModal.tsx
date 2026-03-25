@@ -28,9 +28,10 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
   const [icon, setIcon]           = useState('✦')
   const [color, setColor]         = useState(PROJECT_COLORS[0])
   const [subcategory, setSub]     = useState('')
-  const [dateStart, setDateStart] = useState('')
-  const [dateEnd, setDateEnd]     = useState('')
-  const [submitting, setSubmit]   = useState(false)
+  const [institution, setInstitution] = useState('')
+  const [dateStart, setDateStart]     = useState('')
+  const [dateEnd, setDateEnd]         = useState('')
+  const [submitting, setSubmit]       = useState(false)
   const [error, setError]         = useState('')
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
@@ -101,6 +102,7 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
       color,
       project_type: selectedType!,
       subcategory:  subcategory || undefined,
+      institution:  selectedType === 'academic' ? (institution.trim() || undefined) : undefined,
       status:       'active',
       date_start:   dateStart || undefined,
       date_end:     dateEnd   || undefined,
@@ -177,6 +179,19 @@ export const NewProjectModal: React.FC<Props> = ({ onClose, onCreated }) => {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Instituição (apenas acadêmico) */}
+        {selectedType === 'academic' && (
+          <div className="form-group">
+            <label className="form-label" style={{ color: ink2 }}>Instituição</label>
+            <input
+              className="input"
+              placeholder="Ex: USP, UNICAMP, IFSP..."
+              value={institution}
+              onChange={e => setInstitution(e.target.value)}
+            />
           </div>
         )}
 

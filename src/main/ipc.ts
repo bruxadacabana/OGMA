@@ -663,12 +663,13 @@ export function registerIpcHandlers(): void {
     const r = await dbRun(`
       INSERT INTO projects
         (workspace_id, name, description, icon, color, project_type,
-         subcategory, status, date_start, date_end, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         subcategory, institution, status, date_start, date_end, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       data.workspace_id, data.name, data.description ?? null,
       data.icon ?? null, data.color ?? null, data.project_type ?? 'custom',
-      data.subcategory ?? null, data.status ?? 'active',
+      data.subcategory ?? null, data.institution ?? null,
+      data.status ?? 'active',
       data.date_start ?? null, data.date_end ?? null,
       data.sort_order ?? 0
     )
@@ -684,12 +685,12 @@ export function registerIpcHandlers(): void {
   api('projects:update', async (data) => {
     await dbRun(`
       UPDATE projects SET name=?, description=?, icon=?, color=?,
-        project_type=?, subcategory=?, semester=?, status=?, date_start=?, date_end=?,
-        sort_order=?, updated_at=datetime('now')
+        project_type=?, subcategory=?, institution=?, semester=?, status=?,
+        date_start=?, date_end=?, sort_order=?, updated_at=datetime('now')
       WHERE id=?`,
       data.name, data.description ?? null, data.icon ?? null,
       data.color ?? null, data.project_type, data.subcategory ?? null,
-      data.semester ?? null,
+      data.institution ?? null, data.semester ?? null,
       data.status, data.date_start ?? null, data.date_end ?? null,
       data.sort_order ?? 0, data.id
     )
