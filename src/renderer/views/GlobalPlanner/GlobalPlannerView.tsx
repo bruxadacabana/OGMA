@@ -519,6 +519,7 @@ function InlineCreateForm({ dark, projects, onCreated, onCancel }: {
   const [projectId, setProjectId] = useState<number | ''>(projects[0]?.id ?? '')
   const [title,     setTitle]     = useState('')
   const [taskType,  setTaskType]  = useState('atividade')
+  const [priority,  setPriority]  = useState('medium')
   const [dueDate,   setDueDate]   = useState(new Date().toISOString().slice(0, 10))
   const [hours,     setHours]     = useState('1')
   const [saving,    setSaving]    = useState(false)
@@ -569,6 +570,7 @@ function InlineCreateForm({ dark, projects, onCreated, onCancel }: {
         page_id:         linkedPageId,
         title:           title.trim(),
         task_type:       taskType,
+        priority,
         due_date:        dueDate,
         estimated_hours: parseFloat(hours) || 1,
       }),
@@ -579,7 +581,7 @@ function InlineCreateForm({ dark, projects, onCreated, onCancel }: {
     
     onCreated(result.value)
     // Limpar o formulário
-    setTitle(''); setTaskType('atividade'); setHours('1'); setPageId(null); setCreatePg(false)
+    setTitle(''); setTaskType('atividade'); setPriority('medium'); setHours('1'); setPageId(null); setCreatePg(false)
   }
 
   return (
@@ -633,6 +635,18 @@ function InlineCreateForm({ dark, projects, onCreated, onCancel }: {
         <select className="settings-input" style={{ flex:1, fontSize:11 }}
           value={taskType} onChange={e => setTaskType(e.target.value)}>
           {TASK_TYPES.map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+        </select>
+      </div>
+
+      <div className="bj-detail-row">
+        <label style={{ color:ink2 }}>Prioridade</label>
+        <select className="settings-input" style={{ flex:1, fontSize:11,
+          color: ({ low:'#8B7355', medium:'#2C5F8A', high:'#b8860b', urgent:'#8B3A2A' } as Record<string,string>)[priority] ?? ink2 }}
+          value={priority} onChange={e => setPriority(e.target.value)}>
+          <option value="low">Baixa</option>
+          <option value="medium">Média</option>
+          <option value="high">Alta</option>
+          <option value="urgent">Urgente</option>
         </select>
       </div>
 
