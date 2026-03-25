@@ -82,14 +82,14 @@ export default function App() {
       if (s.ui_font_size) {
         const val = s.ui_font_size
         setFontSizeValue(val)
-        document.documentElement.style.zoom = ({ small: '0.88', normal: '1', large: '1.12' } as const)[val] ?? '1'
+        document.documentElement.style.fontSize = ({ small: '11px', normal: '13px', large: '15px' } as const)[val] ?? '13px'
       }
     })
   }, [setDark])
 
   const handleFontSize = useCallback((val: 'small' | 'normal' | 'large') => {
     setFontSizeValue(val)
-    document.documentElement.style.zoom = ({ small: '0.88', normal: '1', large: '1.12' } as const)[val] ?? '1'
+    document.documentElement.style.fontSize = ({ small: '11px', normal: '13px', large: '15px' } as const)[val] ?? '13px'
     appSettings().set('ui_font_size', val)
   }, [])
 

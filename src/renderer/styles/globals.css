@@ -64,9 +64,13 @@ html, body, #root {
   overflow: hidden;
 }
 
+html {
+  font-size: 13px; /* base para rem — alterado por JS para ajuste de escala de fonte */
+}
+
 body {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 1rem;
   background: var(--paper);
   color: var(--ink);
   line-height: 1.6;
@@ -117,7 +121,7 @@ h1, h2, h3, h4, h5 {
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.85rem;
   letter-spacing: 0.08em;
   padding: 5px 14px;
   border-radius: var(--radius);
@@ -184,13 +188,13 @@ h1, h2, h3, h4, h5 {
 }
 .btn-icon:hover { background: var(--paper-darker); }
 
-.btn-sm { padding: 3px 10px; font-size: 10px; }
+.btn-sm { padding: 3px 10px; font-size: 0.77rem; }
 
 /* ── Inputs ──────────────────────────────────────────────── */
 .input, input[type="text"], input[type="search"],
 input[type="email"], input[type="number"], textarea, select {
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: 1.08rem;
   padding: 7px 11px;
   border-radius: var(--radius);
   border: 1px solid var(--rule);
@@ -347,7 +351,7 @@ input[type="email"], input[type="number"], textarea, select {
   width: 100%;
   padding: 9px 16px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.92rem;
   letter-spacing: 0.06em;
   color: var(--ink-light);
   background: transparent;
@@ -372,13 +376,13 @@ input[type="email"], input[type="number"], textarea, select {
 .nav-item-icon {
   width: 18px;
   text-align: center;
-  font-size: 14px;
+  font-size: 1.08rem;
   flex-shrink: 0;
 }
 
 .nav-sub-item {
   padding: 6px 16px 6px 44px;
-  font-size: 11px;
+  font-size: 0.85rem;
   color: var(--ink-faint);
 }
 .nav-sub-item:hover { color: var(--ink); }
@@ -386,7 +390,7 @@ input[type="email"], input[type="number"], textarea, select {
 
 .sidebar-section-label {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.69rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--ink-ghost);
@@ -418,7 +422,7 @@ input[type="email"], input[type="number"], textarea, select {
 
 .topbar-title {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 1.23rem;
   font-style: italic;
   color: var(--ink);
   flex: 1;
@@ -464,7 +468,7 @@ input[type="email"], input[type="number"], textarea, select {
 
 .modal-title {
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 1.38rem;
   font-style: italic;
   padding: 18px 20px 12px;
   border-bottom: 1px solid var(--rule);
@@ -487,7 +491,7 @@ input[type="email"], input[type="number"], textarea, select {
 .form-label {
   display: block;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.77rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-faint);
