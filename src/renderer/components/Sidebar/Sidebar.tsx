@@ -21,6 +21,8 @@ interface Props {
   activeSub?: SubSection
   projects: Project[]
   dark: boolean
+  collapsed: boolean
+  onToggle: () => void
   onNavigate: (s: Section) => void
   onNavigateSub: (s: SubSection) => void
   onProjectSelect: (id: number) => void
@@ -38,7 +40,7 @@ const NAV: { key: Section; icon: string; label: string }[] = [
 ]
 
 export const Sidebar: React.FC<Props> = ({
-  active, activeSub, projects, dark,
+  active, activeSub, projects, dark, collapsed, onToggle,
   onNavigate, onNavigateSub, onProjectSelect, onNewProject,
 }) => {
   const [projectsOpen, setProjectsOpen] = useState(true)
@@ -47,22 +49,43 @@ export const Sidebar: React.FC<Props> = ({
   const ink   = dark ? '#E8DFC8' : '#2C2416'
   const ink2  = dark ? '#8A7A62' : '#9C8E7A'
 
+  const toggleButton = (
+    <button
+      onClick={onToggle}
+      title={collapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
+      style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: ink2, fontSize: 12, padding: '4px 8px',
+        fontFamily: 'var(--font-mono)',
+      }}
+    >
+      {collapsed ? '▶' : '◀'}
+    </button>
+  )
+
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       {/* ── Logo ─────────────────────────────────────────── */}
-      <div className="sidebar-logo" style={{ position: 'relative', overflow: 'hidden', height: 76 }}>
-        <CosmosLayer
-          width={224} height={76}
-          seed="sidebar_logo" density="low" dark={dark}
-          style={{ opacity: 0.6, top: 0, left: 0 }}
-        />
-        <div style={{ position: 'relative', zIndex: 2 }}>
-          <div className="sidebar-logo-name" style={{ color: ink }}>OGMA</div>
-          <div className="sidebar-logo-sub" style={{ color: ink2 }}>
-            PROJETOS · ESTUDOS · LEITURAS
+      {collapsed ? (
+        <div className="sidebar-logo" style={{ position: 'relative', overflow: 'hidden', height: 76, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <CosmosLayer width={44} height={76} seed="sidebar_logo" density="low" dark={dark} style={{ opacity: 0.6, top: 0, left: 0 }} />
+          <div style={{ position: 'relative', zIndex: 2, fontFamily: 'var(--font-display)', fontSize: 20, fontStyle: 'italic', color: ink }}>O</div>
+        </div>
+      ) : (
+        <div className="sidebar-logo" style={{ position: 'relative', overflow: 'hidden', height: 76 }}>
+          <CosmosLayer
+            width={224} height={76}
+            seed="sidebar_logo" density="low" dark={dark}
+            style={{ opacity: 0.6, top: 0, left: 0 }}
+          />
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            <div className="sidebar-logo-name" style={{ color: ink }}>OGMA</div>
+            <div className="sidebar-logo-sub" style={{ color: ink2 }}>
+              PROJETOS · ESTUDOS · LEITURAS
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Navegação ────────────────────────────────────── */}
       <nav className="sidebar-nav">
@@ -70,6 +93,7 @@ export const Sidebar: React.FC<Props> = ({
           <React.Fragment key={key}>
             <button
               className={`nav-item${active === key ? ' active' : ''}`}
+              title={collapsed ? label : undefined}
               onClick={() => {
                 onNavigate(key)
                 if (key === 'projects') setProjectsOpen(o => !o)
@@ -77,8 +101,8 @@ export const Sidebar: React.FC<Props> = ({
               }}
             >
               <span className="nav-item-icon">{icon}</span>
-              <span>{label}</span>
-              {(key === 'projects' || key === 'library') && (
+              {!collapsed && <span>{label}</span>}
+              {!collapsed && (key === 'projects' || key === 'library') && (
                 <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.5 }}>
                   {(key === 'projects' ? projectsOpen : libraryOpen) ? '▾' : '▸'}
                 </span>
@@ -86,7 +110,7 @@ export const Sidebar: React.FC<Props> = ({
             </button>
 
             {/* Sub-itens de Projetos */}
-            {key === 'projects' && projectsOpen && (
+            {!collapsed && key === 'projects' && projectsOpen && (
               <div className="sidebar-sub-list">
                 {projects.length === 0 ? (
                   <span className="nav-sub-item" style={{ fontStyle: 'italic', opacity: 0.5 }}>
@@ -116,7 +140,7 @@ export const Sidebar: React.FC<Props> = ({
             )}
 
             {/* Sub-itens de Biblioteca */}
-            {key === 'library' && libraryOpen && (
+            {!collapsed && key === 'library' && libraryOpen && (
               <div className="sidebar-sub-list">
                 {(['resources', 'readings'] as SubSection[]).map(sub => (
                   <button
@@ -137,25 +161,32 @@ export const Sidebar: React.FC<Props> = ({
       </nav>
 
       {/* ── Rodapé ───────────────────────────────────────── */}
-      <div className="sidebar-footer" style={{ position: 'relative', overflow: 'hidden', height: 48 }}>
-        <CosmosLayer
-          width={224} height={48}
-          seed="sidebar_footer" density="low" dark={dark}
-          style={{ opacity: 0.45, top: 0, left: 0 }}
-        />
-        <div style={{
-          position: 'relative', zIndex: 2,
-          display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          <span style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 9, letterSpacing: '0.14em',
-            color: ink2,
-          }}>
-            OGMA v0.1.0
-          </span>
+      {collapsed ? (
+        <div className="sidebar-footer" style={{ justifyContent: 'center', padding: '10px 0' }}>
+          {toggleButton}
         </div>
-      </div>
+      ) : (
+        <div className="sidebar-footer" style={{ position: 'relative', overflow: 'hidden', height: 48, justifyContent: 'space-between' }}>
+          <CosmosLayer
+            width={224} height={48}
+            seed="sidebar_footer" density="low" dark={dark}
+            style={{ opacity: 0.45, top: 0, left: 0 }}
+          />
+          <div style={{
+            position: 'relative', zIndex: 2,
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9, letterSpacing: '0.14em',
+              color: ink2,
+            }}>
+              OGMA v0.1.0
+            </span>
+          </div>
+          {toggleButton}
+        </div>
+      )}
     </aside>
   )
 }

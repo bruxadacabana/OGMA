@@ -10,6 +10,8 @@ const db = () => (window as any).db
 interface Props {
   dark: boolean
   onToggleTheme: () => void
+  fontSizeValue: 'small' | 'normal' | 'large'
+  onFontSize: (val: 'small' | 'normal' | 'large') => void
 }
 
 interface GeoResult {
@@ -22,8 +24,10 @@ interface GeoResult {
   timezone:     string
 }
 
-export function SettingsView({ dark, onToggleTheme }: Props) {
+export function SettingsView({ dark, onToggleTheme, fontSizeValue, onFontSize }: Props) {
   const { workspace, loadWorkspace, pushToast } = useAppStore()
+
+  const ink2 = dark ? '#8A7A62' : '#9C8E7A'
 
   const [name,        setName]        = useState('')
   const [icon,        setIcon]        = useState('')
@@ -330,6 +334,33 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
         </div>
       </div>
 
+
+      {/* ── Interface ── */}
+      <div className="settings-section">
+        <div className="settings-section-label">Interface</div>
+        <div className="settings-card">
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 10, letterSpacing: '0.08em', color: ink2, textTransform: 'uppercase', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 8 }}>
+              Tamanho da fonte
+            </label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['small', 'normal', 'large'] as const).map(size => (
+                <button
+                  key={size}
+                  className={`btn${fontSizeValue === size ? ' btn-primary' : ''}`}
+                  onClick={() => onFontSize(size)}
+                  style={{ fontSize: size === 'small' ? 10 : size === 'large' ? 14 : 12 }}
+                >
+                  {size === 'small' ? 'Pequena' : size === 'normal' ? 'Normal' : 'Grande'}
+                </button>
+              ))}
+            </div>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginTop: 8, fontStyle: 'italic' }}>
+              Texto de exemplo — {fontSizeValue === 'small' ? 'fonte compacta (11px)' : fontSizeValue === 'large' ? 'fonte ampliada (15px)' : 'fonte padrão (13px)'}
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* ── Aparência ── */}
       <div className="settings-section">

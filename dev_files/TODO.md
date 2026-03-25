@@ -1,6 +1,6 @@
 # OGMA — TODO
 
-> Atualizado: 2026-03-24
+> Atualizado: 2026-03-25
 
 ---
 
@@ -278,5 +278,11 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 - [ ] Pomodoro Timer completo com estatísticas
 - [ ] Templates customizados de projeto
 - [ ] IA: integração com Ollama e APIs externas
+
+---
+
+## Melhorias Futuras
+
+- [ ] Dashboard e página inicial de projeto: melhorar layout, widgets personalizáveis por projeto, resumo de progresso, atividades recentes, acesso rápido às páginas mais relevantes
 
 ---

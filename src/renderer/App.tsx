@@ -60,6 +60,17 @@ export default function App() {
     activeProject, selectProject, loadPages, pages,
   } = useAppStore()
 
+  const [fontSizeValue, setFontSizeValue] = useState<'small' | 'normal' | 'large'>('normal')
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
+    localStorage.getItem('sidebar_collapsed') === 'true'
+  )
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed
+    setSidebarCollapsed(next)
+    localStorage.setItem('sidebar_collapsed', String(next))
+  }
+
   // Carregar settings ao iniciar (antes do splash terminar)
   useEffect(() => {
     appSettings().getAll().then((s: AppSettings) => {
@@ -68,8 +79,19 @@ export default function App() {
         setDark(true)
         document.documentElement.classList.add('dark')
       }
+      if (s.ui_font_size) {
+        const val = s.ui_font_size
+        setFontSizeValue(val)
+        document.body.style.fontSize = ({ small: '11px', normal: '13px', large: '15px' } as const)[val] ?? '13px'
+      }
     })
   }, [setDark])
+
+  const handleFontSize = useCallback((val: 'small' | 'normal' | 'large') => {
+    setFontSizeValue(val)
+    document.body.style.fontSize = ({ small: '11px', normal: '13px', large: '15px' } as const)[val] ?? '13px'
+    appSettings().set('ui_font_size', val)
+  }, [])
 
   // Aplicar cor de acento do workspace ao CSS quando carregado ou alterado
   useEffect(() => {
@@ -172,6 +194,8 @@ export default function App() {
         active={section} activeSub={activeSub}
         projects={projects.map(p => ({ id: p.id, name: p.name, icon: p.icon ?? undefined, color: p.color ?? undefined }))}
         dark={dark}
+        collapsed={sidebarCollapsed}
+        onToggle={toggleSidebar}
         onNavigate={handleNavigate}
         onNavigateSub={s => { setActiveSub(s); setSection('library'); setView('library') }}
         onProjectSelect={handleProjectSelect}
@@ -288,7 +312,7 @@ export default function App() {
         {view === 'library'   && <LibraryView dark={dark} activeSub={activeSub}
             onNavigateSub={s => { setActiveSub(s); setSection('library'); setView('library') }} />}
         {view === 'analytics' && <PlaceholderView title="Analytics"     dark={dark} />}
-        {view === 'settings'  && <SettingsView dark={dark} onToggleTheme={toggleTheme} />}
+        {view === 'settings'  && <SettingsView dark={dark} onToggleTheme={toggleTheme} fontSizeValue={fontSizeValue} onFontSize={handleFontSize} />}
       </div>
 
       {/* Modais */}

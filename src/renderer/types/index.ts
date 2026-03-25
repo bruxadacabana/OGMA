@@ -19,6 +19,7 @@ export interface AppSettings {
   hidden_widgets?:  string[]
   sync_remote?:     string
   sync_enabled?:    boolean
+  ui_font_size?:    'small' | 'normal' | 'large'
 }
 
 /** Definições globais para o bridge do Electron */

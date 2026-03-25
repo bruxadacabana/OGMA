@@ -28,6 +28,7 @@ export interface AppSettings {
   dashboard_order?: string[]
   widget_sizes?:    Record<string, string>
   hidden_widgets?:  string[]
+  ui_font_size?:    'small' | 'normal' | 'large'
 }
 
 // ── Cache em memória ───────────────────────────────────────────────────────────

@@ -284,7 +284,16 @@ input[type="email"], input[type="number"], textarea, select {
   position: relative;
   overflow: hidden;
   flex-shrink: 0;
-  transition: background var(--transition);
+  transition: background var(--transition), width 220ms ease, min-width 220ms ease;
+}
+
+.sidebar.collapsed {
+  width: 44px;
+  min-width: 44px;
+}
+
+.sidebar.collapsed::before {
+  display: none;
 }
 
 /* Linha de margem vermelha */
