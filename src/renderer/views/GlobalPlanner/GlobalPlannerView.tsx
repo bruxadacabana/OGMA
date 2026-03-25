@@ -279,34 +279,73 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
     obs.observe(el); return () => obs.disconnect()
   }, [])
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    const tasksPromise = fromIpc<GlobalTask[]>(() => db().planner.listAllTasks({ include_completed: showCompleted }), 'listAllTasks')
-    
-    // Se clicou no calendário, exibe só 1 dia. Se não, exibe 3 dias empilhados.
+  const loadData = useCallback(() => {
+    console.log("🔎 1. Iniciou o loadData sem awaits bloqueantes");
+    setLoading(true);
+
+    // Variáveis de controle para não destravar a tela cedo demais
+    let tarefasCarregadas = false;
+    let agendaCarregada = false;
+
+    const checkDone = () => {
+      if (tarefasCarregadas && agendaCarregada) {
+        console.log("🔎 6. Tudo terminou! Finalizando o loading.");
+        setLoading(false);
+      }
+    };
+
+    // --- BLOCO 1: CARREGAR TAREFAS ---
+    (async () => {
+      try {
+        console.log("🔎 2. Disparando pedido de tarefas...");
+        const res = await fromIpc<GlobalTask[]>(() => db().planner.listAllTasks({ include_completed: showCompleted }), 'listAllTasks');
+        res.match(d => setTasks(d || []), () => {});
+        console.log("🔎 3. Tarefas salvas no estado!");
+      } catch (err: any) { // Tipagem explícita adicionada aqui!
+        console.error("🚨 Erro nas Tarefas:", err);
+      } finally {
+        tarefasCarregadas = true;
+        checkDone();
+      }
+    })();
+
+    // --- BLOCO 2: CARREGAR AGENDA (SEQUENCIAL PARA EVITAR LOCKS) ---
     const baseDate = filterDate || new Date().toISOString().slice(0, 10);
     const daysToFetch = filterDate ? 1 : 3;
-    
     const dates = Array.from({ length: daysToFetch }).map((_, i) => {
       const d = new Date(baseDate + 'T12:00:00');
       d.setDate(d.getDate() + i);
       return d.toISOString().slice(0, 10);
     });
 
-    const blocksPromises = dates.map(d => fromIpc<AgendaBlock[]>(() => db().planner.todayBlocks(d), 'todayBlocks'));
-    const [tasksRes, ...blocksResArray] = await Promise.all([tasksPromise, ...blocksPromises]);
+    console.log(`🔎 4. Datas da agenda a buscar:`, dates);
     
-    tasksRes.match(d => setTasks(d), () => {})
-    
-    const allBlocks: AgendaBlock[] = [];
-    for (const res of blocksResArray) {
-      res.match(d => allBlocks.push(...d), () => {});
-    }
-    
-    setAgendaBlocks(allBlocks);
-    if(activeFocus && !allBlocks.find(b=>b.id===activeFocus.id)) setActiveFocus(null);
-    setLoading(false)
-  }, [showCompleted, filterDate, activeFocus])
+    (async () => {
+      try {
+        const allBlocks: AgendaBlock[] = [];
+        for (const dateStr of dates) {
+          console.log(`🔎 -> Buscando blocos para o dia: ${dateStr}`);
+          const res = await fromIpc<AgendaBlock[]>(() => db().planner.todayBlocks(dateStr), 'todayBlocks');
+          res.match(d => {
+            if (d && Array.isArray(d)) allBlocks.push(...d);
+          }, () => {});
+        }
+        
+        console.log("🔎 5. Todos os blocos carregados!", allBlocks);
+        setAgendaBlocks(allBlocks);
+        
+        if (activeFocus && !allBlocks.find(b => b.id === activeFocus.id)) {
+          setActiveFocus(null);
+        }
+      } catch (err: any) { // Tipagem explícita adicionada aqui também!
+        console.error("🚨 Erro na Agenda:", err);
+      } finally {
+        agendaCarregada = true;
+        checkDone();
+      }
+    })();
+
+  }, [showCompleted, filterDate, activeFocus]);
 
   // Lógica do Log Manual do Pomodoro
   const handleLogWork = async (hours: number, startTime?: string, endTime?: string) => {
