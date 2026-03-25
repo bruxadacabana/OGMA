@@ -186,6 +186,24 @@ const KEYWORD_MAP: [string[], string[]][] = [
   // Gestão de tempo
   [['tempo','agenda','horario','cronograma','prazo','deadline','planejamento','calendario'],
    ['⏰','📅','🗓️','⌛','⏱️','🎯','📋','✅','🔔']],
+  // Módulos / Unidades / Aulas
+  [['modulo','unidade','aula','tema','capitulo','topico','licao','sessao'],
+   ['📚','📖','📝','🗂️','📋','📌','🔖','📓','📒','📔','🗒️','✏️']],
+  // Fundamentos / Introdução / Bases
+  [['fundamentos','introducao','bases','principios','nocoes','conceitos','teoria'],
+   ['📖','🏛️','💡','🔭','📐','🧩','⚙️','📜','🌱','🌟']],
+  // Seminário / Apresentação / Trabalho acadêmico
+  [['seminario','apresentacao','palestra','conferencia','simpósio','workshop'],
+   ['🎤','🎙️','🎭','🗣️','📊','📋','🏆','🎓','👥']],
+  // Exercício / Prática / Lista
+  [['exercicio','pratica','lista','atividade','tarefa','problema','questao'],
+   ['✏️','📝','🔧','💪','🎯','✅','📋','🗒️','⚡']],
+  // Resumo / Revisão / Fichamento
+  [['resumo','revisao','sintese','fichamento','esquema','mapa','mapa mental'],
+   ['🗺️','📊','🧩','📝','✍️','🔍','📌','📑','💡']],
+  // Prova / Avaliação / Exame
+  [['prova','avaliacao','exame','teste','quiz','simulado','gabarito'],
+   ['📋','✏️','🎓','⏰','🏆','❓','📊','🎯']],
 ]
 
 function suggestFromText(text: string): string[] {

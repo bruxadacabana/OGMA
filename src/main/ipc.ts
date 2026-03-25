@@ -534,6 +534,93 @@ async function maybeCreateSpacedReview(taskId: number): Promise<void> {
   log.info('spaced-review criada', { taskId, nextDue, depth, reviewId: r.lastInsertRowid })
 }
 
+// ── Geração de código académico ───────────────────────────────────────────────
+const CODE_STOP_WORDS = new Set([
+  'de','do','da','dos','das','e','em','com','a','o','as','os',
+  'um','uma','para','por','ao','aos','no','na','nos','nas',
+  'se','que','mas','ou','num','duma',
+])
+const ROMAN_NUMS: Record<string, number> = {
+  'i':1,'ii':2,'iii':3,'iv':4,'v':5,'vi':6,'vii':7,'viii':8,'ix':9,
+  'x':10,'xi':11,'xii':12,'xiii':13,'xiv':14,'xv':15,'xx':20,
+}
+
+function generateAcademicCode(title: string, existingCodes: string[]): string {
+  const norm = title
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+
+  // Extract number from title (Arabic digits first, then Roman numerals)
+  let titleNum: number | null = null
+  const arabicMatch = norm.match(/\b(\d+)\b/)
+  if (arabicMatch) {
+    titleNum = parseInt(arabicMatch[1], 10)
+  } else {
+    for (const w of norm.split(/\s+/)) {
+      if (ROMAN_NUMS[w] !== undefined) { titleNum = ROMAN_NUMS[w]; break }
+    }
+  }
+
+  // Get meaningful words: non-stop-word, non-numeric, non-roman, length > 1
+  const meaningful = norm
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !CODE_STOP_WORDS.has(w) && !/^\d+$/.test(w) && ROMAN_NUMS[w] === undefined)
+
+  // Generate prefix candidates (ordered by preference)
+  const prefixes = generateCodePrefixes(meaningful)
+  const suffix   = titleNum != null ? String(titleNum).padStart(3, '0') : '001'
+
+  // Return first non-colliding code
+  for (const prefix of prefixes) {
+    const code = prefix + suffix
+    if (!existingCodes.includes(code)) return code
+  }
+
+  // Last resort: increment suffix with the best prefix
+  const best    = prefixes[0] ?? 'PAG'
+  const pattern = new RegExp(`^${best}(\\d+)$`)
+  const used    = existingCodes
+    .map(c => c?.match(pattern)?.[1])
+    .filter(Boolean).map(Number)
+  const next = used.length > 0 ? Math.max(...used) + 1 : (titleNum ?? 1) + 1
+  return best + String(next).padStart(3, '0')
+}
+
+function generateCodePrefixes(words: string[]): string[] {
+  const raw: string[] = []
+
+  if (words.length === 0) return ['PAG']
+
+  if (words.length === 1) {
+    const w = words[0]
+    raw.push(w.slice(0, 3))                        // MOD, CAL, FUN
+    raw.push(w.slice(1, 4))                        // ODU, ALU (chars 2-4)
+    raw.push(w[0] + w.slice(-2))                   // MUO, CFO (first + last 2)
+  } else if (words.length === 2) {
+    const [a, b] = words
+    raw.push(a.slice(0, 2) + b[0])                 // FU+C=FUC, FU+E=FUE
+    raw.push(a[0] + b.slice(0, 2))                 // F+CI=FCI, F+EA=FEA
+    raw.push(a[0] + b[0] + a[1])                   // F+C+U=FCU
+    raw.push(a.slice(0, 3))                        // FUN (fallback word1 first 3)
+    raw.push(b.slice(0, 3))                        // CID / EAD (fallback word2 first 3)
+  } else {
+    const [a, b, c] = words
+    raw.push(a[0] + b[0] + c[0])                   // initials of first 3 words
+    raw.push(a.slice(0, 2) + b[0])                 // first 2 of word1 + first of word2
+    raw.push(a[0] + b.slice(0, 2))                 // first of word1 + first 2 of word2
+    raw.push(a.slice(0, 3))                        // first 3 of word1
+    if (words.length > 3) raw.push(a[0] + b[0] + words[3][0]) // skip word3
+  }
+
+  return [...new Set(
+    raw
+      .map(p => p.toUpperCase().padEnd(3, 'X').slice(0, 3))
+      .filter(p => /^[A-Z]{3}$/.test(p))
+  )]
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 export function registerIpcHandlers(): void {
@@ -699,16 +786,7 @@ export function registerIpcHandlers(): void {
               codigoProp.id
             )).map((row: any) => row.value_text as string)
 
-            const title  = data.title ?? 'Sem título'
-            const prefix = title
-              .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-              .toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3).padEnd(3, 'X')
-            const pattern = new RegExp(`^${prefix}(\\d+)$`)
-            const nums = existingCodes
-              .map(c => c?.match(pattern)?.[1])
-              .filter(Boolean).map(Number)
-            const next   = nums.length > 0 ? Math.max(...nums) + 1 : 1
-            const codigo = `${prefix}${String(next).padStart(3, '0')}`
+            const codigo = generateAcademicCode(data.title ?? 'Sem título', existingCodes)
 
             await dbRun(
               `INSERT INTO page_prop_values (page_id, property_id, value_text)

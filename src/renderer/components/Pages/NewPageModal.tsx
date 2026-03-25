@@ -15,7 +15,7 @@ interface Property {
   prop_type: string
   is_required: number
 }
-interface PropOption { id: number; value: string; color?: string }
+interface PropOption { id: number; label: string; color?: string }
 interface Tag { id: number; name: string; color?: string }
 interface PageItem { id: number; title: string; icon?: string; parent_id?: number | null }
 
@@ -29,10 +29,11 @@ const COVER_COLORS = [
 function propPayload(prop: Property, value: any): Record<string, any> | null {
   if (value === '' || value === null || value === undefined) return null
   switch (prop.prop_type) {
-    case 'number':  return { value_num:  Number(value) }
-    case 'boolean': return { value_bool: value ? 1 : 0 }
-    case 'date':    return { value_date: String(value) }
-    default:        return { value_text: String(value) }
+    case 'number':       return { value_num:  Number(value) }
+    case 'checkbox':     return { value_bool: value ? 1 : 0 }
+    case 'date':         return { value_date: String(value) }
+    case 'multi_select': return { value_json: Array.isArray(value) ? JSON.stringify(value) : value }
+    default:             return { value_text: String(value) }  // text, url, select
   }
 }
 
@@ -84,8 +85,8 @@ export const NewPageModal: React.FC<Props> = ({ project, onClose, onCreated }) =
       if (tagsR.isOk())  setTags(tagsR.value)
       if (propsR.isOk()) {
         setProperties(propsR.value)
-        // load options for select-type properties
-        const selectProps = propsR.value.filter(p => p.prop_type === 'select')
+        // load options for select-type and multi_select-type properties
+        const selectProps = propsR.value.filter(p => p.prop_type === 'select' || p.prop_type === 'multi_select')
         if (selectProps.length > 0) {
           const results = await Promise.all(
             selectProps.map(p =>
@@ -265,7 +266,7 @@ export const NewPageModal: React.FC<Props> = ({ project, onClose, onCreated }) =
                 <label style={{ ...labelStyle, marginBottom: 2 }}>
                   {prop.name}{prop.is_required ? ' *' : ''}
                 </label>
-                {prop.prop_type === 'boolean' ? (
+                {prop.prop_type === 'checkbox' ? (
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                     <input
                       type="checkbox"
@@ -282,9 +283,31 @@ export const NewPageModal: React.FC<Props> = ({ project, onClose, onCreated }) =
                   >
                     <option value="">— selecione —</option>
                     {(propOptions[prop.id] ?? []).map(opt => (
-                      <option key={opt.id} value={opt.value}>{opt.value}</option>
+                      <option key={opt.id} value={opt.label}>{opt.label}</option>
                     ))}
                   </select>
+                ) : prop.prop_type === 'multi_select' ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {(propOptions[prop.id] ?? []).map(opt => {
+                      const sel = (propValues[prop.id] as string[] ?? []).includes(opt.label)
+                      return (
+                        <button key={opt.id} type="button"
+                          onClick={() => {
+                            const cur: string[] = propValues[prop.id] ?? []
+                            const next = sel ? cur.filter(l => l !== opt.label) : [...cur, opt.label]
+                            setPropValues(prev => ({ ...prev, [prop.id]: next }))
+                          }}
+                          style={{
+                            padding: '2px 8px', borderRadius: 10, fontSize: 11,
+                            fontFamily: 'var(--font-mono)', cursor: 'pointer',
+                            border: `1px solid ${sel ? (opt.color ?? accent) : border}`,
+                            background: sel ? (opt.color ? opt.color + '25' : accent + '20') : 'transparent',
+                            color: sel ? (opt.color ?? accent) : ink2,
+                          }}
+                        >{opt.label}</button>
+                      )
+                    })}
+                  </div>
                 ) : prop.prop_type === 'date' ? (
                   <input
                     type="date"
