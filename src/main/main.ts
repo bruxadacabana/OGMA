@@ -94,14 +94,6 @@ async function iniciarFluxoSincronia(win: BrowserWindow) {
       notifySplash("Conectando ao repositório local...")
       await getClient() 
 
-      notifySplash("Alinhando registros com o tecido do tempo...")
-      
-      // MUDANÇA 2: Erro encapsulado em objeto para o logger
-      await syncClient().catch(err => {
-        log.error('Erro na sincronia inicial:', { error: String(err) })
-        notifySplash("Modo offline: operando em luz estelar local.")
-      })
-
       notifySplash("A biblioteca universal está atualizada.")
     } catch (dbError) {
       log.error('Falha crítica no banco:', { error: String(dbError) })

@@ -16,51 +16,56 @@ import { createLogger } from './logger'
 const log = createLogger('database')
 
 let _client: Client | null = null
+// Garante que todos os chamadores aguardam a inicialização completa
+let _initPromise: Promise<Client> | null = null
 
 function toFileUrl(p: string): string {
   return p.startsWith('file:') ? p : `file:${p}`
 }
 
 // ── Ciclo de vida ──────────────────────────────────────────────────────────────
-export async function getClient(): Promise<Client> {
-  if (!_client) {
+export function getClient(): Promise<Client> {
+  if (_client) return Promise.resolve(_client)
+  if (_initPromise) return _initPromise
+  _initPromise = _initClient()
+  return _initPromise
+}
+
+async function _initClient(): Promise<Client> {
     const localUrl  = toFileUrl(DB_PATH)
     const syncUrl   = process.env.TURSO_URL
     const authToken = process.env.TURSO_TOKEN
+    let client: Client
 
     if (syncUrl && authToken) {
-      // Embedded replica — sync primeiro, depois garante o schema local
-      _client = createClient({
+      // Embedded replica — garante o schema local; sync em background
+      client = createClient({
         url: localUrl,
         syncUrl: syncUrl,
         authToken: authToken,
         syncInterval: 60000,
       })
-      try {
-        await Promise.race([
-          _client.sync(),
-          new Promise<void>((_, reject) => setTimeout(() => reject(new Error('sync timeout')), 5000)),
-        ])
-      } catch (e) { log.warn('Sync inicial ignorado (offline ou timeout)', { e }) }
-      await initSchema(_client)
-      await seedDefaults(_client)
+      await initSchema(client)
+      await seedDefaults(client)
+      // Sync em background após inicialização — não bloqueia o startup
+      client.sync().catch(e => log.warn('Sync background falhou', { e }))
     } else {
-      // Local puro - inicializa schema manualmente
-      _client = createClient({ url: localUrl })
-      await _client.execute('PRAGMA foreign_keys = ON')
-      await initSchema(_client)
-      await seedDefaults(_client)
+      // Local puro
+      client = createClient({ url: localUrl })
+      await client.execute('PRAGMA foreign_keys = ON')
+      await initSchema(client)
+      await seedDefaults(client)
     }
 
-    await _client.execute('PRAGMA foreign_keys = ON')
-    log.info('Cliente libsql aberto', { 
-      local: DB_PATH, 
+    await client.execute('PRAGMA foreign_keys = ON')
+    _client = client
+    log.info('Cliente libsql aberto', {
+      local: DB_PATH,
       sync: syncUrl ?? 'local-only',
       mode: syncUrl ? 'embedded-replica' : 'local'
     })
     log.info('Banco pronto')
-  }
-  return _client
+    return _client
 }
 
 export function closeClient(): void {

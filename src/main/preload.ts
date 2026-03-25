@@ -125,6 +125,9 @@ contextBridge.exposeInMainWorld('db', {
   uploads: {
     saveImage: (d: any) => api('uploads:saveImage', d),
   },
+  sync: {
+    now: () => api('db:sync'),
+  },
   events: {
     listForMonth:   (year: number, month: number) => api('events:listForMonth',   { year, month }),
     listForPage:    (page_id: number)              => api('events:listForPage',    { page_id }),

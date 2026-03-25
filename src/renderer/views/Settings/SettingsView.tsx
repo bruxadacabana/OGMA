@@ -35,6 +35,25 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
   const [dailyHours,      setDailyHours]      = useState('4')
   const [dailyHoursSaved, setDailyHoursSaved] = useState(false)
 
+  // Sincronização
+  const [syncing,    setSyncing]    = useState(false)
+  const [syncResult, setSyncResult] = useState<'ok' | 'error' | null>(null)
+
+  const handleSync = async () => {
+    setSyncing(true)
+    setSyncResult(null)
+    const r = await fromIpc<{ ok: boolean; error?: string }>(() => db().sync.now(), 'dbSync')
+    setSyncing(false)
+    if (r.isOk() && r.value.ok) {
+      setSyncResult('ok')
+      pushToast({ type: 'success', message: 'Sincronizado com Turso.' })
+    } else {
+      setSyncResult('error')
+      pushToast({ type: 'error', message: r.isOk() ? (r.value.error ?? 'Falha no sync') : 'Falha no sync' })
+    }
+    setTimeout(() => setSyncResult(null), 3000)
+  }
+
   useEffect(() => {
     fromIpc<any>(() => db().config.get('planner_daily_hours'), 'getDailyHours')
       .then(r => { if (r.isOk() && r.value?.value) setDailyHours(r.value.value) })
@@ -350,6 +369,27 @@ export function SettingsView({ dark, onToggleTheme }: Props) {
               <span className="settings-about-val">{key}</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ── Sincronização ── */}
+      <div className="settings-section">
+        <div className="settings-section-label">Sincronização</div>
+        <div className="settings-card">
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-faint)', marginBottom: 12 }}>
+            Força uma sincronização manual com o Turso Cloud. Útil caso a sincronização automática tenha falhado no arranque.
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              className="btn-outline"
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? '↻ Sincronizando...' : '↻ Sincronizar agora'}
+            </button>
+            {syncResult === 'ok'    && <span style={{ color: 'var(--accent)', fontSize: 12 }}>✓ Concluído</span>}
+            {syncResult === 'error' && <span style={{ color: '#c0392b',       fontSize: 12 }}>✗ Falhou</span>}
+          </div>
         </div>
       </div>
 
