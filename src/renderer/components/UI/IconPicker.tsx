@@ -220,6 +220,7 @@ export function IconPicker({ value, onChange, dark, size = 24, suggestFor }: Pro
   const [panelPos, setPanelPos] = useState({ top: 0, left: 0 })
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef   = useRef<HTMLDivElement>(null)
+  const tabsRef    = useRef<HTMLDivElement>(null)
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
@@ -228,8 +229,21 @@ export function IconPicker({ value, onChange, dark, size = 24, suggestFor }: Pro
   const cardBg = dark ? '#1A1710' : '#EDE7D9'
   const accent = dark ? '#D4A820' : '#b8860b'
 
-  const PANEL_W = 300
-  const PANEL_H = 380
+  const PANEL_W = 320
+  const PANEL_H = 400
+
+  const scrollTabs = (dir: number) => {
+    tabsRef.current?.scrollBy({ left: dir * 120, behavior: 'smooth' })
+  }
+
+  const prevCat = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setCatIdx(i => (i - 1 + CATEGORIES.length) % CATEGORIES.length)
+  }
+  const nextCat = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setCatIdx(i => (i + 1) % CATEGORIES.length)
+  }
 
   const openPanel = useCallback(() => {
     if (!triggerRef.current) return
@@ -262,6 +276,13 @@ export function IconPicker({ value, onChange, dark, size = 24, suggestFor }: Pro
     window.addEventListener('resize', close)
     return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close) }
   }, [open])
+
+  // Scroll active tab into view when category changes
+  useEffect(() => {
+    if (!tabsRef.current) return
+    const btn = tabsRef.current.children[catIdx] as HTMLElement | undefined
+    btn?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+  }, [catIdx])
 
   const handleSelect = (icon: string) => { onChange(icon); setOpen(false); setSearch('') }
 
@@ -342,22 +363,56 @@ export function IconPicker({ value, onChange, dark, size = 24, suggestFor }: Pro
       {/* Tabs de categoria (só quando sem busca) */}
       {!search && (
         <div style={{
-          display: 'flex', gap: 2, padding: '4px 8px 0',
+          display: 'flex', alignItems: 'stretch',
           borderBottom: `1px solid ${border}`, flexShrink: 0,
-          overflowX: 'auto', scrollbarWidth: 'none',
         }}>
-          {CATEGORIES.map((cat, i) => (
-            <button key={cat.label} onClick={() => setCatIdx(i)} style={{
-              fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.06em',
-              padding: '3px 6px', border: 'none', borderRadius: '2px 2px 0 0',
-              cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
-              background: catIdx === i ? cardBg : 'transparent',
-              color: catIdx === i ? accent : ink2,
-              borderBottom: catIdx === i ? `2px solid ${accent}` : '2px solid transparent',
-            }}>
-              {cat.label}
-            </button>
-          ))}
+          {/* Botão anterior */}
+          <button
+            onMouseDown={e => e.preventDefault()}
+            onClick={prevCat}
+            style={{
+              flexShrink: 0, width: 22, border: 'none',
+              borderRight: `1px solid ${border}`,
+              background: 'transparent', cursor: 'pointer',
+              color: ink2, fontSize: 10, padding: 0,
+            }}
+            title="Categoria anterior"
+          >◀</button>
+
+          {/* Lista de tabs com scroll */}
+          <div
+            ref={tabsRef}
+            style={{
+              flex: 1, display: 'flex', gap: 2, padding: '4px 6px 0',
+              overflowX: 'auto', scrollbarWidth: 'none',
+            }}
+          >
+            {CATEGORIES.map((cat, i) => (
+              <button key={cat.label} onClick={() => setCatIdx(i)} style={{
+                fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.06em',
+                padding: '3px 7px', border: 'none', borderRadius: '2px 2px 0 0',
+                cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
+                background: catIdx === i ? cardBg : 'transparent',
+                color: catIdx === i ? accent : ink2,
+                borderBottom: catIdx === i ? `2px solid ${accent}` : '2px solid transparent',
+              }}>
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Botão próximo */}
+          <button
+            onMouseDown={e => e.preventDefault()}
+            onClick={nextCat}
+            style={{
+              flexShrink: 0, width: 22, border: 'none',
+              borderLeft: `1px solid ${border}`,
+              background: 'transparent', cursor: 'pointer',
+              color: ink2, fontSize: 10, padding: 0,
+            }}
+            title="Próxima categoria"
+          >▶</button>
         </div>
       )}
 
