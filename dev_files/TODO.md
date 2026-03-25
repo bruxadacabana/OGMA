@@ -1,6 +1,6 @@
 # OGMA — TODO
 
-> Atualizado: 2026-03-25
+> Atualizado: 2026-03-25 (sessão 2)
 
 ---
 
@@ -35,6 +35,11 @@ Fazer `git commit` após cada funcionalidade ou mudança implementada, com mensa
 - [x] Planejamento de revisão com repetição espaçada: 1→3→7→14→30 dias, ativável por tarefa
 - [x] Aba TEMPO removida — Timer/Pomodoro integrado no Planner: botão ▶ por tarefa, auto-log no bloco, registo manual (duração+início ou início+fim), página obrigatória
 - [x] Bug: ao criar atividade através do Planner, não aparece a opção de conectar a atividade a uma página, apenas a um projeto
+- [x] Dashboard não recarregava ao voltar ao separador (corrigido: prop `isActive` nos widgets)
+- [x] Schema do DB não era recriado no modo embedded replica após apagar o ficheiro local (corrigido: padrão `_initPromise` + sync em background)
+- [x] Botão de sincronização manual nas Configurações (fix: chamada direta a `db().sync.now()`, sem `fromIpc`)
+- [x] Tamanho de fonte nas Configurações não alterava nada (fix: CSS usa `rem` com base em `html { font-size }`)
+- [x] Barra lateral recolhível (modo só-ícones, toggle ◀▶, persistência em localStorage)
 
 ---
 
@@ -72,8 +77,11 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 ## Fase 6 — Módulo Académico Completo
 
 - [x] `colorUtils.ts` — cores HSL automáticas por disciplina (disciplineColor + disciplineColorAlpha)
-- [x] Gerador de código `PREFIX###` automático (IPC pages:create, propriedade built-in `codigo`)
+- [x] Gerador de código `PREFIX###` automático (IPC pages:create, propriedade built-in `codigo`) — algoritmo melhorado com initials por palavras significativas + extração de numerais
 - [x] Pré-requisitos entre páginas com detecção de ciclo (IPC + UI no PageView para projetos académicos)
+- [x] Campo `institution` no nível do projeto (coluna na tabela `projects`, visível em NewProjectModal e EditProjectModal apenas para tipo `academic`) — "Professor" permanece propriedade da página
+- [x] Modal de nova página expandido: cor de capa, página pai, propriedades dinâmicas, tags, multi-select
+- [x] IconPicker: navegação ◀▶ entre categorias, scroll, novas sugestões por palavra-chave
 - ~~Script de migração do StudyFlow~~ (cancelado)
 - [ ] Deve ter uma forma de adicionar projetos de forma mais simplificada como ideias futuras e criar um widget que exibe esse tipo específico de ideias para eu relembrá-las
 - [ ] Já tem uma opção de criar projetos do tipo "hobbies"? Esse vai servir para organizar hobbies manuais como crochê, desenho, bijuterias, moda e resina (entre outros) e deve ser configurado como.
@@ -113,9 +121,9 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 
 Agendamento de tarefas com horas estimadas, replanejamento automático e vínculo com páginas do projeto.
 
-- [ ] Migrations: tabelas `planned_tasks` e `work_blocks`
-- [ ] IPC handlers: CRUD de `planned_tasks` + algoritmo de scheduling (EDF, capacidade diária global, replanejamento de missed blocks)
-- [ ] Aba "Planner" no ProjectView — lista de tarefas planejáveis + calendário semanal com blocos de horas + criar/vincular página ao criar tarefa
+- [x] Migrations: tabelas `planned_tasks` e `work_blocks`
+- [x] IPC handlers: CRUD de `planned_tasks` + algoritmo de scheduling (EDF, capacidade diária global, replanejamento de missed blocks)
+- [x] Aba "Planner" no ProjectView — lista de tarefas planejáveis + calendário semanal com blocos de horas + criar/vincular página ao criar tarefa
 - [x] Widget "Plano do Dia" no Dashboard — consolidado de todos os projetos para hoje, com checkbox de sessão concluída
 - [x] Campo "Capacidade diária (horas)" em Settings (padrão 4h)
 - [x] Criar uma aba para o planner global no menu lateral (GlobalPlannerView: fundo pontilhado + cosmos, estética bullet journal, mini calendário, urgente/hoje à esquerda, log completo com agrupamento/criação/detalhe inline à direita)
@@ -190,9 +198,9 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 
 ### Passo 7 — Sync no ciclo de vida do app
 
-- [ ] `main.ts` — chamar `await syncDb()` antes de `createWindow()` (sync inicial)
-- [ ] `main.ts` — chamar `await syncDb()` no evento `app.on('before-quit')` (flush de saída)
-- [ ] Opcional: IPC `db:sync` para sync manual a partir do renderer (botão nas Settings)
+- [x] `main.ts` — sync inicial em background após init do schema (não bloqueia o arranque)
+- [x] `main.ts` — sync no evento `app.on('before-quit')`
+- [x] IPC `db:sync` para sync manual a partir do renderer (botão nas Settings)
 
 ### Passo 8 — Testes e validação
 
