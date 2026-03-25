@@ -34,9 +34,14 @@ export async function getClient(): Promise<Client> {
         url: localUrl,
         syncUrl: syncUrl,
         authToken: authToken,
-        syncInterval: 1000,
+        syncInterval: 60000,
       })
-      try { await _client.sync() } catch (e) { log.warn('Sync inicial falhou (offline?)', { e }) }
+      try {
+        await Promise.race([
+          _client.sync(),
+          new Promise<void>((_, reject) => setTimeout(() => reject(new Error('sync timeout')), 5000)),
+        ])
+      } catch (e) { log.warn('Sync inicial ignorado (offline ou timeout)', { e }) }
       await initSchema(_client)
       await seedDefaults(_client)
     } else {
