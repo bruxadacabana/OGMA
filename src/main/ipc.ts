@@ -1811,8 +1811,19 @@ export function registerIpcHandlers(): void {
     `)
   })
 
-  api('planner:todayBlocks', async () => {
-    const today = new Date().toISOString().slice(0, 10)
+  api('planner:todayBlocks', async (dateInput?: any) => {
+    let targetDate: string;
+
+    if (dateInput instanceof Date) {
+      targetDate = dateInput.toISOString().slice(0, 10);
+    } else if (typeof dateInput === 'string' && dateInput.trim() !== '') {
+      targetDate = dateInput.slice(0, 10);
+    } else {
+      // Agora sabemos que o frontend manda {}, então este fallback é quem salva o dia!
+      targetDate = new Date().toISOString().slice(0, 10);
+    }
+
+    // Remova os colchetes em volta do targetDate aqui embaixo!
     return dbAll(`
       SELECT wb.*,
         pt.title AS task_title, pt.task_type, pt.due_date, pt.estimated_hours,
@@ -1824,7 +1835,23 @@ export function registerIpcHandlers(): void {
       LEFT JOIN pages pg ON pg.id = pt.page_id
       WHERE wb.date = ? AND wb.status != 'missed'
       ORDER BY pt.due_date ASC
-    `, today)
+    `, targetDate) // <-- Passado direto, sem ser array!
+  })
+
+  api('planner:logWork', async (data: { block_id: number, task_id: number, hours: number, start_time?: string, end_time?: string, note?: string }) => {
+    // Atualiza o bloco no Planner
+    await dbRun(`UPDATE work_blocks SET logged_hours = logged_hours + ?, status = 'done' WHERE id = ?`, data.hours, data.block_id)
+    
+    // Se a tarefa pertencer a uma página (Disciplina), regista no tempo de estudo da página!
+    const task = await dbGet(`SELECT project_id, page_id FROM planned_tasks WHERE id = ?`, data.task_id)
+    if (task && task.page_id) {
+      const dateStr = data.start_time ? data.start_time.slice(0,10) : new Date().toISOString().slice(0,10)
+      await dbRun(`
+        INSERT INTO time_sessions (project_id, page_id, duration_minutes, start_time, end_time, note)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, task.project_id, task.page_id, Math.round(data.hours * 60), data.start_time || null, data.end_time || null, data.note || 'Foco pelo Planner')
+    }
+    return { success: true }
   })
 
   // ── Widgets extras ────────────────────────────────────────────────────────

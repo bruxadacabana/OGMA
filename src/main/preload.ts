@@ -165,6 +165,10 @@ contextBridge.exposeInMainWorld('db', {
     list:   (d: { project_id: number }) => api('time:list',   d),
     create: (d: any)                    => api('time:create', d),
     delete: (d: { id: number })         => api('time:delete', d),
+    todayBlocks:      (dateStr?: string) => api('planner:todayBlocks', dateStr),
+    logBlock:         (block_id: number, hours: number) => api('planner:logBlock', { block_id, hours }),
+    logWork:          (data: any) => api('planner:logWork', data), // <--- O NOVO CALCULADOR
+    listBlocks:       (task_id: number) => api('planner:listBlocks', { task_id }),
   },
 })
 
