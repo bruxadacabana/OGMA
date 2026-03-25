@@ -158,7 +158,7 @@ contextBridge.exposeInMainWorld('db', {
     updateBlock:   (d: any)                           => api('planner:updateBlock',   d),
     schedule:      (project_id: number)               => api('planner:schedule',      { project_id }),
     rescheduleAll: ()                                 => api('planner:rescheduleAll', {}),
-    todayBlocks:   ()                                 => api('planner:todayBlocks',   {}),
+    todayBlocks:   (dateStr?: string)                 => api('planner:todayBlocks',   dateStr),
     listAllTasks:  (opts?: { include_completed?: boolean }) => api('planner:listAllTasks', opts ?? {}),
   },
   time: {

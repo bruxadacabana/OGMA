@@ -279,75 +279,62 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
     obs.observe(el); return () => obs.disconnect()
   }, [])
 
-  const loadData = useCallback(() => {
-    console.log("🔎 1. Iniciou o loadData sem awaits bloqueantes");
+  const loadData = useCallback(async () => {
+    console.log("🔎 1. Iniciou o loadData");
     setLoading(true);
 
-    // Variáveis de controle para não destravar a tela cedo demais
-    let tarefasCarregadas = false;
-    let agendaCarregada = false;
-
-    const checkDone = () => {
-      if (tarefasCarregadas && agendaCarregada) {
-        console.log("🔎 6. Tudo terminou! Finalizando o loading.");
-        setLoading(false);
+    try {
+      // 1. BLINDAGEM DA DATA: Ignora eventos de clique perdidos e garante uma string
+      let safeBaseDate = new Date().toISOString().slice(0, 10);
+      if (typeof filterDate === 'string' && filterDate.length >= 10) {
+        safeBaseDate = filterDate.slice(0, 10);
       }
-    };
+      console.log("🔎 2. Data segura definida para:", safeBaseDate);
 
-    // --- BLOCO 1: CARREGAR TAREFAS ---
-    (async () => {
-      try {
-        console.log("🔎 2. Disparando pedido de tarefas...");
-        const res = await fromIpc<GlobalTask[]>(() => db().planner.listAllTasks({ include_completed: showCompleted }), 'listAllTasks');
-        res.match(d => setTasks(d || []), () => {});
-        console.log("🔎 3. Tarefas salvas no estado!");
-      } catch (err: any) { // Tipagem explícita adicionada aqui!
-        console.error("🚨 Erro nas Tarefas:", err);
-      } finally {
-        tarefasCarregadas = true;
-        checkDone();
+      // 2. BUSCA DE TAREFAS
+      const tasksRes = await fromIpc<GlobalTask[]>(() => db().planner.listAllTasks({ include_completed: showCompleted }), 'listAllTasks');
+      tasksRes.match(d => setTasks(d || []), () => setTasks([]));
+      console.log("🔎 3. Tarefas carregadas");
+
+      // 3. CÁLCULO DE DATAS (Agora protegido dentro do try)
+      const numDays = daysToShow || 3; 
+      const datesToFetch = Array.from({ length: numDays }).map((_, i) => {
+        const d = new Date(safeBaseDate + 'T12:00:00');
+        d.setDate(d.getDate() + i);
+        return d.toISOString().slice(0, 10);
+      });
+      console.log("🔎 4. Buscando agenda para as datas:", datesToFetch);
+
+      // 4. BUSCA DA AGENDA (Sequencial e Segura)
+      const allBlocks: AgendaBlock[] = [];
+      for (const dateStr of datesToFetch) {
+        const res = await fromIpc<AgendaBlock[]>(() => db().planner.todayBlocks(dateStr), 'todayBlocks');
+        res.match(d => {
+          if (d && Array.isArray(d)) allBlocks.push(...d);
+        }, () => {});
       }
-    })();
 
-    // --- BLOCO 2: CARREGAR AGENDA (SEQUENCIAL PARA EVITAR LOCKS) ---
-    const baseDate = filterDate || new Date().toISOString().slice(0, 10);
-    const daysToFetch = filterDate ? 1 : 3;
-    const dates = Array.from({ length: daysToFetch }).map((_, i) => {
-      const d = new Date(baseDate + 'T12:00:00');
-      d.setDate(d.getDate() + i);
-      return d.toISOString().slice(0, 10);
-    });
+      console.log("🔎 5. Blocos carregados:", allBlocks);
+      setAgendaBlocks(allBlocks);
 
-    console.log(`🔎 4. Datas da agenda a buscar:`, dates);
-    
-    (async () => {
-      try {
-        const allBlocks: AgendaBlock[] = [];
-        for (const dateStr of dates) {
-          console.log(`🔎 -> Buscando blocos para o dia: ${dateStr}`);
-          const res = await fromIpc<AgendaBlock[]>(() => db().planner.todayBlocks(dateStr), 'todayBlocks');
-          res.match(d => {
-            if (d && Array.isArray(d)) allBlocks.push(...d);
-          }, () => {});
+      if (activeFocus && !allBlocks.find(b => b.id === activeFocus.id)) {
+        setActiveFocus(null);
+      }
+
+    } catch (error) {
+      console.error("🚨 ERRO CRÍTICO NO LOADDATA:", error);
+    } finally {
+          console.log("🔎 6. Finalizando o loading.");
+          setLoading(false);
         }
-        
-        console.log("🔎 5. Todos os blocos carregados!", allBlocks);
-        setAgendaBlocks(allBlocks);
-        
-        if (activeFocus && !allBlocks.find(b => b.id === activeFocus.id)) {
-          setActiveFocus(null);
-        }
-      } catch (err: any) { // Tipagem explícita adicionada aqui também!
-        console.error("🚨 Erro na Agenda:", err);
-      } finally {
-        agendaCarregada = true;
-        checkDone();
-      }
-    })();
+      }, [showCompleted, filterDate, daysToShow, activeFocus]);
 
-  }, [showCompleted, filterDate, activeFocus]);
+      // Carregar dados quando o componente montar ou quando as dependências mudarem
+      useEffect(() => {
+        loadData()
+      }, [loadData])
 
-  // Lógica do Log Manual do Pomodoro
+      // Lógica do Log Manual do Pomodoro
   const handleLogWork = async (hours: number, startTime?: string, endTime?: string) => {
     if (!activeFocus) return
     const res = await fromIpc(() => db().planner.logWork({ block_id: activeFocus.id, task_id: activeFocus.task_id, hours, start_time: startTime, end_time: endTime }), 'logWork')
@@ -437,24 +424,27 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
               /* MODO AGENDA */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
                 {(() => {
-                  // Agrupa os blocos pelas datas buscadas
-                  const baseDate = filterDate || new Date().toISOString().slice(0, 10);
-                  const daysToRender = filterDate ? 1 : 3;
-                  const renderDates = Array.from({ length: daysToRender }).map((_, i) => {
-                    const d = new Date(baseDate + 'T12:00:00');
+                  // Blindagem visual da data
+                  let safeRenderDate = new Date().toISOString().slice(0, 10);
+                  if (typeof filterDate === 'string' && filterDate.length >= 10) {
+                    safeRenderDate = filterDate.slice(0, 10);
+                  }
+
+                  const numDays = daysToShow || 3;
+                  const renderDates = Array.from({ length: numDays }).map((_, i) => {
+                    const d = new Date(safeRenderDate + 'T12:00:00');
                     d.setDate(d.getDate() + i);
                     return d.toISOString().slice(0, 10);
                   });
 
-                  return renderDates.map(date => {
-                    const blocks = agendaBlocks.filter(b => b.date === date);
-                    const dateObj = new Date(date + 'T12:00:00');
+                  return renderDates.map(dateStr => {
+                    const blocks = agendaBlocks.filter(b => b.date === dateStr);
+                    const dateObj = new Date(dateStr + 'T12:00:00');
                     const dayLabel = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
-                    const isToday = date === new Date().toISOString().slice(0,10);
+                    const isToday = dateStr === new Date().toISOString().slice(0,10);
                     
                     return (
-                      <div key={date}>
-                        {/* ESTE É O CABEÇALHO EXATAMENTE IGUAL À ABA SUPERIOR */}
+                      <div key={dateStr}>
                         <div style={{
                           fontFamily: 'var(--font-mono)',
                           fontSize: 12,
