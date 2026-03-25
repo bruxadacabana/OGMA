@@ -22,7 +22,7 @@ interface GlobalTask {
   page_icon?:     string
   project_name?:  string
   project_color?: string
-  project_icon?:  string
+  project_icon?:  string 
 }
 
 interface TodayBlock {
@@ -39,6 +39,8 @@ interface TodayBlock {
   project_name:   string
   project_color:  string
   project_icon:   string
+  page_title?:    string 
+  page_icon?:     string 
 }
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -48,6 +50,11 @@ const TYPE_LABELS: Record<string, string> = {
   atividade:'Atividade', aula:'Aula', prova:'Prova', trabalho:'Trabalho',
   seminario:'Seminário', defesa:'Defesa', prazo:'Prazo', reuniao:'Reunião',
   leitura:'Leitura', outro:'Outro',
+}
+
+const TYPE_ICONS: Record<string, string> = {
+  aula: '📚', atividade: '📋', prova: '📝', leitura: '📖', trabalho: '📋', 
+  seminario: '🎙', defesa: '🎓', prazo: '⏰', reuniao: '👥', outro: '◦',
 }
 
 const STATUS_SYMBOL: Record<string, string> = {
@@ -192,6 +199,14 @@ function UrgentTaskItem({ task, dark, onToggleDone }: {
             color: color, letterSpacing:'0.06em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
             {task.project_icon ?? '◦'} {task.project_name}
           </span>
+          {task.page_title && (
+            <>
+              <span style={{ color: ink2, fontSize: 8 }}>/</span>
+              <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color: ink, letterSpacing:'0.04em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {task.page_icon ?? '◦'} {task.page_title}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <span style={{
@@ -241,9 +256,18 @@ function TodayBlockItem({ block, dark, onLog }: {
           <div style={{ width:`${pct*100}%`, height:'100%', background: color, borderRadius:1, transition:'width 0.3s' }} />
         </div>
         <div style={{ display:'flex', gap:8, marginTop:4, alignItems:'center' }}>
-          <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color: ink2 }}>
+          <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color: color }}>
             {block.project_icon} {block.project_name}
           </span>
+          {block.page_title && (
+            <>
+              <span style={{ color: ink2, fontSize: 8 }}>/</span>
+              <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color: ink }}>
+                {block.page_icon ?? '◦'} {block.page_title}
+              </span>
+            </>
+          )}
+          <span style={{ flex:1 }} />
           <span style={{ flex:1 }} />
           {logging ? (
             <div style={{ display:'flex', gap:4, alignItems:'center' }}>
@@ -352,7 +376,15 @@ function TaskRow({ task, dark, expanded, onExpand, onUpdate, onDelete, onProject
             <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color, letterSpacing:'0.04em' }}>
               {task.project_icon ?? '◦'} {task.project_name}
             </span>
-            <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color: ink2 }}>
+            {task.page_title && (
+              <>
+                <span style={{ color: ink2, fontSize: 8 }}>/</span>
+                <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color: ink, letterSpacing:'0.04em' }}>
+                  {task.page_icon ?? '◦'} {task.page_title}
+                </span>
+              </>
+            )}
+            <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color: ink2, marginLeft: 'auto' }}>
               {TYPE_LABELS[task.task_type] ?? task.task_type}
             </span>
           </div>
@@ -475,6 +507,8 @@ function TaskRow({ task, dark, expanded, onExpand, onUpdate, onDelete, onProject
 
 // ── Formulário inline de criação ──────────────────────────────────────────────
 
+// ── Formulário inline de criação ──────────────────────────────────────────────
+
 function InlineCreateForm({ dark, projects, onCreated, onCancel }: {
   dark:      boolean
   projects:  { id: number; name: string; icon?: string; color?: string }[]
@@ -489,6 +523,25 @@ function InlineCreateForm({ dark, projects, onCreated, onCancel }: {
   const [hours,     setHours]     = useState('1')
   const [saving,    setSaving]    = useState(false)
 
+  // Novos estados para gerir a Página/Disciplina
+  const [pageId,    setPageId]    = useState<number | null>(null)
+  const [createPg,  setCreatePg]  = useState(false)
+  const [pages,     setPages]     = useState<any[]>([])
+
+  // Buscar páginas sempre que o Projeto mudar
+  useEffect(() => {
+    if (!projectId) { setPages([]); setPageId(null); setCreatePg(false); return }
+    // A função correta mapeada no backend é apenas "list", que recebe um objecto com project_id
+    fromIpc<any[]>(() => db().pages.list(Number(projectId)), 'listPages')
+      .then(r => {
+        if (r.isOk()) {
+          setPages(r.value)
+          setPageId(null)
+          setCreatePg(false)
+        }
+      })
+  }, [projectId])
+
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const accent = dark ? '#D4A820' : '#b8860b'
@@ -499,9 +552,21 @@ function InlineCreateForm({ dark, projects, onCreated, onCancel }: {
     if (!title.trim())  { pushToast({ kind:'error', title:'Título obrigatório' }); return }
     if (!projectId)     { pushToast({ kind:'error', title:'Selecione um projeto' }); return }
     setSaving(true)
+
+    // Se escolheu criar página nova (ex: Nova Disciplina/Matéria)
+    let linkedPageId = pageId
+    if (createPg) {
+      const r = await fromIpc<any>(
+        () => db().pages.create({ project_id: Number(projectId), title: title.trim(), icon: TYPE_ICONS[taskType] ?? '◦' }),
+        'createPage'
+      )
+      if (r.isOk()) linkedPageId = r.value.id
+    }
+
     const result = await fromIpc<GlobalTask>(
       () => db().planner.createTask({
         project_id:      Number(projectId),
+        page_id:         linkedPageId,
         title:           title.trim(),
         task_type:       taskType,
         due_date:        dueDate,
@@ -511,14 +576,17 @@ function InlineCreateForm({ dark, projects, onCreated, onCancel }: {
     )
     setSaving(false)
     if (result.isErr()) { pushToast({ kind:'error', title:'Erro ao criar tarefa', detail: result.error.message }); return }
+    
     onCreated(result.value)
-    setTitle(''); setTaskType('atividade'); setHours('1')
+    // Limpar o formulário
+    setTitle(''); setTaskType('atividade'); setHours('1'); setPageId(null); setCreatePg(false)
   }
 
   return (
     <div className="bj-create-form" style={{ background: cardBg, borderColor: border }}>
       <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:ink2,
         letterSpacing:'0.14em', marginBottom:8 }}>NOVA TAREFA</div>
+      
       <div className="bj-detail-row">
         <label style={{ color:ink2 }}>Projeto</label>
         <select className="settings-input" style={{ flex:1, fontSize:11 }}
@@ -526,14 +594,40 @@ function InlineCreateForm({ dark, projects, onCreated, onCancel }: {
           {projects.map(p => <option key={p.id} value={p.id}>{p.icon ?? '◦'} {p.name}</option>)}
         </select>
       </div>
+
+      <div className="bj-detail-row">
+        <label style={{ color:ink2 }}>Página</label>
+        <select className="settings-input" style={{ flex:1, fontSize:11 }}
+          value={createPg ? '__new__' : (pageId ?? '__none__')}
+          onChange={e => {
+            if (e.target.value === '__new__') { setCreatePg(true); setPageId(null) }
+            else if (e.target.value === '__none__') { setCreatePg(false); setPageId(null) }
+            else { setCreatePg(false); setPageId(Number(e.target.value)) }
+          }}
+          disabled={!projectId}
+        >
+          <option value="__none__">— Nenhuma —</option>
+          <option value="__new__">✦ Criar nova com este título</option>
+          {pages.map((p: any) => (
+            <option key={p.id} value={p.id}>{p.icon ?? '◦'} {p.title}</option>
+          ))}
+        </select>
+      </div>
+      {createPg && (
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: accent, fontStyle: 'italic', textAlign: 'right', marginTop: -4, marginBottom: 4 }}>
+          Uma nova página será criada ao guardar.
+        </div>
+      )}
+
       <div className="bj-detail-row">
         <label style={{ color:ink2 }}>Título</label>
         <input className="settings-input" style={{ flex:1, fontSize:11 }}
-          placeholder="Nome da tarefa…"
+          placeholder="Nome da tarefa / aula…"
           value={title} onChange={e => setTitle(e.target.value)}
           onKeyDown={e => e.key==='Enter' && submit()}
           autoFocus />
       </div>
+
       <div className="bj-detail-row">
         <label style={{ color:ink2 }}>Tipo</label>
         <select className="settings-input" style={{ flex:1, fontSize:11 }}
@@ -541,17 +635,20 @@ function InlineCreateForm({ dark, projects, onCreated, onCancel }: {
           {TASK_TYPES.map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
         </select>
       </div>
+
       <div className="bj-detail-row">
         <label style={{ color:ink2 }}>Prazo</label>
         <input type="date" className="settings-input" style={{ flex:1, fontSize:11 }}
           value={dueDate} onChange={e => setDueDate(e.target.value)} />
       </div>
+
       <div className="bj-detail-row">
         <label style={{ color:ink2 }}>Horas est.</label>
         <input type="number" min="0.25" step="0.25" className="settings-input"
           style={{ width:70, fontSize:11 }}
           value={hours} onChange={e => setHours(e.target.value)} />
       </div>
+
       <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:8 }}>
         <button className="btn btn-ghost btn-sm" style={{ color:ink2 }} onClick={onCancel}>Cancelar</button>
         <button className="btn btn-sm" style={{ borderColor:accent, color:accent }}
