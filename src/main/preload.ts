@@ -135,10 +135,11 @@ contextBridge.exposeInMainWorld('db', {
     delete:         (id: number)                   => api('events:delete',         { id }),
   },
   reminders: {
-    list:    (include_dismissed?: boolean) => api('reminders:list',    { include_dismissed: include_dismissed ?? false }),
-    create:  (d: any)                      => api('reminders:create',  d),
-    dismiss: (id: number)                  => api('reminders:dismiss', { id }),
-    delete:  (id: number)                  => api('reminders:delete',  { id }),
+    list:           (include_dismissed?: boolean)                 => api('reminders:list',           { include_dismissed: include_dismissed ?? false }),
+    listForProject: (project_id: number, include_dismissed?: boolean) => api('reminders:listForProject', { project_id, include_dismissed: include_dismissed ?? false }),
+    create:         (d: any)                                      => api('reminders:create',         d),
+    dismiss:        (id: number)                                  => api('reminders:dismiss',        { id }),
+    delete:         (id: number)                                  => api('reminders:delete',         { id }),
   },
   dashboardExtra: {
     projectsProgress: () => api('dashboard:projectsProgress'),
@@ -151,6 +152,7 @@ contextBridge.exposeInMainWorld('db', {
     deleteTask:    (id: number)                       => api('planner:deleteTask',    { id }),
     listBlocks:    (task_id: number)                  => api('planner:listBlocks',    { task_id }),
     logBlock:      (id: number, logged_hours: number) => api('planner:logBlock',      { id, logged_hours }),
+    updateBlock:   (d: any)                           => api('planner:updateBlock',   d),
     schedule:      (project_id: number)               => api('planner:schedule',      { project_id }),
     rescheduleAll: ()                                 => api('planner:rescheduleAll', {}),
     todayBlocks:   ()                                 => api('planner:todayBlocks',   {}),

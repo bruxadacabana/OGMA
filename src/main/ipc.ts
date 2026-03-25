@@ -378,9 +378,15 @@ async function getDailyCapacity(): Promise<number> {
   return row ? parseFloat(row.value) || 4 : 4
 }
 
+async function getSkipWeekends(): Promise<boolean> {
+  const row = await dbGet(`SELECT value FROM settings WHERE key = 'planner_skip_weekends'`)
+  return row?.value === '1'
+}
+
 async function scheduleTasks(projectId: number): Promise<void> {
-  const dailyCap = await getDailyCapacity()
-  const today    = new Date().toISOString().slice(0, 10)
+  const dailyCap    = await getDailyCapacity()
+  const skipWeekends = await getSkipWeekends()
+  const today       = new Date().toISOString().slice(0, 10)
 
   const tasks = await dbAll(`
     SELECT pt.*,
@@ -390,7 +396,12 @@ async function scheduleTasks(projectId: number): Promise<void> {
       ), 0) AS done_hours
     FROM planned_tasks pt
     WHERE pt.project_id = ? AND pt.status IN ('pending','in_progress')
-    ORDER BY pt.due_date ASC
+    ORDER BY
+      CASE COALESCE(pt.priority,'medium')
+        WHEN 'urgent' THEN 1 WHEN 'high' THEN 2
+        WHEN 'medium' THEN 3 ELSE 4
+      END ASC,
+      pt.due_date ASC
   `, projectId)
 
   if (tasks.length === 0) return
@@ -425,7 +436,10 @@ async function scheduleTasks(projectId: number): Promise<void> {
     let cur = new Date(today + 'T12:00:00')
     const dueDate = new Date(due + 'T12:00:00')
     while (cur <= dueDate) {
-      dates.push(cur.toISOString().slice(0, 10))
+      const dow = cur.getDay() // 0=Sun, 6=Sat
+      if (!skipWeekends || (dow !== 0 && dow !== 6)) {
+        dates.push(cur.toISOString().slice(0, 10))
+      }
       cur = new Date(cur.getTime() + 86400000)
     }
 
@@ -478,7 +492,46 @@ async function updateTaskStatus(taskId: number): Promise<void> {
   let newStatus = task.status
   if (doneHours >= task.estimated_hours)  newStatus = 'completed'
   else if (doneHours > 0)                 newStatus = 'in_progress'
-  await dbRun(`UPDATE planned_tasks SET status = ?, updated_at = datetime('now') WHERE id = ?`, newStatus, taskId)
+  if (newStatus !== task.status) {
+    await dbRun(`UPDATE planned_tasks SET status = ?, updated_at = datetime('now') WHERE id = ?`, newStatus, taskId)
+    if (newStatus === 'completed') await maybeCreateSpacedReview(taskId)
+  }
+}
+
+const REVIEW_INTERVALS = [1, 3, 7, 14, 30]
+
+async function maybeCreateSpacedReview(taskId: number): Promise<void> {
+  const task = await dbGet(`SELECT * FROM planned_tasks WHERE id = ?`, taskId)
+  if (!task || task.spaced_review !== 1) return
+
+  // Walk the parent chain to determine depth
+  let depth = 0
+  let cur = task
+  while (cur.parent_task_id && depth < 10) {
+    depth++
+    const parent = await dbGet(`SELECT * FROM planned_tasks WHERE id = ?`, cur.parent_task_id)
+    if (!parent) break
+    cur = parent
+  }
+  if (depth >= REVIEW_INTERVALS.length) return
+
+  const intervalDays = REVIEW_INTERVALS[depth]
+  const base         = new Date(task.due_date + 'T12:00:00')
+  base.setDate(base.getDate() + intervalDays)
+  const nextDue      = base.toISOString().slice(0, 10)
+
+  const r = await dbRun(`
+    INSERT INTO planned_tasks
+      (project_id, page_id, title, task_type, due_date, estimated_hours, status, priority, spaced_review, parent_task_id)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, 1, ?)
+  `,
+    task.project_id, task.page_id ?? null,
+    `[Rev ${intervalDays}d] ${task.title.replace(/^\[Rev \d+d\] /, '')}`,
+    task.task_type, nextDue, task.estimated_hours,
+    task.priority ?? 'medium', taskId
+  )
+  await scheduleTasks(task.project_id)
+  log.info('spaced-review criada', { taskId, nextDue, depth, reviewId: r.lastInsertRowid })
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -1522,10 +1575,11 @@ export function registerIpcHandlers(): void {
 
   api('reminders:create', async (data) => {
     const r = await dbRun(`
-      INSERT INTO reminders (title, trigger_at, offset_minutes, linked_event_id, linked_page_id)
-      VALUES (?, ?, ?, ?, ?)`,
+      INSERT INTO reminders (title, trigger_at, offset_minutes, linked_event_id, linked_page_id, priority, project_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`,
       data.title, data.trigger_at, data.offset_minutes ?? null,
-      data.linked_event_id ?? null, data.linked_page_id ?? null
+      data.linked_event_id ?? null, data.linked_page_id ?? null,
+      data.priority ?? 'medium', data.project_id ?? null
     )
     return dbGet(`SELECT * FROM reminders WHERE id = ?`, r.lastInsertRowid)
   })
@@ -1536,6 +1590,17 @@ export function registerIpcHandlers(): void {
 
   api('reminders:delete', async ({ id }) =>
     dbRun(`DELETE FROM reminders WHERE id = ?`, id)
+  )
+
+  api('reminders:listForProject', async ({ project_id, include_dismissed }) =>
+    dbAll(`
+      SELECT r.*, p.title AS page_title, p.icon AS page_icon
+      FROM reminders r
+      LEFT JOIN pages p ON p.id = r.linked_page_id
+      WHERE r.project_id = ?
+        ${include_dismissed ? '' : 'AND r.is_dismissed = 0'}
+      ORDER BY r.trigger_at ASC
+    `, project_id)
   )
 
   // ── Planejador académico ───────────────────────────────────────────────────
@@ -1554,22 +1619,28 @@ export function registerIpcHandlers(): void {
 
   api('planner:createTask', async (data) => {
     const r = await dbRun(`
-      INSERT INTO planned_tasks (project_id, page_id, title, task_type, due_date, estimated_hours, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending')
+      INSERT INTO planned_tasks
+        (project_id, page_id, title, task_type, due_date, estimated_hours, status, priority, spaced_review, parent_task_id)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
     `, data.project_id, data.page_id ?? null, data.title, data.task_type ?? 'atividade',
-       data.due_date, data.estimated_hours ?? 1)
+       data.due_date, data.estimated_hours ?? 1,
+       data.priority ?? 'medium', data.spaced_review ?? 0, data.parent_task_id ?? null)
     const taskId = r.lastInsertRowid
     await scheduleTasks(data.project_id)
     return dbGet(`
       SELECT pt.*,
         COALESCE((SELECT SUM(wb.logged_hours) FROM work_blocks wb WHERE wb.task_id = pt.id AND wb.status = 'done'), 0) AS done_hours,
-        p.title AS page_title, p.icon AS page_icon
-      FROM planned_tasks pt LEFT JOIN pages p ON p.id = pt.page_id WHERE pt.id = ?
+        p.title AS page_title, p.icon AS page_icon,
+        proj.name AS project_name, proj.color AS project_color, proj.icon AS project_icon
+      FROM planned_tasks pt
+      LEFT JOIN pages p ON p.id = pt.page_id
+      LEFT JOIN projects proj ON proj.id = pt.project_id
+      WHERE pt.id = ?
     `, taskId)
   })
 
   api('planner:updateTask', async (data) => {
-    const allowed = ['title','task_type','due_date','estimated_hours','page_id','status']
+    const allowed = ['title','task_type','due_date','estimated_hours','page_id','status','priority','spaced_review']
     const cols: string[] = [], vals: any[] = []
     for (const key of allowed) {
       if (data[key] !== undefined) { cols.push(`${key} = ?`); vals.push(data[key]) }
@@ -1583,8 +1654,12 @@ export function registerIpcHandlers(): void {
     return dbGet(`
       SELECT pt.*,
         COALESCE((SELECT SUM(wb.logged_hours) FROM work_blocks wb WHERE wb.task_id = pt.id AND wb.status = 'done'), 0) AS done_hours,
-        p.title AS page_title, p.icon AS page_icon
-      FROM planned_tasks pt LEFT JOIN pages p ON p.id = pt.page_id WHERE pt.id = ?
+        p.title AS page_title, p.icon AS page_icon,
+        proj.name AS project_name, proj.color AS project_color, proj.icon AS project_icon
+      FROM planned_tasks pt
+      LEFT JOIN pages p ON p.id = pt.page_id
+      LEFT JOIN projects proj ON proj.id = pt.project_id
+      WHERE pt.id = ?
     `, data.id)
   })
 
@@ -1604,6 +1679,18 @@ export function registerIpcHandlers(): void {
     await dbRun(`UPDATE work_blocks SET logged_hours = ?, status = ? WHERE id = ?`, capped, status, id)
     await updateTaskStatus(block.task_id)
     return dbGet(`SELECT * FROM work_blocks WHERE id = ?`, id)
+  })
+
+  api('planner:updateBlock', async (data) => {
+    const allowed = ['date', 'planned_hours']
+    const cols: string[] = [], vals: any[] = []
+    for (const key of allowed) {
+      if (data[key] !== undefined) { cols.push(`${key} = ?`); vals.push(data[key]) }
+    }
+    if (cols.length) {
+      await dbRun(`UPDATE work_blocks SET ${cols.join(', ')} WHERE id = ?`, ...vals, data.id)
+    }
+    return dbGet(`SELECT * FROM work_blocks WHERE id = ?`, data.id)
   })
 
   api('planner:schedule', async ({ project_id }) => {
@@ -1649,10 +1736,12 @@ export function registerIpcHandlers(): void {
     return dbAll(`
       SELECT wb.*,
         pt.title AS task_title, pt.task_type, pt.due_date, pt.estimated_hours,
-        p.name AS project_name, p.color AS project_color, p.icon AS project_icon
+        p.name AS project_name, p.color AS project_color, p.icon AS project_icon,
+        pg.title AS page_title, pg.icon AS page_icon
       FROM work_blocks wb
       JOIN planned_tasks pt ON pt.id = wb.task_id
       JOIN projects p ON p.id = pt.project_id
+      LEFT JOIN pages pg ON pg.id = pt.page_id
       WHERE wb.date = ? AND wb.status != 'missed'
       ORDER BY pt.due_date ASC
     `, today)

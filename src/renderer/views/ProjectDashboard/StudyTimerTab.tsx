@@ -162,13 +162,24 @@ function fmtDate(iso: string) {
 
 // ── Componente principal ───────────────────────────────────────────────────────
 
-interface Props {
-  projectId: number
-  dark:      boolean
-  pages:     Page[]
+export interface ActiveTimerBlock {
+  blockId:      number | null   // work_block id (null = sem bloco agendado hoje)
+  taskId:       number
+  taskTitle:    string
+  pageId:       number | null
+  loggedHours:  number
+  plannedHours: number
 }
 
-export function StudyTimerTab({ projectId, dark, pages }: Props) {
+interface Props {
+  projectId:    number
+  dark:         boolean
+  pages:        Page[]
+  initialBlock?: ActiveTimerBlock | null
+  onAutoLog?:   (blockId: number, newTotalHours: number) => void
+}
+
+export function StudyTimerTab({ projectId, dark, pages, initialBlock, onAutoLog }: Props) {
   const { workspace, pushToast } = useAppStore()
 
   // ── Timer state ─────────────────────────────────────────────────────────────
@@ -178,8 +189,13 @@ export function StudyTimerTab({ projectId, dark, pages }: Props) {
   const [totalSecs,   setTotalSecs]   = useState(FOCUS_MIN * 60)
   const [sessionStart, setSessionStart] = useState<Date | null>(null)
 
-  // selected page for the current timer session (can change before start)
-  const [timerPageId, setTimerPageId] = useState<number | ''>('')
+  // selected page for the current timer session
+  const [timerPageId, setTimerPageId] = useState<number | ''>(initialBlock?.pageId ?? '')
+
+  // keep page in sync when initialBlock changes (user clicked ▶ on a different task)
+  useEffect(() => {
+    if (initialBlock?.pageId) setTimerPageId(initialBlock.pageId)
+  }, [initialBlock?.taskId])
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -203,6 +219,13 @@ export function StudyTimerTab({ projectId, dark, pages }: Props) {
       setTimerStatus('idle')
       if (timerMode === 'focus' && sessionStart) {
         saveSession('pomodoro', FOCUS_MIN, sessionStart)
+        if (initialBlock?.blockId && onAutoLog) {
+          const newTotal = Math.min(
+            initialBlock.loggedHours + FOCUS_MIN / 60,
+            initialBlock.plannedHours
+          )
+          onAutoLog(initialBlock.blockId, newTotal)
+        }
         setTimerMode('break')
         setRemainSecs(BREAK_MIN * 60)
         setTotalSecs(BREAK_MIN * 60)
@@ -218,6 +241,10 @@ export function StudyTimerTab({ projectId, dark, pages }: Props) {
   }, [remainSecs, timerStatus])
 
   const startTimer = () => {
+    if (!timerPageId) {
+      pushToast({ kind: 'error', title: 'Selecione uma página', detail: 'Cada sessão de foco precisa estar ligada a uma página/disciplina.' })
+      return
+    }
     if (timerStatus === 'idle') setSessionStart(new Date())
     setTimerStatus('running')
     intervalRef.current = setInterval(tick, 1000)
@@ -300,26 +327,48 @@ export function StudyTimerTab({ projectId, dark, pages }: Props) {
   }
 
   // ── Manual entry state ───────────────────────────────────────────────────────
+  type ManMode = 'duration' | 'start_end'
   const [showManual,   setShowManual]   = useState(false)
+  const [manMode,      setManMode]      = useState<ManMode>('duration')
   const [manPageId,    setManPageId]    = useState<number | ''>('')
   const [manHours,     setManHours]     = useState('0')
   const [manMins,      setManMins]      = useState('25')
   const [manDate,      setManDate]      = useState(new Date().toISOString().slice(0, 10))
+  const [manStartTime, setManStartTime] = useState('09:00')
+  const [manEndTime,   setManEndTime]   = useState('09:25')
   const [manNotes,     setManNotes]     = useState('')
-  const [manTags,      setManTags]      = useState('')
   const [manSaving,    setManSaving]    = useState(false)
 
   const submitManual = async () => {
-    const totalMin = (parseInt(manHours) || 0) * 60 + (parseInt(manMins) || 0)
-    if (totalMin <= 0) {
-      pushToast({ kind: 'error', title: 'Duração inválida', detail: 'Indique pelo menos 1 minuto.' })
+    if (!manPageId) {
+      pushToast({ kind: 'error', title: 'Página obrigatória', detail: 'Selecione a página/disciplina desta sessão.' })
       return
     }
     if (!workspace) return
+    let totalMin: number
+    let startDt: Date
+    let endDt: Date
+
+    if (manMode === 'duration') {
+      totalMin = (parseInt(manHours) || 0) * 60 + (parseInt(manMins) || 0)
+      if (totalMin <= 0) {
+        pushToast({ kind: 'error', title: 'Duração inválida', detail: 'Indique pelo menos 1 minuto.' })
+        return
+      }
+      startDt = new Date(`${manDate}T${manStartTime}:00`)
+      endDt   = new Date(startDt.getTime() + totalMin * 60_000)
+    } else {
+      startDt  = new Date(`${manDate}T${manStartTime}:00`)
+      endDt    = new Date(`${manDate}T${manEndTime}:00`)
+      if (endDt <= startDt) {
+        pushToast({ kind: 'error', title: 'Horário inválido', detail: 'O fim deve ser depois do início.' })
+        return
+      }
+      totalMin = Math.round((endDt.getTime() - startDt.getTime()) / 60_000)
+    }
+
     setManSaving(true)
-    const startDt = new Date(`${manDate}T09:00:00`)
-    const endDt   = new Date(startDt.getTime() + totalMin * 60_000)
-    const result  = await fromIpc<TimeSession>(
+    const result = await fromIpc<TimeSession>(
       () => db().time.create({
         workspace_id: workspace.id,
         project_id:   projectId,
@@ -327,7 +376,7 @@ export function StudyTimerTab({ projectId, dark, pages }: Props) {
         duration_min: totalMin,
         session_type: 'manual',
         notes:        manNotes.trim() || null,
-        tags:         manTags.trim() || null,
+        tags:         null,
         started_at:   startDt.toISOString(),
         ended_at:     endDt.toISOString(),
       }),
@@ -339,7 +388,7 @@ export function StudyTimerTab({ projectId, dark, pages }: Props) {
       return
     }
     setSessions(prev => [result.value, ...prev])
-    setManHours('0'); setManMins('25'); setManNotes(''); setManTags('')
+    setManHours('0'); setManMins('25'); setManNotes('')
     setShowManual(false)
     pushToast({ kind: 'success', title: 'Sessão registada!' })
   }
@@ -352,6 +401,13 @@ export function StudyTimerTab({ projectId, dark, pages }: Props) {
     const elapsed = Math.round((Date.now() - sessionStart.getTime()) / 60_000)
     if (elapsed >= 1) {
       await saveSession('pomodoro', elapsed, sessionStart, timerPageId || null)
+      if (initialBlock?.blockId && onAutoLog) {
+        const newTotal = Math.min(
+          initialBlock.loggedHours + elapsed / 60,
+          initialBlock.plannedHours
+        )
+        onAutoLog(initialBlock.blockId, newTotal)
+      }
       pushToast({ kind: 'success', title: `Sessão de ${elapsed} min registada.` })
     }
     setSessionStart(null)
@@ -388,18 +444,29 @@ export function StudyTimerTab({ projectId, dark, pages }: Props) {
           />
         </div>
 
+        {/* active task indicator */}
+        {initialBlock && (
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: accent,
+            textAlign: 'center', marginBottom: 4, letterSpacing: '0.06em',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            maxWidth: 220 }}>
+            ▶ {initialBlock.taskTitle}
+          </div>
+        )}
+
         {/* page selector */}
         <div className="study-page-sel">
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: ink2 }}>
-            PÁGINA
+            PÁGINA *
           </span>
           <select
             className="settings-input"
-            style={{ flex: 1, fontSize: 11, padding: '3px 6px' }}
+            style={{ flex: 1, fontSize: 11, padding: '3px 6px',
+              borderColor: !timerPageId ? '#8B3A2A44' : undefined }}
             value={timerPageId}
             onChange={e => setTimerPageId(e.target.value ? Number(e.target.value) : '')}
           >
-            <option value="">— nenhuma —</option>
+            <option value="">— selecione —</option>
             {pages.map(p => (
               <option key={p.id} value={p.id}>
                 {p.icon ?? '◦'} {p.title}
@@ -477,29 +544,29 @@ export function StudyTimerTab({ projectId, dark, pages }: Props) {
         {/* manual entry form */}
         {showManual && (
           <div className="study-manual-form" style={{ background: cardBg, borderColor: border }}>
+            {/* modo selector */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+              {(['duration','start_end'] as const).map(m => (
+                <button key={m}
+                  className="btn btn-sm"
+                  style={{ fontSize: 9, padding: '2px 8px',
+                    borderColor: manMode === m ? accent : border,
+                    color: manMode === m ? accent : ink2 }}
+                  onClick={() => setManMode(m)}>
+                  {m === 'duration' ? 'Duração + início' : 'Início + fim'}
+                </button>
+              ))}
+            </div>
+
             <div className="study-form-row">
-              <label style={{ color: ink2 }}>Página</label>
+              <label style={{ color: ink2 }}>Página *</label>
               <select className="settings-input" style={{ flex: 1, fontSize: 11 }}
                 value={manPageId} onChange={e => setManPageId(e.target.value ? Number(e.target.value) : '')}>
-                <option value="">— nenhuma —</option>
+                <option value="">— selecione —</option>
                 {pages.map(p => (
                   <option key={p.id} value={p.id}>{p.icon ?? '◦'} {p.title}</option>
                 ))}
               </select>
-            </div>
-
-            <div className="study-form-row">
-              <label style={{ color: ink2 }}>Duração</label>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input type="number" min="0" max="23" className="settings-input"
-                  style={{ width: 52, fontSize: 11 }}
-                  value={manHours} onChange={e => setManHours(e.target.value)} />
-                <span style={{ color: ink2, fontSize: 10 }}>h</span>
-                <input type="number" min="0" max="59" className="settings-input"
-                  style={{ width: 52, fontSize: 11 }}
-                  value={manMins} onChange={e => setManMins(e.target.value)} />
-                <span style={{ color: ink2, fontSize: 10 }}>min</span>
-              </div>
             </div>
 
             <div className="study-form-row">
@@ -509,17 +576,68 @@ export function StudyTimerTab({ projectId, dark, pages }: Props) {
                 value={manDate} onChange={e => setManDate(e.target.value)} />
             </div>
 
-            <div className="study-form-row">
-              <label style={{ color: ink2 }}>Tags</label>
-              <input className="settings-input" placeholder="ex: revisão, leetcode"
-                style={{ flex: 1, fontSize: 11 }}
-                value={manTags} onChange={e => setManTags(e.target.value)} />
-            </div>
+            {manMode === 'duration' ? (<>
+              <div className="study-form-row">
+                <label style={{ color: ink2 }}>Duração</label>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input type="number" min="0" max="23" className="settings-input"
+                    style={{ width: 52, fontSize: 11 }}
+                    value={manHours} onChange={e => setManHours(e.target.value)} />
+                  <span style={{ color: ink2, fontSize: 10 }}>h</span>
+                  <input type="number" min="0" max="59" className="settings-input"
+                    style={{ width: 52, fontSize: 11 }}
+                    value={manMins} onChange={e => setManMins(e.target.value)} />
+                  <span style={{ color: ink2, fontSize: 10 }}>min</span>
+                </div>
+              </div>
+              <div className="study-form-row">
+                <label style={{ color: ink2 }}>Início</label>
+                <input type="time" className="settings-input"
+                  style={{ flex: 1, fontSize: 11 }}
+                  value={manStartTime} onChange={e => setManStartTime(e.target.value)} />
+              </div>
+              {manStartTime && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2,
+                  textAlign: 'right', marginTop: -4 }}>
+                  Fim calculado: {(() => {
+                    const totalMin = (parseInt(manHours)||0)*60+(parseInt(manMins)||0)
+                    const d = new Date(`${manDate}T${manStartTime}:00`)
+                    d.setMinutes(d.getMinutes() + totalMin)
+                    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+                  })()}
+                </div>
+              )}
+            </>) : (<>
+              <div className="study-form-row">
+                <label style={{ color: ink2 }}>Início</label>
+                <input type="time" className="settings-input"
+                  style={{ flex: 1, fontSize: 11 }}
+                  value={manStartTime} onChange={e => setManStartTime(e.target.value)} />
+              </div>
+              <div className="study-form-row">
+                <label style={{ color: ink2 }}>Fim</label>
+                <input type="time" className="settings-input"
+                  style={{ flex: 1, fontSize: 11 }}
+                  value={manEndTime} onChange={e => setManEndTime(e.target.value)} />
+              </div>
+              {manStartTime && manEndTime && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2,
+                  textAlign: 'right', marginTop: -4 }}>
+                  {(() => {
+                    const s = new Date(`${manDate}T${manStartTime}:00`)
+                    const e = new Date(`${manDate}T${manEndTime}:00`)
+                    const m = Math.max(0, Math.round((e.getTime()-s.getTime())/60_000))
+                    const h = Math.floor(m/60), min = m%60
+                    return `Duração calculada: ${h > 0 ? `${h}h ` : ''}${min}min`
+                  })()}
+                </div>
+              )}
+            </>)}
 
-            <div className="study-form-row" style={{ alignItems: 'flex-start' }}>
+            <div className="study-form-row" style={{ alignItems: 'flex-start', marginTop: 4 }}>
               <label style={{ color: ink2, marginTop: 4 }}>Notas</label>
               <textarea className="settings-input"
-                style={{ flex: 1, fontSize: 11, resize: 'vertical', minHeight: 48 }}
+                style={{ flex: 1, fontSize: 11, resize: 'vertical', minHeight: 40 }}
                 value={manNotes} onChange={e => setManNotes(e.target.value)}
                 placeholder="Observações opcionais…"
               />

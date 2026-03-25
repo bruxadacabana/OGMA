@@ -30,12 +30,11 @@ Fazer `git commit` após cada funcionalidade ou mudança implementada, com mensa
 - [x] Dashboard reseta ao trocar de aba (DashboardView desmontava — corrigido: sempre montado com display:none)
 - [x] Cor de acento não aplicada ao CSS (accent_color guardado mas não aplicado à variável --accent — corrigido: useEffect em App.tsx)
 - [x] Atividades do Planner não aparecem no Calendário Global nem no widget de Agenda (UNION planned_tasks nas queries events:listForMonth e events:listUpcoming)
-- [ ] Algoritmo de agendamento automático do Planner precisa de melhoria + edição manual
-- [ ] Lembretes: mover para dentro do Planner do projeto; adicionar múltiplos lembretes, opções de tempo e prioridade
-- [ ] Melhorar algoritmo de planejamento automático
-- [ ] Criar planejamento de revisão com repetição espaçada
-- [ ] Ao invés da aba TEMPO em cada página, o timer e pomodoro deveriam estar em Planner
-- [ ] Bug: ao criar atividade através do Planner, não aparece a opção de conectar a atividade a uma página, apenas a um projeto
+- [x] Algoritmo de agendamento: prioridade (urgent/high/medium/low) + skip weekends + edição manual de planned_hours por bloco
+- [x] Lembretes: movidos para dentro do Planner (RemindersSection) — prioridade, opções de antecedência, página obrigatória
+- [x] Planejamento de revisão com repetição espaçada: 1→3→7→14→30 dias, ativável por tarefa
+- [x] Aba TEMPO removida — Timer/Pomodoro integrado no Planner: botão ▶ por tarefa, auto-log no bloco, registo manual (duração+início ou início+fim), página obrigatória
+- [x] Bug: ao criar atividade através do Planner, não aparece a opção de conectar a atividade a uma página, apenas a um projeto
 
 ---
 

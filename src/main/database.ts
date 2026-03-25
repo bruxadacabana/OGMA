@@ -391,6 +391,11 @@ async function runIncrementalMigrations(client: Client): Promise<void> {
       created_at    TEXT DEFAULT (datetime('now'))
     )`,
     `ALTER TABLE time_sessions ADD COLUMN tags TEXT`,
+    `ALTER TABLE planned_tasks ADD COLUMN priority TEXT DEFAULT 'medium'`,
+    `ALTER TABLE planned_tasks ADD COLUMN spaced_review INTEGER DEFAULT 0`,
+    `ALTER TABLE planned_tasks ADD COLUMN parent_task_id INTEGER REFERENCES planned_tasks(id) ON DELETE SET NULL`,
+    `ALTER TABLE reminders ADD COLUMN priority TEXT DEFAULT 'medium'`,
+    `ALTER TABLE reminders ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE`,
   ]
 
   for (const sql of migrations) {
