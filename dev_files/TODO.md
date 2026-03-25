@@ -40,6 +40,7 @@ Fazer `git commit` após cada funcionalidade ou mudança implementada, com mensa
 - [x] Botão de sincronização manual nas Configurações (fix: chamada direta a `db().sync.now()`, sem `fromIpc`)
 - [x] Tamanho de fonte nas Configurações não alterava nada (fix: CSS usa `rem` com base em `html { font-size }`)
 - [x] Barra lateral recolhível (modo só-ícones, toggle ◀▶, persistência em localStorage)
+- [ ] Mudar o planner para poder mudar a visualização da parte direita. ALém de exibir tudo o que está em aberto, deveria ser possível ver a agenda (o que tem para fazer por dia ao invés de por deadline). No lado direito, ao invés de ter o "plano de hoje", será exibido o relógio animado do pomodoro (relógio visual ou relógio de areia).
 
 ---
 
