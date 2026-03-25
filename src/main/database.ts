@@ -29,13 +29,16 @@ export async function getClient(): Promise<Client> {
     const authToken = process.env.TURSO_TOKEN
 
     if (syncUrl && authToken) {
-      // Embedded replica - o libsql gerencia tudo, não criamos nada antes
+      // Embedded replica — sync primeiro, depois garante o schema local
       _client = createClient({
         url: localUrl,
         syncUrl: syncUrl,
         authToken: authToken,
         syncInterval: 1000,
       })
+      try { await _client.sync() } catch (e) { log.warn('Sync inicial falhou (offline?)', { e }) }
+      await initSchema(_client)
+      await seedDefaults(_client)
     } else {
       // Local puro - inicializa schema manualmente
       _client = createClient({ url: localUrl })

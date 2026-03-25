@@ -1084,7 +1084,7 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   defesa: '#b8860b', prazo: '#7A5C2E', reuniao: '#4A6741', outro: '#8B7355',
 }
 
-function AgendaWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+function AgendaWidget({ dark, size, isActive }: { dark: boolean; size: WidgetSize; isActive: boolean }) {
   const [events,  setEvents]  = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1096,9 +1096,10 @@ function AgendaWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   const today  = new Date().toISOString().slice(0, 10)
 
   useEffect(() => {
+    if (!isActive) return
     fromIpc<any[]>(() => db().events.listUpcoming(14), 'agendaEvents')
       .then(r => { if (r.isOk()) setEvents(r.value); setLoading(false) })
-  }, [])
+  }, [isActive])
 
   // Dias a mostrar: sm=3, md=7, lg=14
   const days = size === 'sm' ? 3 : size === 'lg' ? 14 : 7
@@ -1188,7 +1189,7 @@ function AgendaWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
 
 // ── RemindersWidget ───────────────────────────────────────────────────────────
 
-function RemindersWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+function RemindersWidget({ dark, size, isActive }: { dark: boolean; size: WidgetSize; isActive: boolean }) {
   const [reminders, setReminders] = useState<any[]>([])
   const [loading,   setLoading]   = useState(true)
 
@@ -1202,7 +1203,7 @@ function RemindersWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
     fromIpc<any[]>(() => db().reminders.list(false), 'remindersList')
       .then(r => { if (r.isOk()) setReminders(r.value); setLoading(false) })
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (isActive) load() }, [isActive])
 
   const dismiss = async (id: number) => {
     await fromIpc(() => db().reminders.dismiss(id), 'dismissReminder')
@@ -1298,7 +1299,7 @@ function RemindersWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
 
 const ACADEMIC_TYPES = ['prova', 'trabalho', 'seminario', 'defesa', 'prazo']
 
-function ProvasWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+function ProvasWidget({ dark, size, isActive }: { dark: boolean; size: WidgetSize; isActive: boolean }) {
   const [events,  setEvents]  = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1308,6 +1309,7 @@ function ProvasWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   const cardBg = dark ? '#211D16' : '#EDE7D9'
 
   useEffect(() => {
+    if (!isActive) return
     fromIpc<any[]>(() => db().events.listUpcoming(60), 'provasEvents')
       .then(r => {
         if (r.isOk()) {
@@ -1315,7 +1317,7 @@ function ProvasWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
         }
         setLoading(false)
       })
-  }, [])
+  }, [isActive])
 
   const limit  = size === 'sm' ? 3 : size === 'lg' ? 10 : 5
   const shown  = events.slice(0, limit)
@@ -1400,7 +1402,7 @@ interface ProjProgress {
   total_pages: number; done_pages: number; total_tasks: number; done_tasks: number
 }
 
-function ProjProgressWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+function ProjProgressWidget({ dark, size, isActive }: { dark: boolean; size: WidgetSize; isActive: boolean }) {
   const [projects, setProjects] = useState<ProjProgress[]>([])
   const [loading,  setLoading]  = useState(true)
 
@@ -1410,9 +1412,10 @@ function ProjProgressWidget({ dark, size }: { dark: boolean; size: WidgetSize })
   const cardBg = dark ? '#211D16' : '#EDE7D9'
 
   useEffect(() => {
+    if (!isActive) return
     fromIpc<ProjProgress[]>(() => db().dashboardExtra.projectsProgress(), 'projectsProgress')
       .then(r => { if (r.isOk()) setProjects(r.value); setLoading(false) })
-  }, [])
+  }, [isActive])
 
   const limit = size === 'sm' ? 3 : size === 'lg' ? 8 : 5
   const shown = projects.slice(0, limit)
@@ -1589,7 +1592,7 @@ const TASK_TYPE_ICONS: Record<string, string> = {
   aula: '📚', atividade: '📋', prova: '📝', leitura: '📖', outro: '◦',
 }
 
-function DayPlanWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+function DayPlanWidget({ dark, size, isActive }: { dark: boolean; size: WidgetSize; isActive: boolean }) {
   const [blocks,  setBlocks]  = useState<TodayBlock[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1606,7 +1609,7 @@ function DayPlanWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (isActive) load() }, [isActive])
 
   const handleLog = async (block: TodayBlock, hours: number) => {
     const r = await fromIpc<any>(() => db().planner.logBlock(block.id, hours), 'logBlock')
@@ -2078,12 +2081,11 @@ export const DashboardView: React.FC<Props> = ({ dark, isActive, onProjectOpen, 
       case 'weather':       return <WeatherWidget      dark={dark} size={size} location={location} />
       case 'quote':         return <QuoteWidget        dark={dark} size={size} />
 
-      // Faltam atualizar (Ainda usam a lógica antiga sem isActive):
-      case 'planner':       return <DayPlanWidget      dark={dark} size={size} />
-      case 'agenda':        return <AgendaWidget       dark={dark} size={size} />
-      case 'reminders':     return <RemindersWidget    dark={dark} size={size} />
-      case 'provas':        return <ProvasWidget       dark={dark} size={size} />
-      case 'proj_progress': return <ProjProgressWidget dark={dark} size={size} />
+      case 'planner':       return <DayPlanWidget      dark={dark} size={size} isActive={isActive} />
+      case 'agenda':        return <AgendaWidget       dark={dark} size={size} isActive={isActive} />
+      case 'reminders':     return <RemindersWidget    dark={dark} size={size} isActive={isActive} />
+      case 'provas':        return <ProvasWidget       dark={dark} size={size} isActive={isActive} />
+      case 'proj_progress': return <ProjProgressWidget dark={dark} size={size} isActive={isActive} />
     }
   }
 
