@@ -122,6 +122,154 @@ function AgendaBlockItem({ block, dark, onStartFocus }: { block: AgendaBlock; da
   )
 }
 
+// ── Visualização Pomodoro (relógio de bolso + ampulheta com estrelas) ────────
+function PomodoroVisual({ progress, timeLeft, isRunning, accent, dark, ink, ink2, border }: {
+  progress: number; timeLeft: number; isRunning: boolean;
+  accent: string; dark: boolean; ink: string; ink2: string; border: string;
+}) {
+  const [vizMode, setVizMode] = useState<'clock'|'hourglass'>('clock')
+  const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0')
+  const secs = (timeLeft % 60).toString().padStart(2, '0')
+
+  const now = new Date()
+  const hourAngle = ((now.getHours() % 12) / 12 + now.getMinutes() / 720) * 360
+  const minuteAngle = progress * 360
+
+  const caseBg     = dark ? '#2C2212' : '#DDD0A8'
+  const faceBg     = dark ? '#1C1608' : '#F7F2E8'
+  const frameColor = dark ? '#7A6030' : '#8B6914'
+  const glassColor = dark ? '#18140A' : '#EDE8DC'
+  const C60        = 2 * Math.PI * 60
+
+  const ticks = Array.from({ length: 12 }, (_, i) => {
+    const a = (i / 12) * Math.PI * 2 - Math.PI / 2
+    const main = i % 3 === 0
+    return { x1: 65 + Math.cos(a) * 49, y1: 86 + Math.sin(a) * 49,
+             x2: 65 + Math.cos(a) * (main ? 42 : 46), y2: 86 + Math.sin(a) * (main ? 42 : 46), main }
+  })
+
+  // Areia: topo vai descendo conforme o tempo passa (de y=17 até y=68)
+  const sandTop    = 17 + progress * 51
+  // Areia inferior: sobe conforme tempo passa (de y=133 até y=82)
+  const sandBotTop = 133 - progress * 51
+
+  // Estrelas dentro da areia (visíveis apenas quando cobertas pela areia)
+  const topStars = [{x:25,y:28},{x:67,y:23},{x:50,y:40},{x:73,y:32},{x:36,y:50},{x:58,y:57}]
+    .filter(s => s.y >= sandTop - 1 && s.y <= 66)
+  const botStars = [{x:30,y:122},{x:62,y:112},{x:74,y:128},{x:30,y:109},{x:50,y:120}]
+    .filter(s => s.y >= sandBotTop - 1 && s.y <= 131)
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+      {/* Toggle relógio / ampulheta */}
+      <div style={{ display:'flex', border:`1px solid ${border}`, borderRadius:3, overflow:'hidden' }}>
+        <button onClick={() => setVizMode('clock')}
+          style={{ padding:'2px 9px', fontSize:8, fontFamily:'var(--font-mono)', letterSpacing:'0.06em',
+            background: vizMode==='clock' ? `${accent}22` : 'transparent', border:'none',
+            borderRight:`1px solid ${border}`, color: vizMode==='clock' ? accent : ink2, cursor:'pointer' }}>
+          ⟳ RELÓGIO
+        </button>
+        <button onClick={() => setVizMode('hourglass')}
+          style={{ padding:'2px 9px', fontSize:8, fontFamily:'var(--font-mono)', letterSpacing:'0.06em',
+            background: vizMode==='hourglass' ? `${accent}22` : 'transparent', border:'none',
+            color: vizMode==='hourglass' ? accent : ink2, cursor:'pointer' }}>
+          ⌛ AMPULHETA
+        </button>
+      </div>
+
+      {vizMode === 'clock' ? (
+        /* ── Relógio de bolso ────────────────────────────────────────── */
+        <svg width="130" height="152" viewBox="0 0 130 152">
+          {/* Coroa (botão de dar corda) */}
+          <rect x="57" y="1" width="16" height="12" rx="4" fill={caseBg} stroke={frameColor} strokeWidth="1.5" />
+          <line x1="61" y1="3" x2="61" y2="11" stroke={accent} strokeWidth="0.7" opacity="0.5" />
+          <line x1="65" y1="3" x2="65" y2="11" stroke={accent} strokeWidth="0.7" opacity="0.5" />
+          <line x1="69" y1="3" x2="69" y2="11" stroke={accent} strokeWidth="0.7" opacity="0.5" />
+          {/* Caixa exterior */}
+          <circle cx="65" cy="86" r="60" fill={caseBg} stroke={frameColor} strokeWidth="3" />
+          {/* Arco de progresso (varre de 12h no sentido horário) */}
+          <circle cx="65" cy="86" r="60" fill="none" stroke={accent} strokeWidth="3.5"
+            strokeDasharray={C60} strokeDashoffset={C60 * (1 - progress)}
+            transform="rotate(-90 65 86)" strokeLinecap="round" opacity="0.75" />
+          {/* Anel interior do bisel */}
+          <circle cx="65" cy="86" r="56" fill="none" stroke={frameColor} strokeWidth="1" opacity="0.4" />
+          {/* Face do mostrador */}
+          <circle cx="65" cy="86" r="53" fill={faceBg} />
+          {/* Anéis decorativos guilhoché */}
+          <circle cx="65" cy="86" r="50" fill="none" stroke={accent} strokeWidth="0.5" opacity="0.15" />
+          <circle cx="65" cy="86" r="46" fill="none" stroke={accent} strokeWidth="0.4" opacity="0.10" />
+          {/* Marcações das horas */}
+          {ticks.map((t, i) => (
+            <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
+              stroke={t.main ? accent : ink2} strokeWidth={t.main ? 2 : 0.8}
+              opacity={t.main ? 0.8 : 0.35} />
+          ))}
+          {/* Ponteiro das horas (hora real) */}
+          <g transform={`rotate(${hourAngle.toFixed(1)} 65 86)`}>
+            <line x1="65" y1="86" x2="65" y2="65" stroke={ink} strokeWidth="3.5" strokeLinecap="round" opacity="0.65" />
+            <line x1="65" y1="86" x2="65" y2="90" stroke={ink} strokeWidth="3.5" strokeLinecap="round" opacity="0.40" />
+          </g>
+          {/* Ponteiro dos minutos (progresso Pomodoro) */}
+          <g transform={`rotate(${minuteAngle.toFixed(1)} 65 86)`}>
+            <line x1="65" y1="86" x2="65" y2="52" stroke={accent} strokeWidth="2" strokeLinecap="round" />
+            <line x1="65" y1="86" x2="65" y2="93" stroke={accent} strokeWidth="3" strokeLinecap="round" opacity="0.50" />
+          </g>
+          {/* Jóia central */}
+          <circle cx="65" cy="86" r="5" fill={caseBg} stroke={accent} strokeWidth="1.5" />
+          <circle cx="65" cy="86" r="2.5" fill={accent} />
+          {/* Display digital */}
+          <text x="65" y="110" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="11" fill={ink} opacity="0.75">{mins}:{secs}</text>
+        </svg>
+      ) : (
+        /* ── Ampulheta com estrelas ───────────────────────────────────── */
+        <svg width="100" height="155" viewBox="0 0 100 155">
+          <defs>
+            <clipPath id="pomo-clip-top"><polygon points="10,17 90,17 54,68 46,68" /></clipPath>
+            <clipPath id="pomo-clip-bot"><polygon points="46,82 54,82 90,133 10,133" /></clipPath>
+          </defs>
+          {/* Moldura superior */}
+          <rect x="4" y="4" width="92" height="14" rx="4" fill={frameColor} opacity="0.85" />
+          <line x1="9" y1="9"  x2="91" y2="9"  stroke={accent} strokeWidth="0.6" opacity="0.35" />
+          <line x1="9" y1="13" x2="91" y2="13" stroke={accent} strokeWidth="0.4" opacity="0.20" />
+          {/* Moldura inferior */}
+          <rect x="4" y="133" width="92" height="14" rx="4" fill={frameColor} opacity="0.85" />
+          <line x1="9" y1="138" x2="91" y2="138" stroke={accent} strokeWidth="0.6" opacity="0.35" />
+          <line x1="9" y1="142" x2="91" y2="142" stroke={accent} strokeWidth="0.4" opacity="0.20" />
+          {/* Vidro — metade superior */}
+          <polygon points="10,17 90,17 54,68 46,68" fill={glassColor} stroke={accent} strokeWidth="1.5" />
+          {/* Gargalo */}
+          <rect x="46" y="68" width="8" height="14" fill={glassColor} stroke={accent} strokeWidth="1.2" />
+          {/* Vidro — metade inferior */}
+          <polygon points="46,82 54,82 90,133 10,133" fill={glassColor} stroke={accent} strokeWidth="1.5" />
+          {/* Areia superior (vai diminuindo) */}
+          <rect x="0" y={sandTop} width="100" height={Math.max(0, 68 - sandTop)}
+            fill={accent} opacity="0.32" clipPath="url(#pomo-clip-top)" />
+          {/* Estrelas na areia superior */}
+          {topStars.map((s, i) => (
+            <circle key={i} cx={s.x} cy={s.y} r="1.8" fill={accent} opacity="0.60"
+              className="pomo-star" style={{ animationDelay:`${i * 0.37}s` }} />
+          ))}
+          {/* Partículas a cair pelo gargalo */}
+          {isRunning && [0, 0.22, 0.44].map((delay, i) => (
+            <circle key={i} cx={50 + (i - 1)} cy="68" r="1.5" fill={accent} opacity="0.85"
+              className="pomo-particle" style={{ animationDelay:`${delay}s` }} />
+          ))}
+          {/* Areia inferior (vai aumentando) */}
+          <rect x="0" y={sandBotTop} width="100" height={Math.max(0, 133 - sandBotTop)}
+            fill={accent} opacity="0.42" clipPath="url(#pomo-clip-bot)" />
+          {/* Estrelas na areia inferior */}
+          {botStars.map((s, i) => (
+            <circle key={i} cx={s.x} cy={s.y} r="1.8" fill={accent} opacity="0.70"
+              className="pomo-star" style={{ animationDelay:`${(i + 3) * 0.3}s` }} />
+          ))}
+          {/* Display digital */}
+          <text x="50" y="152" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="10" fill={ink} opacity="0.70">{mins}:{secs}</text>
+        </svg>
+      )}
+    </div>
+  )
+}
+
 // ── Widget Pomodoro / Foco (Esquerda) ─────────────────────────────────────────
 function PomodoroWidget({ dark, block, onLogWork, onClear }: { dark: boolean; block: AgendaBlock | null; onLogWork: (h: number, s?: string, e?: string) => void; onClear: () => void }) {
   const ink = dark ? '#E8DFC8' : '#2C2416', ink2 = dark ? '#8A7A62' : '#9C8E7A', accent = dark ? '#D4A820' : '#b8860b', cardBg = dark ? '#1E1A12' : '#EAE4D8', border = dark ? '#3A3020' : '#C4B9A8'
@@ -167,8 +315,6 @@ function PomodoroWidget({ dark, block, onLogWork, onClear }: { dark: boolean; bl
     }
   }
 
-  const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0')
-  const secs = (timeLeft % 60).toString().padStart(2, '0')
   const progress = 1 - (timeLeft / (25 * 60))
 
   return (
@@ -194,14 +340,9 @@ function PomodoroWidget({ dark, block, onLogWork, onClear }: { dark: boolean; bl
 
           {mode === 'timer' ? (
             <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
-              <div style={{ position:'relative', width:120, height:120, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:16 }}>
-                <svg width="120" height="120" style={{ position:'absolute', top:0, left:0, transform:'rotate(-90deg)' }}>
-                  <circle cx="60" cy="60" r="54" fill="none" stroke={border} strokeWidth="4" />
-                  <circle cx="60" cy="60" r="54" fill="none" stroke={accent} strokeWidth="4" strokeDasharray={339.29} strokeDashoffset={339.29 * progress} style={{ transition: 'stroke-dashoffset 1s linear' }} />
-                </svg>
-                <div style={{ fontFamily:'var(--font-mono)', fontSize:28, color: ink }}>{mins}:{secs}</div>
-              </div>
-              <div style={{ display:'flex', gap:8 }}>
+              <PomodoroVisual progress={progress} timeLeft={timeLeft} isRunning={isRunning}
+                accent={accent} dark={dark} ink={ink} ink2={ink2} border={border} />
+              <div style={{ display:'flex', gap:8, marginTop:8 }}>
                 <button className="btn btn-sm" style={{ borderColor: accent, color: accent, width: 80 }} onClick={toggleTimer}>{isRunning ? 'Pausar' : 'Iniciar'}</button>
                 <button className="btn btn-ghost btn-sm" style={{ color: ink2 }} onClick={resetTimer}>Reset</button>
               </div>

@@ -336,3 +336,25 @@
   flex-direction: column;
   gap:           6px;
 }
+
+/* ── Pomodoro animações ──────────────────────────────────────────────────── */
+
+@keyframes pomo-star-twinkle {
+  0%, 100% { opacity: 0.15; }
+  50%       { opacity: 0.90; }
+}
+
+@keyframes pomo-particle-fall {
+  0%   { transform: translateY(0px);  opacity: 0;   }
+  15%  { opacity: 0.95; }
+  80%  { opacity: 0.50; }
+  100% { transform: translateY(14px); opacity: 0;   }
+}
+
+.pomo-star {
+  animation: pomo-star-twinkle 2.1s ease-in-out infinite;
+}
+
+.pomo-particle {
+  animation: pomo-particle-fall 0.65s ease-in infinite;
+}
