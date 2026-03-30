@@ -158,36 +158,38 @@ function fmtDate(d: Date): string {
 }
 
 function buildWheelSabbats(year: number, hemisphere: 'north' | 'south'): ComputedSabbat[] {
-  // 0=equinócio março, 1=solstício junho, 2=equinócio setembro, 3=solstício dezembro
-  const prevDec = computeEquinoxSolstice(year - 1, 3)
-  const march   = computeEquinoxSolstice(year, 0)
-  const june    = computeEquinoxSolstice(year, 1)
-  const sep     = computeEquinoxSolstice(year, 2)
-  const dec     = computeEquinoxSolstice(year, 3)
+  // Solstícios e equinócios: cálculo astronómico (Meeus) — variam ligeiramente por ano
+  const march = computeEquinoxSolstice(year, 0)
+  const june  = computeEquinoxSolstice(year, 1)
+  const sep   = computeEquinoxSolstice(year, 2)
+  const dec   = computeEquinoxSolstice(year, 3)
+
+  // Cross-quarter sabbats: datas fixas tradicionais (não dependem do hemisfério)
+  const fix = (month: number, day: number) => new Date(year, month, day)
 
   const mk = (name: string, symbol: string, date: Date, season: string): ComputedSabbat => ({
     name, symbol, date, day: getDayOfYear(date), dateStr: fmtDate(date), season,
   })
 
   const raw = hemisphere === 'north' ? [
-    mk('Imbolc',     '❄', midDate(prevDec, march), 'Início da Primavera'),
-    mk('Ostara',     '🌱', march,                   'Equinócio de Primavera'),
-    mk('Beltane',    '🔥', midDate(march, june),    'Início do Verão'),
-    mk('Litha',      '☀', june,                    'Solstício de Verão'),
-    mk('Lughnasadh', '🌾', midDate(june, sep),      'Início do Outono'),
-    mk('Mabon',      '🍂', sep,                     'Equinócio de Outono'),
-    mk('Samhain',    '🕯', midDate(sep, dec),       'Início do Inverno'),
-    mk('Yule',       '✦', dec,                     'Solstício de Inverno'),
+    mk('Imbolc',     '❄', fix(1, 2),  'Início da Primavera'),   // 2 fev — fixo
+    mk('Ostara',     '🌱', march,      'Equinócio de Primavera'), // astronómico
+    mk('Beltane',    '🔥', fix(4, 1),  'Início do Verão'),        // 1 mai — fixo
+    mk('Litha',      '☀', june,       'Solstício de Verão'),      // astronómico
+    mk('Lughnasadh', '🌾', fix(7, 1),  'Início do Outono'),       // 1 ago — fixo
+    mk('Mabon',      '🍂', sep,        'Equinócio de Outono'),     // astronómico
+    mk('Samhain',    '🕯', fix(9, 31), 'Início do Inverno'),      // 31 out — fixo
+    mk('Yule',       '✦', dec,        'Solstício de Inverno'),    // astronómico
   ] : [
-    // Hemisfério Sul — estações invertidas
-    mk('Lughnasadh', '🌾', midDate(prevDec, march), 'Início do Outono'),
-    mk('Mabon',      '🍂', march,                   'Equinócio de Outono'),
-    mk('Samhain',    '🕯', midDate(march, june),    'Início do Inverno'),
-    mk('Yule',       '✦', june,                    'Solstício de Inverno'),
-    mk('Imbolc',     '❄', midDate(june, sep),      'Início da Primavera'),
-    mk('Ostara',     '🌱', sep,                     'Equinócio de Primavera'),
-    mk('Beltane',    '🔥', midDate(sep, dec),       'Início do Verão'),
-    mk('Litha',      '☀', dec,                     'Solstício de Verão'),
+    // Hemisfério Sul — estações invertidas; cross-quarters com datas fixas
+    mk('Lughnasadh', '🌾', fix(1, 2),  'Início do Outono'),       // 2 fev — fixo
+    mk('Mabon',      '🍂', march,      'Equinócio de Outono'),     // astronómico
+    mk('Samhain',    '🕯', fix(4, 1),  'Início do Inverno'),      // 1 mai — fixo
+    mk('Yule',       '✦', june,       'Solstício de Inverno'),    // astronómico
+    mk('Imbolc',     '❄', fix(7, 1),  'Início da Primavera'),    // 1 ago — fixo
+    mk('Ostara',     '🌱', sep,        'Equinócio de Primavera'), // astronómico
+    mk('Beltane',    '🔥', fix(9, 31), 'Início do Verão'),        // 31 out — fixo
+    mk('Litha',      '☀', dec,        'Solstício de Verão'),      // astronómico
   ]
 
   return raw.sort((a, b) => a.day - b.day)

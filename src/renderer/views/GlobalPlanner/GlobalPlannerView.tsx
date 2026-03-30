@@ -538,16 +538,16 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
           <MiniCalendar tasksWithDates={taskDates} filterDate={filterDate} onFilterDate={setFilterDate} dark={dark} />
           <div className="bj-section-sep" style={{ borderColor: border }} />
 
+          {/* FOCO / POMODORO */}
+          <PomodoroWidget dark={dark} block={activeFocus} onLogWork={handleLogWork} onClear={() => setActiveFocus(null)} />
+
+          <div className="bj-section-sep" style={{ borderColor: border }} />
+
           <div className="bj-section">
             <div className="bj-section-label" style={{ color: ink2 }}>! URGENTE · PRÓXIMOS 3 DIAS</div>
             {urgentTasks.length === 0 ? <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color: ink2, fontStyle:'italic', opacity:0.5, padding:'8px 0' }}>nenhuma tarefa urgente</div>
               : urgentTasks.map(t => <UrgentTaskItem key={t.id} task={t} dark={dark} onToggleDone={handleToggleDone} />)}
           </div>
-
-          <div className="bj-section-sep" style={{ borderColor: border }} />
-          
-          {/* POMODORO COCKPIT SUBSTITUI O ANTIGO "PLANO DE HOJE" */}
-          <PomodoroWidget dark={dark} block={activeFocus} onLogWork={handleLogWork} onClear={() => setActiveFocus(null)} />
         </div>
 
         {!narrow && <div className="bj-page-divider" style={{ borderColor: border }} />}
