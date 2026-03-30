@@ -450,7 +450,20 @@ async function scheduleGlobalTasks(): Promise<void> {
       cur = new Date(cur.getTime() + 86400000)
     }
 
-    if (dates.length === 0) dates.push(today) // Passado do prazo, agenda para hoje
+    if (dates.length === 0) {
+      // Tarefa atrasada: distribuir a partir de hoje (horizonte de 30 dias)
+      let d = new Date(today + 'T12:00:00')
+      const horizon = new Date(d.getTime() + 30 * 86400000)
+      while (d <= horizon) {
+        const dow = d.getDay()
+        const dayOk = perDayMap !== null
+          ? ((perDayMap[dow] ?? dailyCap) > 0)
+          : (!skipWeekends || (dow !== 0 && dow !== 6))
+        if (dayOk) dates.push(d.toISOString().slice(0, 10))
+        d = new Date(d.getTime() + 86400000)
+      }
+      if (dates.length === 0) dates.push(today) // fallback absoluto
+    }
 
     let hoursLeft = remaining
     for (const date of dates) {
@@ -1131,7 +1144,7 @@ export function registerIpcHandlers(): void {
   // ── Configurações ─────────────────────────────────────────────────────────
   api('config:get', async ({ key }) => {
     const row = await dbGet('SELECT value FROM settings WHERE key = ?', key)
-    return row?.value ?? null
+    return row ?? null  // retorna { value: '...' } para o renderer poder aceder via r.value?.value
   })
 
   api('config:set', async ({ key, value }) =>
