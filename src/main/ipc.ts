@@ -384,13 +384,20 @@ async function getSkipWeekends(): Promise<boolean> {
   return row?.value === '1'
 }
 
+async function getDailyCapacityPerDay(): Promise<Record<number, number> | null> {
+  const row = await dbGet(`SELECT value FROM settings WHERE key = 'planner_daily_hours_per_day'`)
+  if (!row?.value) return null
+  try { return JSON.parse(row.value) } catch { return null }
+}
+
 // 1. O NOVO ALGORITMO GLOBAL
 async function scheduleGlobalTasks(): Promise<void> {
-  const dailyCap    = await getDailyCapacity()
+  const dailyCap     = await getDailyCapacity()
+  const perDayMap    = await getDailyCapacityPerDay()
   const skipWeekends = await getSkipWeekends()
-  const today       = new Date().toISOString().slice(0, 10)
+  const today        = new Date().toISOString().slice(0, 10)
 
-  // Busca TODAS as tarefas de TODOS os projetos ordenadas por prioridade e prazo
+  // Inclui tarefas 'overdue' — tarefas atrasadas têm urgência máxima (0) na ordenação
   const tasks = await dbAll(`
     SELECT pt.*,
       COALESCE((
@@ -398,11 +405,14 @@ async function scheduleGlobalTasks(): Promise<void> {
         WHERE wb.task_id = pt.id AND wb.status = 'done'
       ), 0) AS done_hours
     FROM planned_tasks pt
-    WHERE pt.status IN ('pending','in_progress')
+    WHERE pt.status IN ('pending','in_progress','overdue')
     ORDER BY
-      CASE COALESCE(pt.priority,'medium')
-        WHEN 'urgent' THEN 1 WHEN 'high' THEN 2
-        WHEN 'medium' THEN 3 ELSE 4
+      CASE
+        WHEN pt.due_date < date('now')                 THEN 0
+        WHEN COALESCE(pt.priority,'medium') = 'urgent' THEN 1
+        WHEN COALESCE(pt.priority,'medium') = 'high'   THEN 2
+        WHEN COALESCE(pt.priority,'medium') = 'medium' THEN 3
+        ELSE 4
       END ASC,
       pt.due_date ASC
   `)
@@ -410,7 +420,7 @@ async function scheduleGlobalTasks(): Promise<void> {
   if (tasks.length === 0) return
 
   const c = await getClient()
-  
+
   // Limpa o horizonte: deleta todos os blocos agendados no futuro para recalcular
   await c.execute({
     sql:  `DELETE FROM work_blocks WHERE date >= ? AND status = 'scheduled'`,
@@ -428,12 +438,15 @@ async function scheduleGlobalTasks(): Promise<void> {
     const dates: string[] = []
     let cur = new Date(today + 'T12:00:00')
     const dueDate = new Date(due + 'T12:00:00')
-    
+
     while (cur <= dueDate) {
       const dow = cur.getDay() // 0=Sun, 6=Sat
-      if (!skipWeekends || (dow !== 0 && dow !== 6)) {
-        dates.push(cur.toISOString().slice(0, 10))
-      }
+      // Com mapa por dia: inclui o dia apenas se capacidade > 0
+      // Sem mapa: aplica regra de skipWeekends
+      const dayOk = perDayMap !== null
+        ? ((perDayMap[dow] ?? dailyCap) > 0)
+        : (!skipWeekends || (dow !== 0 && dow !== 6))
+      if (dayOk) dates.push(cur.toISOString().slice(0, 10))
       cur = new Date(cur.getTime() + 86400000)
     }
 
@@ -442,10 +455,12 @@ async function scheduleGlobalTasks(): Promise<void> {
     let hoursLeft = remaining
     for (const date of dates) {
       if (hoursLeft <= 0) break
+      const dow       = new Date(date + 'T12:00:00').getDay()
+      const cap       = perDayMap !== null ? (perDayMap[dow] ?? dailyCap) : dailyCap
       const load      = loadMap.get(date) ?? 0
-      const available = Math.max(0, dailyCap - load)
+      const available = Math.max(0, cap - load)
       if (available <= 0) continue
-      
+
       const h = Math.min(hoursLeft, available)
       inserts.push({
         sql:  `INSERT INTO work_blocks (task_id, date, planned_hours, logged_hours, status) VALUES (?, ?, ?, 0, 'scheduled')`,
@@ -454,7 +469,7 @@ async function scheduleGlobalTasks(): Promise<void> {
       loadMap.set(date, load + h)
       hoursLeft -= h
     }
-    
+
     if (hoursLeft > 0.01) {
       const lastDate = dates[dates.length - 1]
       inserts.push({
@@ -1772,10 +1787,7 @@ export function registerIpcHandlers(): void {
       UPDATE planned_tasks SET status = 'overdue', updated_at = datetime('now')
       WHERE due_date < ? AND status IN ('pending','in_progress')
     `, today)
-    const projects = await dbAll(
-      `SELECT DISTINCT project_id FROM planned_tasks WHERE status IN ('pending','in_progress')`
-    )
-    for (const { project_id } of projects) await scheduleGlobalTasks()
+    await scheduleGlobalTasks()
     return { ok: true }
   })
 

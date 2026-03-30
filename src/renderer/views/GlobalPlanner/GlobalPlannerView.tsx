@@ -411,6 +411,7 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
   
   // Pomodoro
   const [activeFocus, setActiveFocus] = useState<AgendaBlock | null>(null)
+  const [scheduling, setScheduling] = useState(false)
 
   const ink2 = dark ? '#8A7A62' : '#9C8E7A', accent = dark ? '#D4A820' : '#b8860b', border = dark ? '#3A3020' : '#C4B9A8'
 
@@ -483,6 +484,14 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
     else pushToast({ kind:'error', title:'Erro ao registar tempo.' })
   }
 
+  const handleRescheduleAll = async () => {
+    setScheduling(true)
+    const r = await fromIpc(() => db().planner.rescheduleAll(), 'rescheduleAll')
+    if (r.isOk()) { pushToast({ kind:'success', title:'Reagendamento concluído!' }); loadData() }
+    else pushToast({ kind:'error', title:'Erro ao reagendar.' })
+    setScheduling(false)
+  }
+
   const taskDates = new Set(tasks.map(t => t.due_date))
   const today3 = new Date(); today3.setDate(today3.getDate() + 2)
   const urgentTasks = tasks.filter(t => t.status !== 'completed' && new Date(t.due_date + 'T12:00:00') <= today3)
@@ -548,7 +557,7 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
           
           {/* HEADER DA DIREITA (TABS) */}
           <div className="bj-right-header" style={{ borderBottom: `1px solid ${border}`, paddingBottom: 16, marginBottom: 16 }}>
-            <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ display: 'flex', gap: 16, flex: 1 }}>
               <button onClick={() => setRightTab('agenda')} style={{ background:'transparent', border:'none', fontFamily:'var(--font-mono)', fontSize:12, letterSpacing:'0.1em', cursor:'pointer', borderBottom: rightTab==='agenda'?`2px solid ${accent}`:'2px solid transparent', color: rightTab==='agenda'?accent:ink2, paddingBottom:4 }}>
                 AGENDA {filterDate ? `(${fmtDate(filterDate)})` : '(HOJE)'}
               </button>
@@ -556,6 +565,10 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
                 TAREFAS ABERTAS
               </button>
             </div>
+            <button className="btn btn-sm" onClick={handleRescheduleAll} disabled={scheduling}
+              style={{ borderColor: accent, color: accent, flexShrink:0, opacity: scheduling ? 0.5 : 1 }}>
+              {scheduling ? '…' : '↺ Reagendar'}
+            </button>
           </div>
 
           <div className="bj-task-list">

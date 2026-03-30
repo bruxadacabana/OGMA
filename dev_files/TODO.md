@@ -40,7 +40,10 @@ Fazer `git commit` após cada funcionalidade ou mudança implementada, com mensa
 - [x] Botão de sincronização manual nas Configurações (fix: chamada direta a `db().sync.now()`, sem `fromIpc`)
 - [x] Tamanho de fonte nas Configurações não alterava nada (fix: CSS usa `rem` com base em `html { font-size }`)
 - [x] Barra lateral recolhível (modo só-ícones, toggle ◀▶, persistência em localStorage)
-- [ ] Mudar o planner para poder mudar a visualização da parte direita. ALém de exibir tudo o que está em aberto, deveria ser possível ver a agenda (o que tem para fazer por dia ao invés de por deadline). No lado direito, ao invés de ter o "plano de hoje", será exibido o relógio animado do pomodoro (relógio visual ou relógio de areia).
+- [ ] Acrescentar o botão "reagendar" no planner global ao invés de só nos locais dos projetos
+- [ ] Verificar se os botões "reagendar" também reagendam tarefas pendentes atrasadas (que devem ser trtadas como urgência máxima)
+- [ ] separar limite de horas disponíveis para marcar automaticamente as atividades do planner por dia ao invés de continuar com o mesmo limite de horas para todos os dias
+- [x] Mudar o planner para poder mudar a visualização da parte direita. ALém de exibir tudo o que está em aberto, deveria ser possível ver a agenda (o que tem para fazer por dia ao invés de por deadline). No lado direito, ao invés de ter o "plano de hoje", será exibido o relógio animado do pomodoro ( incluir visualização do tipo relógio/pomodoro visual inspirado em relógio de bolso antigo e relógio de areia (ampulheta) com estrelas).
 
 ---
 

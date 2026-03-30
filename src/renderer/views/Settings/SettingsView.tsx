@@ -38,6 +38,8 @@ export function SettingsView({ dark, onToggleTheme, fontSizeValue, onFontSize }:
   // Planner
   const [dailyHours,      setDailyHours]      = useState('4')
   const [dailyHoursSaved, setDailyHoursSaved] = useState(false)
+  const [perDayHours,     setPerDayHours]     = useState<Record<number,string>>({0:'0',1:'4',2:'4',3:'4',4:'4',5:'4',6:'0'})
+  const [perDaySaved,     setPerDaySaved]     = useState(false)
 
   // Sincronização
   const [syncing,    setSyncing]    = useState(false)
@@ -67,6 +69,15 @@ export function SettingsView({ dark, onToggleTheme, fontSizeValue, onFontSize }:
   useEffect(() => {
     fromIpc<any>(() => db().config.get('planner_daily_hours'), 'getDailyHours')
       .then(r => { if (r.isOk() && r.value?.value) setDailyHours(r.value.value) })
+    fromIpc<any>(() => db().config.get('planner_daily_hours_per_day'), 'getPerDayHours')
+      .then(r => {
+        if (r.isOk() && r.value?.value) {
+          try {
+            const parsed = JSON.parse(r.value.value)
+            setPerDayHours(Object.fromEntries(Object.entries(parsed).map(([k, v]) => [Number(k), String(v)])) as Record<number,string>)
+          } catch {}
+        }
+      })
   }, [])
 
   const saveDailyHours = async () => {
@@ -75,6 +86,14 @@ export function SettingsView({ dark, onToggleTheme, fontSizeValue, onFontSize }:
     setDailyHours(String(val))
     setDailyHoursSaved(true)
     setTimeout(() => setDailyHoursSaved(false), 2000)
+  }
+
+  const savePerDayHours = async () => {
+    const map: Record<number,number> = {}
+    for (let i = 0; i < 7; i++) map[i] = Math.min(24, Math.max(0, parseFloat(perDayHours[i] ?? '') || 0))
+    await fromIpc(() => db().config.set('planner_daily_hours_per_day', JSON.stringify(map)), 'setPerDayHours')
+    setPerDaySaved(true)
+    setTimeout(() => setPerDaySaved(false), 2000)
   }
 
   // Localização
@@ -259,8 +278,29 @@ export function SettingsView({ dark, onToggleTheme, fontSizeValue, onFontSize }:
             </div>
           </div>
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-faint)', marginTop: 8, fontStyle: 'italic' }}>
-            Máximo de horas de trabalho por dia usado pelo algoritmo de agendamento.
+            Limite padrão quando a capacidade por dia não está configurada abaixo.
           </p>
+          <div className="settings-row" style={{ flexDirection:'column', alignItems:'flex-start', gap:6, marginTop: 14 }}>
+            <span className="settings-row-label">Capacidade por dia</span>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:4 }}>
+              {(['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'] as const).map((label, dow) => (
+                <div key={dow} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+                  <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'var(--ink-faint)' }}>{label}</span>
+                  <input type="number" min="0" max="24" step="0.5"
+                    className="settings-input" style={{ width:52 }}
+                    value={perDayHours[dow] ?? '0'}
+                    onChange={e => setPerDayHours(prev => ({ ...prev, [dow]: e.target.value }))}
+                  />
+                </div>
+              ))}
+              <button className="btn btn-sm" onClick={savePerDayHours} style={{ alignSelf:'flex-end' }}>
+                {perDaySaved ? '✓ Guardado' : 'Guardar'}
+              </button>
+            </div>
+            <p style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'var(--ink-faint)', fontStyle:'italic', margin:0 }}>
+              0 horas = não agendar nesse dia. Substitui o limite padrão acima.
+            </p>
+          </div>
         </div>
       </div>
 
