@@ -172,24 +172,24 @@ function buildWheelSabbats(year: number, hemisphere: 'north' | 'south'): Compute
   })
 
   const raw = hemisphere === 'north' ? [
-    mk('Imbolc',     '❄', fix(1, 2),  'Início da Primavera'),   // 2 fev — fixo
-    mk('Ostara',     '🌱', march,      'Equinócio de Primavera'), // astronómico
-    mk('Beltane',    '🔥', fix(4, 1),  'Início do Verão'),        // 1 mai — fixo
-    mk('Litha',      '☀', june,       'Solstício de Verão'),      // astronómico
-    mk('Lughnasadh', '🌾', fix(7, 1),  'Início do Outono'),       // 1 ago — fixo
-    mk('Mabon',      '🍂', sep,        'Equinócio de Outono'),     // astronómico
-    mk('Samhain',    '🕯', fix(9, 31), 'Início do Inverno'),      // 31 out — fixo
-    mk('Yule',       '✦', dec,        'Solstício de Inverno'),    // astronómico
+    mk('Imbolc',     '✧', fix(1, 2),  'Início da Primavera'),   // 2 fev — fixo
+    mk('Ostara',     '◉', march,      'Equinócio de Primavera'), // astronómico
+    mk('Beltane',    '✦', fix(4, 1),  'Início do Verão'),        // 1 mai — fixo
+    mk('Litha',      '⊙', june,       'Solstício de Verão'),      // astronómico
+    mk('Lughnasadh', '✤', fix(7, 1),  'Início do Outono'),       // 1 ago — fixo
+    mk('Mabon',      '◈', sep,        'Equinócio de Outono'),     // astronómico
+    mk('Samhain',    '☽', fix(9, 31), 'Início do Inverno'),      // 31 out — fixo
+    mk('Yule',       '✶', dec,        'Solstício de Inverno'),    // astronómico
   ] : [
     // Hemisfério Sul — estações invertidas; cross-quarters com datas fixas
-    mk('Lughnasadh', '🌾', fix(1, 2),  'Início do Outono'),       // 2 fev — fixo
-    mk('Mabon',      '🍂', march,      'Equinócio de Outono'),     // astronómico
-    mk('Samhain',    '🕯', fix(4, 1),  'Início do Inverno'),      // 1 mai — fixo
-    mk('Yule',       '✦', june,       'Solstício de Inverno'),    // astronómico
-    mk('Imbolc',     '❄', fix(7, 1),  'Início da Primavera'),    // 1 ago — fixo
-    mk('Ostara',     '🌱', sep,        'Equinócio de Primavera'), // astronómico
-    mk('Beltane',    '🔥', fix(9, 31), 'Início do Verão'),        // 31 out — fixo
-    mk('Litha',      '☀', dec,        'Solstício de Verão'),      // astronómico
+    mk('Lughnasadh', '✤', fix(1, 2),  'Início do Outono'),       // 2 fev — fixo
+    mk('Mabon',      '◈', march,      'Equinócio de Outono'),     // astronómico
+    mk('Samhain',    '☽', fix(4, 1),  'Início do Inverno'),      // 1 mai — fixo
+    mk('Yule',       '✶', june,       'Solstício de Inverno'),    // astronómico
+    mk('Imbolc',     '✧', fix(7, 1),  'Início da Primavera'),    // 1 ago — fixo
+    mk('Ostara',     '◉', sep,        'Equinócio de Primavera'), // astronómico
+    mk('Beltane',    '✦', fix(9, 31), 'Início do Verão'),        // 31 out — fixo
+    mk('Litha',      '⊙', dec,        'Solstício de Verão'),      // astronómico
   ]
 
   return raw.sort((a, b) => a.day - b.day)
@@ -868,7 +868,7 @@ function WheelOfYearWidget({ dark, size, location }: { dark: boolean; size: Widg
       <div className="card" style={{ background: cardBg, borderColor: border }}>
         {label}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 32, lineHeight: 1 }}>{nextSabbat.symbol}</span>
+          <span style={{ fontSize: 36, lineHeight: 1, fontFamily: 'var(--font-mono)', color: accent }}>{nextSabbat.symbol}</span>
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontStyle: 'italic', color: ink }}>{nextSabbat.name}</div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent, marginTop: 2 }}>{dl}</div>
@@ -892,66 +892,122 @@ function WheelOfYearWidget({ dark, size, location }: { dark: boolean; size: Widg
   const daysUntil  = daysLeft >= 0 ? daysLeft : 365 - todayDoy + nextSabbat.day
   const dl         = daysUntil === 0 ? 'hoje' : daysUntil === 1 ? 'amanhã' : `em ${daysUntil} dias`
 
-  const svgSize = size === 'lg' ? 240 : 200
+  const svgSize    = size === 'lg' ? 260 : 210
   const cx = svgSize / 2, cy = svgSize / 2
-  const rim = size === 'lg' ? 100 : 78, inner = size === 'lg' ? 18 : 14
-  const symbolR = size === 'lg' ? 68 : 54
+  const outerRim   = size === 'lg' ? 124 : 100
+  const nameR      = size === 'lg' ? 111 : 88
+  const dateR      = size === 'lg' ? 96  : 75
+  const symbolR    = size === 'lg' ? 79  : 62
+  const sectorOuter = size === 'lg' ? 62  : 48
+  const innerR     = size === 'lg' ? 20  : 15
 
-  const f = (n: number) => n.toFixed(1)
-  const toRad = (day: number) => (day / 365 * 360 - 90) * Math.PI / 180
-  const pt    = (day: number, r: number) => ({ x: cx + r * Math.cos(toRad(day)), y: cy + r * Math.sin(toRad(day)) })
-
-  const sector = (startDay: number, endDay: number, fill: string, key: string) => {
+  const f      = (n: number) => n.toFixed(1)
+  const toRad  = (day: number) => (day / 365 * 360 - 90) * Math.PI / 180
+  const pt     = (day: number, r: number) => ({ x: cx + r * Math.cos(toRad(day)), y: cy + r * Math.sin(toRad(day)) })
+  const textRot = (day: number) => {
+    const a = day / 365 * 360 - 90
+    return (a > 90 && a <= 270) ? a + 180 : a
+  }
+  const seasonFill = (season: string): string => {
+    if (season.includes('Outono'))    return dark ? 'rgba(180,100,30,0.25)'  : 'rgba(160,85,25,0.22)'
+    if (season.includes('Inverno'))   return dark ? 'rgba(70,110,160,0.22)'  : 'rgba(75,105,150,0.18)'
+    if (season.includes('Primavera')) return dark ? 'rgba(80,148,70,0.24)'   : 'rgba(85,135,65,0.20)'
+    return dark ? 'rgba(200,150,30,0.28)' : 'rgba(190,130,25,0.22)'  // Verão
+  }
+  const sector8 = (startDay: number, endDay: number, fill: string, key: string) => {
     const eff = startDay > endDay ? endDay + 365 : endDay
     const a1 = toRad(startDay), a2 = toRad(eff)
-    const ox1 = cx+rim*Math.cos(a1), oy1 = cy+rim*Math.sin(a1)
-    const ox2 = cx+rim*Math.cos(a2), oy2 = cy+rim*Math.sin(a2)
-    const ix1 = cx+inner*Math.cos(a1), iy1 = cy+inner*Math.sin(a1)
-    const ix2 = cx+inner*Math.cos(a2), iy2 = cy+inner*Math.sin(a2)
-    const span = ((eff - startDay) + 730) % 365
+    const ox1 = cx + sectorOuter * Math.cos(a1), oy1 = cy + sectorOuter * Math.sin(a1)
+    const ox2 = cx + sectorOuter * Math.cos(a2), oy2 = cy + sectorOuter * Math.sin(a2)
+    const ix1 = cx + innerR * Math.cos(a1), iy1 = cy + innerR * Math.sin(a1)
+    const ix2 = cx + innerR * Math.cos(a2), iy2 = cy + innerR * Math.sin(a2)
+    const span = eff - startDay
     const large = span > 182 ? 1 : 0
     return (
-      <path key={key} fill={fill} d={
-        `M ${f(ix1)} ${f(iy1)} L ${f(ox1)} ${f(oy1)} A ${rim} ${rim} 0 ${large} 1 ${f(ox2)} ${f(oy2)} L ${f(ix2)} ${f(iy2)} A ${inner} ${inner} 0 ${large} 0 ${f(ix1)} ${f(iy1)} Z`
+      <path key={key} fill={fill} stroke="none" d={
+        `M ${f(ix1)} ${f(iy1)} L ${f(ox1)} ${f(oy1)} A ${sectorOuter} ${sectorOuter} 0 ${large} 1 ${f(ox2)} ${f(oy2)} L ${f(ix2)} ${f(iy2)} A ${innerR} ${innerR} 0 ${large} 0 ${f(ix1)} ${f(iy1)} Z`
       } />
     )
   }
 
-  const byName = (name: string) => sabbats.find(s => s.name === name)!
-  const imbolc = byName('Imbolc'), beltane = byName('Beltane')
-  const lugh   = byName('Lughnasadh'), samhain = byName('Samhain')
-
   const wheel = (
     <svg width={svgSize} height={svgSize} viewBox={`0 0 ${svgSize} ${svgSize}`} style={{ flexShrink: 0 }}>
-      {sector(imbolc.day,  beltane.day,  'rgba(107,140,74,0.22)',  'spring')}
-      {sector(beltane.day, lugh.day,     'rgba(196,137,42,0.20)',  'summer')}
-      {sector(lugh.day,    samhain.day,  'rgba(140,74,26,0.20)',   'autumn')}
-      {sector(samhain.day, imbolc.day,   'rgba(100,120,150,0.18)', 'winter')}
-
-      <circle cx={cx} cy={cy} r={rim}   fill="none" stroke={border} strokeWidth={1} />
-      <circle cx={cx} cy={cy} r={inner} fill={cardBg} stroke={border} strokeWidth={1} />
-
-      {sabbats.map(s => {
-        const o = pt(s.day, inner), i = pt(s.day, rim)
-        return <line key={s.name+'r'} x1={f(o.x)} y1={f(o.y)} x2={f(i.x)} y2={f(i.y)} stroke={border} strokeWidth={0.8} />
+      {/* 8 season sectors */}
+      {sabbats.map((s, i) => {
+        const next = sabbats[(i + 1) % sabbats.length]
+        return sector8(s.day, next.day, seasonFill(s.season), `sect${i}`)
       })}
 
+      {/* Ring borders */}
+      <circle cx={cx} cy={cy} r={outerRim}    fill="none" stroke={border} strokeWidth={1.5} />
+      <circle cx={cx} cy={cy} r={sectorOuter} fill="none" stroke={border} strokeWidth={0.6} opacity={0.5} />
+      <circle cx={cx} cy={cy} r={innerR}      fill={cardBg} stroke={border} strokeWidth={1} />
+
+      {/* Radial dividers */}
       {sabbats.map(s => {
-        const p = pt(s.day, symbolR), isNext = s === nextSabbat
+        const o = pt(s.day, innerR), e = pt(s.day, outerRim)
+        return <line key={s.name+'r'} x1={f(o.x)} y1={f(o.y)} x2={f(e.x)} y2={f(e.y)} stroke={border} strokeWidth={0.7} opacity={0.45} />
+      })}
+
+      {/* Symbols */}
+      {sabbats.map(s => {
+        const p = pt(s.day, symbolR)
+        const isNext = s === nextSabbat
         return (
-          <text key={s.name+'t'} x={f(p.x)} y={f(p.y)} textAnchor="middle" dominantBaseline="middle"
-            fontSize={isNext ? (size === 'lg' ? 20 : 16) : (size === 'lg' ? 16 : 13)} opacity={isNext ? 1 : 0.55}>
-            {s.symbol}
-          </text>
+          <text key={s.name+'sym'} x={f(p.x)} y={f(p.y)}
+            textAnchor="middle" dominantBaseline="middle"
+            fontSize={isNext ? (size === 'lg' ? 18 : 14) : (size === 'lg' ? 13 : 10)}
+            fill={isNext ? accent : ink2} opacity={isNext ? 1 : 0.55}
+            fontFamily="var(--font-mono)"
+          >{s.symbol}</text>
         )
       })}
 
-      {(() => { const p = pt(todayDoy, rim - 7); return (
-        <circle cx={f(p.x)} cy={f(p.y)} r={size === 'lg' ? 7 : 5.5} fill={accent} stroke={cardBg} strokeWidth={1.5} />
-      )})()}
+      {/* Sabbat name labels (rotated, outer ring) */}
+      {sabbats.map(s => {
+        const p   = pt(s.day, nameR)
+        const rot = textRot(s.day)
+        const isNext = s === nextSabbat
+        return (
+          <text key={s.name+'n'} x={f(p.x)} y={f(p.y)}
+            textAnchor="middle" dominantBaseline="middle"
+            fontSize={size === 'lg' ? 8 : 6.5}
+            fontFamily="var(--font-mono)" letterSpacing="0.06em"
+            fill={isNext ? accent : ink2}
+            opacity={isNext ? 1 : 0.65}
+            fontWeight={isNext ? '700' : '400'}
+            transform={`rotate(${f(rot)}, ${f(p.x)}, ${f(p.y)})`}
+          >{s.name.toUpperCase()}</text>
+        )
+      })}
 
+      {/* Date labels */}
+      {sabbats.map(s => {
+        const p   = pt(s.day, dateR)
+        const rot = textRot(s.day)
+        return (
+          <text key={s.name+'dt'} x={f(p.x)} y={f(p.y)}
+            textAnchor="middle" dominantBaseline="middle"
+            fontSize={size === 'lg' ? 6 : 5}
+            fontFamily="var(--font-mono)"
+            fill={ink2} opacity={0.5}
+            transform={`rotate(${f(rot)}, ${f(p.x)}, ${f(p.y)})`}
+          >{s.dateStr}</text>
+        )
+      })}
+
+      {/* Today marker */}
+      {(() => {
+        const p = pt(todayDoy, outerRim)
+        return <>
+          <circle cx={f(p.x)} cy={f(p.y)} r={size === 'lg' ? 6.5 : 5} fill={cardBg} stroke={accent} strokeWidth={1.5} opacity={0.4} />
+          <circle cx={f(p.x)} cy={f(p.y)} r={size === 'lg' ? 3.5 : 2.8} fill={accent} />
+        </>
+      })()}
+
+      {/* Center symbol */}
       <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle"
-        fontSize={size === 'lg' ? 16 : 13} fill={accent}>✦</text>
+        fontSize={size === 'lg' ? 14 : 11} fill={accent} fontFamily="var(--font-mono)">✦</text>
     </svg>
   )
 
@@ -960,7 +1016,7 @@ function WheelOfYearWidget({ dark, size, location }: { dark: boolean; size: Widg
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
           color: ink2, textTransform: 'uppercase', marginBottom: 6 }}>Próximo Sabá</div>
-        <div style={{ fontSize: 26, marginBottom: 4 }}>{nextSabbat.symbol}</div>
+        <div style={{ fontSize: 30, marginBottom: 4, fontFamily: 'var(--font-mono)', color: accent }}>{nextSabbat.symbol}</div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontStyle: 'italic', color: ink }}>{nextSabbat.name}</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent, marginTop: 2 }}>{dl}</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2, marginTop: 1 }}>{nextSabbat.season} · {nextSabbat.dateStr}</div>
@@ -977,7 +1033,7 @@ function WheelOfYearWidget({ dark, size, location }: { dark: boolean; size: Widg
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {sabbats.filter(s => s.day >= todayDoy).slice(0, 3).map(s => (
             <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ fontSize: 11 }}>{s.symbol}</span>
+              <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: s === nextSabbat ? accent : ink2 }}>{s.symbol}</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: s === nextSabbat ? accent : ink2 }}>
                 {s.name} · {s.dateStr}{s === nextSabbat && ' ←'}
               </span>
@@ -1003,7 +1059,7 @@ function WheelOfYearWidget({ dark, size, location }: { dark: boolean; size: Widg
         {wheel}
         <div style={{ flex: 1 }}>
           <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 36 }}>{nextSabbat.symbol}</span>
+            <span style={{ fontSize: 42, fontFamily: 'var(--font-mono)', color: accent }}>{nextSabbat.symbol}</span>
             <div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em',
                 color: ink2, textTransform: 'uppercase', marginBottom: 2 }}>Próximo Sabá</div>
@@ -1034,7 +1090,7 @@ function WheelOfYearWidget({ dark, size, location }: { dark: boolean; size: Widg
                     border: isNext ? `1px solid ${accent}40` : '1px solid transparent',
                     borderRadius: 2,
                   }}>
-                    <span style={{ fontSize: 13, opacity: isPast ? 0.45 : 1 }}>{s.symbol}</span>
+                    <span style={{ fontSize: 15, fontFamily: 'var(--font-mono)', color: isNext ? accent : ink2, opacity: isPast ? 0.45 : 1 }}>{s.symbol}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: 'var(--font-display)', fontSize: 11, fontStyle: 'italic',
                         color: isPast ? ink2 : ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
