@@ -1607,8 +1607,23 @@ export function registerIpcHandlers(): void {
       WHERE pt.status NOT IN ('done')
         AND pt.due_date >= ? AND pt.due_date <= ?
 
+      UNION ALL
+
+      SELECT 'planner' AS source, wb.id, 'Foco: ' || pt.title AS title, 'Sessão de Foco' AS description,
+        wb.date || 'T09:00:00' AS start_dt, wb.date || 'T10:00:00' AS end_dt, 0 AS all_day,
+        pr.color AS color, 'atividade' AS event_type,
+        pt.page_id AS linked_page_id, pt.project_id AS linked_project_id,
+        p.title AS page_title, pr.name AS project_name, pr.color AS project_color
+      FROM work_blocks wb
+      JOIN  planned_tasks pt ON pt.id  = wb.task_id
+      LEFT JOIN projects pr  ON pr.id  = pt.project_id
+      LEFT JOIN pages    p   ON p.id   = pt.page_id
+      WHERE wb.status != 'missed'
+        AND pt.status NOT IN ('done', 'completed')
+        AND wb.date >= ? AND wb.date <= ?
+
       ORDER BY start_dt
-    `, now, future, now, future)
+    `, now, future, now, future, now, future)
   })
 
   api('events:create', async (data) => {

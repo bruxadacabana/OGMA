@@ -421,6 +421,8 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
   
   // Pomodoro
   const [activeFocus, setActiveFocus] = useState<AgendaBlock | null>(null)
+  const activeFocusRef = useRef<AgendaBlock | null>(null)
+  useEffect(() => { activeFocusRef.current = activeFocus }, [activeFocus])
   const [scheduling, setScheduling] = useState(false)
 
   const ink2 = dark ? '#8A7A62' : '#9C8E7A', accent = dark ? '#D4A820' : '#b8860b', border = dark ? '#3A3020' : '#C4B9A8'
@@ -432,54 +434,40 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
   }, [])
 
   const loadData = useCallback(async () => {
-    console.log("🔎 1. Iniciou o loadData");
-    setLoading(true);
-
+    setLoading(true)
     try {
-      // 1. BLINDAGEM DA DATA: Ignora eventos de clique perdidos e garante uma string
-      let safeBaseDate = new Date().toISOString().slice(0, 10);
-      if (typeof filterDate === 'string' && filterDate.length >= 10) {
-        safeBaseDate = filterDate.slice(0, 10);
-      }
-      console.log("🔎 2. Data segura definida para:", safeBaseDate);
+      const safeBaseDate = (typeof filterDate === 'string' && filterDate.length >= 10)
+        ? filterDate.slice(0, 10)
+        : new Date().toISOString().slice(0, 10)
 
-      // 2. BUSCA DE TAREFAS
-      const tasksRes = await fromIpc<GlobalTask[]>(() => db().planner.listAllTasks({ include_completed: showCompleted }), 'listAllTasks');
-      tasksRes.match(d => setTasks(d || []), () => setTasks([]));
-      console.log("🔎 3. Tarefas carregadas");
+      const tasksRes = await fromIpc<GlobalTask[]>(() => db().planner.listAllTasks({ include_completed: showCompleted }), 'listAllTasks')
+      tasksRes.match(d => setTasks(d || []), () => setTasks([]))
 
-      // 3. CÁLCULO DE DATAS (Agora protegido dentro do try)
-      const numDays = daysToShow || 3; 
+      const numDays = daysToShow || 3
       const datesToFetch = Array.from({ length: numDays }).map((_, i) => {
-        const d = new Date(safeBaseDate + 'T12:00:00');
-        d.setDate(d.getDate() + i);
-        return d.toISOString().slice(0, 10);
-      });
-      console.log("🔎 4. Buscando agenda para as datas:", datesToFetch);
+        const d = new Date(safeBaseDate + 'T12:00:00')
+        d.setDate(d.getDate() + i)
+        return d.toISOString().slice(0, 10)
+      })
 
-      // 4. BUSCA DA AGENDA (Sequencial e Segura)
-      const allBlocks: AgendaBlock[] = [];
+      const allBlocks: AgendaBlock[] = []
       for (const dateStr of datesToFetch) {
-        const res = await fromIpc<AgendaBlock[]>(() => db().planner.todayBlocks(dateStr), 'todayBlocks');
-        res.match(d => {
-          if (d && Array.isArray(d)) allBlocks.push(...d);
-        }, () => {});
+        const res = await fromIpc<AgendaBlock[]>(() => db().planner.todayBlocks(dateStr), 'todayBlocks')
+        res.match(d => { if (d && Array.isArray(d)) allBlocks.push(...d) }, () => {})
       }
 
-      console.log("🔎 5. Blocos carregados:", allBlocks);
-      setAgendaBlocks(allBlocks);
+      setAgendaBlocks(allBlocks)
 
-      if (activeFocus && !allBlocks.find(b => b.id === activeFocus.id)) {
-        setActiveFocus(null);
+      if (activeFocusRef.current && !allBlocks.find(b => b.id === activeFocusRef.current!.id)) {
+        setActiveFocus(null)
       }
 
     } catch (error) {
-      console.error("🚨 ERRO CRÍTICO NO LOADDATA:", error);
+      console.error("🚨 ERRO CRÍTICO NO LOADDATA:", error)
     } finally {
-          console.log("🔎 6. Finalizando o loading.");
-          setLoading(false);
-        }
-      }, [showCompleted, filterDate, daysToShow, activeFocus]);
+      setLoading(false)
+    }
+  }, [showCompleted, filterDate, daysToShow])
 
       // Carregar dados quando o componente montar ou quando as dependências mudarem
       useEffect(() => {
@@ -588,39 +576,32 @@ export function GlobalPlannerView({ dark, onProjectOpen }: Props) {
               /* MODO AGENDA */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
                 {(() => {
-                  // Blindagem visual da data
-                  let safeRenderDate = new Date().toISOString().slice(0, 10);
-                  if (typeof filterDate === 'string' && filterDate.length >= 10) {
-                    safeRenderDate = filterDate.slice(0, 10);
-                  }
-
-                  const numDays = daysToShow || 3;
-                  const renderDates = Array.from({ length: numDays }).map((_, i) => {
-                    const d = new Date(safeRenderDate + 'T12:00:00');
-                    d.setDate(d.getDate() + i);
-                    return d.toISOString().slice(0, 10);
-                  });
+                  const baseDate = (typeof filterDate === 'string' && filterDate.length >= 10)
+                    ? filterDate.slice(0, 10)
+                    : new Date().toISOString().slice(0, 10)
+                  const renderDates = Array.from({ length: daysToShow || 3 }).map((_, i) => {
+                    const d = new Date(baseDate + 'T12:00:00')
+                    d.setDate(d.getDate() + i)
+                    return d.toISOString().slice(0, 10)
+                  })
+                  const todayStr = new Date().toISOString().slice(0, 10)
 
                   return renderDates.map(dateStr => {
-                    const blocks = agendaBlocks.filter(b => b.date === dateStr);
-                    const dateObj = new Date(dateStr + 'T12:00:00');
-                    const dayLabel = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
-                    const isToday = dateStr === new Date().toISOString().slice(0,10);
-                    
+                    const blocks = agendaBlocks.filter(b => b.date === dateStr)
+                    const dateObj = new Date(dateStr + 'T12:00:00')
+                    const dayLabel = dateObj.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, '')
+                    const isToday = dateStr === todayStr
+
                     return (
                       <div key={dateStr}>
                         <div style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 12,
-                          letterSpacing: '0.1em',
-                          color: accent,
-                          borderBottom: `2px solid ${accent}`,
-                          paddingBottom: 4,
-                          marginBottom: 16,
-                          display: 'inline-block',
-                          textTransform: 'uppercase'
+                          fontFamily: 'var(--font-mono)', fontSize: 11,
+                          letterSpacing: '0.12em', color: isToday ? accent : ink2,
+                          borderBottom: `1px solid ${isToday ? accent : border}`,
+                          paddingBottom: 4, marginBottom: 12,
+                          textTransform: 'uppercase',
                         }}>
-                          AGENDA ({dayLabel}){isToday ? ' · HOJE' : ''}
+                          {dayLabel.toUpperCase()}{isToday ? ' · HOJE' : ''}
                         </div>
                         
                         {blocks.length === 0 ? (

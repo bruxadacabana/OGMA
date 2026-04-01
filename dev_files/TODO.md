@@ -45,8 +45,8 @@ Fazer `git commit` após cada funcionalidade ou mudança implementada, com mensa
 - [x] separar limite de horas disponíveis para marcar automaticamente as atividades do planner por dia ao invés de continuar com o mesmo limite de horas para todos os dias
 - [x] Mudar o planner para poder mudar a visualização da parte direita — tabs AGENDA e TAREFAS ABERTAS implementadas; Pomodoro sempre visível na coluna esquerda
 - [x] Campo de prioridade no formulário de criação de tarefa do GlobalPlanner
-- [ ] **Bug:** filtro por data via clique no mini-calendário do GlobalPlanner não funciona
-- [ ] **Bug:** work_blocks do Planner não aparecem no GlobalCalendarView (só `calendar_events` aparecem)
+- [x] **Bug:** filtro por data via clique no mini-calendário do GlobalPlanner — corrigido: `activeFocus` removido das deps do `useCallback`, headers da agenda uniformizados
+- [x] **Bug:** work_blocks do Planner não apareciam na aba Agenda do GlobalCalendarView — corrigido: adicionado UNION com `work_blocks` em `events:listUpcoming`
 
 ---
 
