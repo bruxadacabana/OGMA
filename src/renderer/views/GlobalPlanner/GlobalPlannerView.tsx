@@ -319,45 +319,55 @@ function PomodoroWidget({ dark, block, onLogWork, onClear }: { dark: boolean; bl
 
   return (
     <div className="bj-section" style={{ background: cardBg, borderColor: border, padding: 16, borderRadius: 8, borderWidth: 1, borderStyle: 'solid' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12 }}>
         <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color: accent, letterSpacing:'0.12em' }}>◈ FOCO ATUAL</div>
         {block && <button onClick={onClear} style={{ background:'transparent', border:'none', color:ink2, cursor:'pointer', fontSize:14 }}>×</button>}
       </div>
 
-      {!block ? (
-        <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color: ink2, fontStyle:'italic', textAlign:'center', padding:'20px 0' }}>Selecione "▶ Focar" na Agenda.</div>
+      {/* Info do bloco ativo — só aparece quando há bloco selecionado */}
+      {block ? (
+        <div style={{ textAlign:'center', marginBottom: 12 }}>
+          <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color: block.project_color ?? ink }}>{block.project_icon} {block.project_name}</div>
+          <div style={{ fontFamily:'var(--font-display)', fontSize:15, color: ink, marginTop:3, fontStyle:'italic' }}>{block.task_title}</div>
+        </div>
       ) : (
-        <>
-          <div style={{ textAlign:'center', marginBottom: 16 }}>
-            <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color: block.project_color ?? ink }}>{block.project_icon} {block.project_name}</div>
-            <div style={{ fontFamily:'var(--font-display)', fontSize:16, color: ink, marginTop:4, fontStyle:'italic' }}>{block.task_title}</div>
-          </div>
+        <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color: ink2, fontStyle:'italic', textAlign:'center', marginBottom: 10 }}>
+          Nenhum bloco selecionado — clique "▶ Focar" na Agenda para vincular.
+        </div>
+      )}
 
-          <div style={{ display:'flex', gap:0, marginBottom:16, borderBottom:`1px solid ${border}` }}>
-            <button style={{ flex:1, padding:'6px 0', fontSize:9, fontFamily:'var(--font-mono)', background:'transparent', border:'none', borderBottom: mode==='timer'?`2px solid ${accent}`:'2px solid transparent', color: mode==='timer'?accent:ink2 }} onClick={() => setMode('timer')}>TIMER</button>
-            <button style={{ flex:1, padding:'6px 0', fontSize:9, fontFamily:'var(--font-mono)', background:'transparent', border:'none', borderBottom: mode==='manual'?`2px solid ${accent}`:'2px solid transparent', color: mode==='manual'?accent:ink2 }} onClick={() => setMode('manual')}>MANUAL</button>
-          </div>
+      <div style={{ display:'flex', gap:0, marginBottom:14, borderBottom:`1px solid ${border}` }}>
+        <button style={{ flex:1, padding:'6px 0', fontSize:9, fontFamily:'var(--font-mono)', background:'transparent', border:'none', borderBottom: mode==='timer'?`2px solid ${accent}`:'2px solid transparent', color: mode==='timer'?accent:ink2 }} onClick={() => setMode('timer')}>TIMER</button>
+        <button style={{ flex:1, padding:'6px 0', fontSize:9, fontFamily:'var(--font-mono)', background:'transparent', border:'none', borderBottom: mode==='manual'?`2px solid ${accent}`:'2px solid transparent', color: mode==='manual'?accent:ink2 }} onClick={() => setMode('manual')}>MANUAL</button>
+      </div>
 
-          {mode === 'timer' ? (
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
-              <PomodoroVisual progress={progress} timeLeft={timeLeft} isRunning={isRunning}
-                accent={accent} dark={dark} ink={ink} ink2={ink2} border={border} />
-              <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                <button className="btn btn-sm" style={{ borderColor: accent, color: accent, width: 80 }} onClick={toggleTimer}>{isRunning ? 'Pausar' : 'Iniciar'}</button>
-                <button className="btn btn-ghost btn-sm" style={{ color: ink2 }} onClick={resetTimer}>Reset</button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              <div style={{ display:'flex', gap:8 }}>
-                <div style={{ flex:1 }}><label style={{ display:'block', fontSize:9, color:ink2, marginBottom:2 }}>INÍCIO</label><input type="time" className="settings-input" style={{ width:'100%', fontSize:11 }} value={mStart} onChange={e=>setMStart(e.target.value)} /></div>
-                <div style={{ flex:1 }}><label style={{ display:'block', fontSize:9, color:ink2, marginBottom:2 }}>FIM</label><input type="time" className="settings-input" style={{ width:'100%', fontSize:11 }} value={mEnd} onChange={e=>setMEnd(e.target.value)} /></div>
-              </div>
-              <div><label style={{ display:'block', fontSize:9, color:ink2, marginBottom:2 }}>TOTAL (HORAS)</label><input type="number" step="0.25" className="settings-input" style={{ width:'100%', fontSize:11 }} value={mHours} onChange={e=>setMHours(e.target.value)} /></div>
-              <button className="btn btn-sm" style={{ borderColor: accent, color: accent, width:'100%', marginTop:8 }} onClick={submitManual}>Registar Foco</button>
+      {mode === 'timer' ? (
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+          <PomodoroVisual progress={progress} timeLeft={timeLeft} isRunning={isRunning}
+            accent={accent} dark={dark} ink={ink} ink2={ink2} border={border} />
+          <div style={{ display:'flex', gap:8, marginTop:8 }}>
+            <button className="btn btn-sm" style={{ borderColor: accent, color: accent, width: 80 }} onClick={toggleTimer}>{isRunning ? 'Pausar' : 'Iniciar'}</button>
+            <button className="btn btn-ghost btn-sm" style={{ color: ink2 }} onClick={resetTimer}>Reset</button>
+          </div>
+          {!block && isRunning && (
+            <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color: ink2, fontStyle:'italic', marginTop:8, textAlign:'center' }}>
+              O tempo corre mas não será registado sem um bloco vinculado.
             </div>
           )}
-        </>
+        </div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          <div style={{ display:'flex', gap:8 }}>
+            <div style={{ flex:1 }}><label style={{ display:'block', fontSize:9, color:ink2, marginBottom:2 }}>INÍCIO</label><input type="time" className="settings-input" style={{ width:'100%', fontSize:11 }} value={mStart} onChange={e=>setMStart(e.target.value)} /></div>
+            <div style={{ flex:1 }}><label style={{ display:'block', fontSize:9, color:ink2, marginBottom:2 }}>FIM</label><input type="time" className="settings-input" style={{ width:'100%', fontSize:11 }} value={mEnd} onChange={e=>setMEnd(e.target.value)} /></div>
+          </div>
+          <div><label style={{ display:'block', fontSize:9, color:ink2, marginBottom:2 }}>TOTAL (HORAS)</label><input type="number" step="0.25" className="settings-input" style={{ width:'100%', fontSize:11 }} value={mHours} onChange={e=>setMHours(e.target.value)} /></div>
+          <button className="btn btn-sm"
+            style={{ borderColor: block ? accent : border, color: block ? accent : ink2, width:'100%', marginTop:8 }}
+            disabled={!block} onClick={submitManual}>
+            {block ? 'Registar Foco' : 'Selecione um bloco para registar'}
+          </button>
+        </div>
       )}
     </div>
   )
