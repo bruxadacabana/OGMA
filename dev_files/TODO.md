@@ -60,10 +60,10 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Recursos: vista em galeria + detalhe com metadados + conexões a páginas
 - [x] `reading_links`: vincular leitura ↔ página do OGMA
 - [x] Progresso de leitura por páginas ou porcentagem (escolha ao cadastrar)
-- [ ] Meta de leitura anual — tabela `reading_goals` já existe no schema; falta IPC + UI na Biblioteca + widget no Dashboard
+- [x] Meta de leitura anual — IPC `reading:goals:*` + `ReadingGoalBanner` na Biblioteca: barra de progresso, contador lidos/meta, inline edit; widget Dashboard pendente
 - [ ] Histórico de versões de página — tabela `page_versions` já existe no schema; falta IPC + UI no PageView
 - [x] Backlinks: mostrar no PageView as páginas que referenciam a atual
-- [ ] **Pomodoro / timer independente com histórico por página** — tabela `time_sessions` e IPC `time:*` já existem; falta a aba "Tempo" no ProjectDashboardView com relógio SVG animado, modo Pomodoro (25/5min), registo manual de sessões (página, duração, data, notas, tags); sessões ligadas a project_id + page_id para analytics
+- [x] **Pomodoro / timer independente com histórico por página** — aba "Tempo" adicionada ao ProjectDashboardView: `StudyTimerTab` com relógio SVG animado, Pomodoro 25/5min, registo manual de sessões (página, duração, data, notas, tags), histórico do projeto
 
 ---
 
@@ -282,7 +282,7 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 - [ ] **Sumário do Dia** — briefing textual: eventos hoje, prazos próximos, lembretes ativos
 
 #### Futuros (dependem de features pendentes)
-- [ ] **Meta de Leitura Anual** — gauge circular de progresso da meta (depende de `reading_goals`)
+- [ ] **Meta de Leitura Anual** — gauge circular no Dashboard (base já feita: `readingGoals.progress()` disponível)
 - [ ] **Tempo de Foco Hoje** — sessões Pomodoro do dia (depende de Pomodoro/`time_sessions`)
 - [ ] **Grafo de Conexões** — mini grafo de força com páginas mais interligadas via backlinks (requer lib de visualização)
 

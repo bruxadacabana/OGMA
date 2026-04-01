@@ -7,6 +7,7 @@ import { ViewRenderer } from './ViewRenderer'
 import { NewViewModal } from '../../components/Views/NewViewModal'
 import { ManagePropertiesModal } from '../../components/Properties/ManagePropertiesModal'
 import { PlannerTab } from './PlannerTab'
+import { StudyTimerTab } from './StudyTimerTab'
 import './ProjectDashboardView.css'
 
 interface Props {
@@ -279,6 +280,7 @@ export const ProjectDashboardView: React.FC<Props> = ({
   const [showNewView,     setShowNewView]     = useState(false)
   const [showManageProps, setShowManageProps] = useState(false)
   const [showPlanner,     setShowPlanner]     = useState(false)
+  const [showTime,        setShowTime]        = useState(false)
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
@@ -286,7 +288,7 @@ export const ProjectDashboardView: React.FC<Props> = ({
   const color  = project.color ?? '#8B7355'
 
   const activeView  = projectViews.find(v => v.id === activeViewId) ?? projectViews[0] ?? null
-  const noScroll    = !showPlanner && (
+  const noScroll    = !showPlanner && !showTime && (
                       activeView?.view_type === 'kanban'
                    || activeView?.view_type === 'calendar'
                    || activeView?.view_type === 'timeline'
@@ -316,11 +318,11 @@ export const ProjectDashboardView: React.FC<Props> = ({
           {projectViews.map(v => (
             <button
               key={v.id}
-              className={`view-tab${!showPlanner && activeViewId === v.id ? ' view-tab--active' : ''}`}
-              onClick={() => { setShowPlanner(false); setActiveView(v.id) }}
+              className={`view-tab${!showPlanner && !showTime && activeViewId === v.id ? ' view-tab--active' : ''}`}
+              onClick={() => { setShowPlanner(false); setShowTime(false); setActiveView(v.id) }}
               style={{
-                color: !showPlanner && activeViewId === v.id ? color : ink2,
-                borderBottomColor: !showPlanner && activeViewId === v.id ? color : 'transparent',
+                color: !showPlanner && !showTime && activeViewId === v.id ? color : ink2,
+                borderBottomColor: !showPlanner && !showTime && activeViewId === v.id ? color : 'transparent',
               }}
             >
               <span style={{ fontSize: 12 }}>{VIEW_TYPE_ICONS[v.view_type] ?? '◦'}</span>
@@ -335,17 +337,29 @@ export const ProjectDashboardView: React.FC<Props> = ({
           >
             + Vista
           </button>
-          {/* Aba Planner (inclui Timer/Pomodoro) */}
+          {/* Aba Planner */}
           <button
             className={`view-tab${showPlanner ? ' view-tab--active' : ''}`}
-            onClick={() => setShowPlanner(true)}
+            onClick={() => { setShowPlanner(true); setShowTime(false) }}
             style={{
               color: showPlanner ? color : ink2,
               borderBottomColor: showPlanner ? color : 'transparent',
             }}
           >
-            <span style={{ fontSize: 12 }}>⏱</span>
+            <span style={{ fontSize: 12 }}>⊞</span>
             Planner
+          </button>
+          {/* Aba Tempo / Pomodoro */}
+          <button
+            className={`view-tab${showTime ? ' view-tab--active' : ''}`}
+            onClick={() => { setShowTime(true); setShowPlanner(false) }}
+            style={{
+              color: showTime ? color : ink2,
+              borderBottomColor: showTime ? color : 'transparent',
+            }}
+          >
+            <span style={{ fontSize: 12 }}>◎</span>
+            Tempo
           </button>
           <div style={{ flex: 1 }} />
           <button
@@ -368,7 +382,9 @@ export const ProjectDashboardView: React.FC<Props> = ({
 
       {/* Conteúdo */}
       <div className={`proj-dashboard-content${noScroll ? ' proj-dashboard-content--noscroll' : ''}`}>
-        {showPlanner ? (
+        {showTime ? (
+          <StudyTimerTab projectId={project.id} dark={dark} pages={pages} />
+        ) : showPlanner ? (
           <PlannerTab projectId={project.id} dark={dark} pages={pages} />
         ) : activeView ? (
           <ViewRenderer

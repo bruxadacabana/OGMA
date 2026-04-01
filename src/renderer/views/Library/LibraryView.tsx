@@ -1336,6 +1336,127 @@ function ReadingDetailView({ reading: initialReading, dark, onBack, onEdit, onSe
 
 // ── ReadingsView ──────────────────────────────────────────────────────────────
 
+// ── Meta de Leitura Anual ─────────────────────────────────────────────────────
+
+function ReadingGoalBanner({ dark }: { dark: boolean }) {
+  const year = new Date().getFullYear()
+  const [wsId,    setWsId]    = useState<number | null>(null)
+  const [target,  setTarget]  = useState<number | null>(null)
+  const [done,    setDone]    = useState(0)
+  const [editing, setEditing] = useState(false)
+  const [input,   setInput]   = useState('')
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+  const border = dark ? '#3A3020' : '#C4B9A8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
+
+  useEffect(() => {
+    fromIpc<any>(() => db().workspace.get(), 'getWs').then(r =>
+      r.match(ws => setWsId(ws.id), _e => {})
+    )
+  }, [])
+
+  useEffect(() => {
+    if (!wsId) return
+    fromIpc<any>(() => db().readingGoals.progress(wsId, year), 'readingGoalProgress')
+      .then(r => r.match(data => {
+        setTarget(data.target)
+        setDone(data.done)
+      }, _e => {}))
+  }, [wsId, year])
+
+  const save = async () => {
+    if (!wsId) return
+    const val = parseInt(input)
+    if (!val || val < 1) return
+    await fromIpc<any>(() => db().readingGoals.set(wsId, year, val), 'setReadingGoal')
+    setTarget(val)
+    setEditing(false)
+  }
+
+  const pct = target && target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0
+
+  if (!editing && target === null) {
+    return (
+      <div style={{
+        borderBottom: `1px solid ${border}`, padding: '10px 28px',
+        background: cardBg, display: 'flex', alignItems: 'center', gap: 12,
+      }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>
+          META DE LEITURA {year}
+        </span>
+        <button className="btn btn-sm" style={{ borderColor: accent, color: accent, fontSize: 10 }}
+          onClick={() => { setInput('12'); setEditing(true) }}>
+          + Definir meta
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      borderBottom: `1px solid ${border}`, padding: '10px 28px',
+      background: cardBg, display: 'flex', alignItems: 'center', gap: 16,
+      flexWrap: 'wrap',
+    }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.12em', color: ink2 }}>
+        META {year}
+      </span>
+
+      {editing ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="number" min="1" max="500"
+            className="settings-input"
+            style={{ width: 64, fontSize: 11, padding: '2px 6px' }}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false) }}
+            autoFocus
+          />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>livros</span>
+          <button className="btn btn-sm" style={{ borderColor: accent, color: accent, fontSize: 10 }}
+            onClick={save}>Guardar</button>
+          <button className="btn btn-ghost btn-sm" style={{ color: ink2, fontSize: 10 }}
+            onClick={() => setEditing(false)}>Cancelar</button>
+        </div>
+      ) : (
+        <>
+          <div style={{ flex: 1, minWidth: 160, maxWidth: 300 }}>
+            <div style={{
+              height: 6, borderRadius: 3,
+              background: dark ? '#2A2418' : '#D8D0C0',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%', borderRadius: 3,
+                width: `${pct}%`,
+                background: pct >= 100 ? '#4A6741' : accent,
+                transition: 'width 0.4s ease',
+              }} />
+            </div>
+          </div>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink }}>
+            <span style={{ color: pct >= 100 ? '#4A6741' : accent, fontWeight: 600 }}>{done}</span>
+            <span style={{ color: ink2 }}> / {target}</span>
+          </span>
+          {pct >= 100 && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#4A6741' }}>
+              ✓ Meta atingida!
+            </span>
+          )}
+          <button className="btn btn-ghost btn-sm" style={{ color: ink2, fontSize: 10, marginLeft: 'auto' }}
+            onClick={() => { setInput(String(target ?? 12)); setEditing(true) }}>
+            ✎
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 function ReadingsView({ dark }: { dark: boolean }) {
   const [readings,    setReadings]    = useState<Reading[]>([])
   const [filter,        setFilter]        = useState<string>('reading')
@@ -1423,6 +1544,7 @@ function ReadingsView({ dark }: { dark: boolean }) {
 
   return (
     <div className="library-root">
+      <ReadingGoalBanner dark={dark} />
       <div className="library-toolbar" style={{ borderColor: dark ? '#3A3020' : undefined }}>
         {STATUS_FILTERS.map(f => (
           <button key={f.key}

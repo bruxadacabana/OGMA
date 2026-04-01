@@ -1430,6 +1430,36 @@ export function registerIpcHandlers(): void {
     `, project_id)
   )
 
+  // ── Metas de leitura ──────────────────────────────────────────────────────
+
+  api('reading:goals:get', async ({ workspace_id, year }: { workspace_id: number; year: number }) =>
+    dbGet(`SELECT * FROM reading_goals WHERE workspace_id = ? AND year = ? LIMIT 1`, workspace_id, year)
+  )
+
+  api('reading:goals:set', async ({ workspace_id, year, target }: { workspace_id: number; year: number; target: number }) => {
+    const existing = await dbGet(`SELECT id FROM reading_goals WHERE workspace_id = ? AND year = ? LIMIT 1`, workspace_id, year)
+    if (existing) {
+      await dbRun(`UPDATE reading_goals SET target = ? WHERE id = ?`, target, existing.id)
+    } else {
+      await dbRun(`INSERT INTO reading_goals (workspace_id, year, target) VALUES (?, ?, ?)`, workspace_id, year, target)
+    }
+    return dbGet(`SELECT * FROM reading_goals WHERE workspace_id = ? AND year = ? LIMIT 1`, workspace_id, year)
+  })
+
+  api('reading:goals:progress', async ({ workspace_id, year }: { workspace_id: number; year: number }) => {
+    const goal = await dbGet(
+      `SELECT target FROM reading_goals WHERE workspace_id = ? AND year = ? LIMIT 1`,
+      workspace_id, year
+    )
+    const done = await dbGet(
+      `SELECT COUNT(*) AS count FROM readings
+       WHERE workspace_id = ? AND status = 'done'
+         AND (date_end IS NOT NULL AND substr(date_end,1,4) = ?)`,
+      workspace_id, String(year)
+    )
+    return { target: goal?.target ?? null, done: done?.count ?? 0 }
+  })
+
   // ── Recursos ───────────────────────────────────────────────────────────────
   api('resources:list', async () => {
     const ws = await dbGet('SELECT id FROM workspaces LIMIT 1')

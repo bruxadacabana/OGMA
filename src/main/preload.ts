@@ -100,6 +100,11 @@ contextBridge.exposeInMainWorld('db', {
     remove:         (reading_id: number, page_id: number) => api('reading_links:remove',         { reading_id, page_id }),
     listForProject: (project_id: number)                  => api('reading_links:listForProject', { project_id }),
   },
+  readingGoals: {
+    get:      (workspace_id: number, year: number)                    => api('reading:goals:get',      { workspace_id, year }),
+    set:      (workspace_id: number, year: number, target: number)    => api('reading:goals:set',      { workspace_id, year, target }),
+    progress: (workspace_id: number, year: number)                    => api('reading:goals:progress', { workspace_id, year }),
+  },
   resources: {
     list:      ()                                           => api('resources:list',   {}),
     create:    (d: any)                                     => api('resources:create', d),
