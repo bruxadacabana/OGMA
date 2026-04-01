@@ -15,7 +15,7 @@ interface Props {
   onCreated?: (id: number) => void
 }
 
-const TYPES: ProjectType[] = ['academic', 'creative', 'research', 'software', 'health', 'custom']
+const TYPES: ProjectType[] = ['academic', 'creative', 'research', 'software', 'health', 'hobby', 'idea', 'custom']
 
 // ── Modal principal ───────────────────────────────────────────────────────────
 

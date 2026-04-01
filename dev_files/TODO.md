@@ -90,8 +90,8 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Modal de nova página expandido: cor de capa, página pai, propriedades dinâmicas, tags, multi-select
 - [x] IconPicker: navegação ◀▶ entre categorias, scroll, novas sugestões por palavra-chave
 - ~~Script de migração do StudyFlow~~ (cancelado)
-- [ ] Tipo de projeto **"Hobbies"** — não existe ainda; adicionar `'hobby'` ao `ProjectType` com subcategorias (crochê, desenho, bijuterias, moda, resina…) e propriedades padrão próprias
-- [ ] **Ideias Futuras** — forma rápida de registar um projeto-ideia sem configurar tudo; widget no Dashboard que exibe essas ideias
+- [x] Tipo de projeto **"Hobbies"** — `'hobby'` adicionado ao `ProjectType` com subcategorias, propriedades padrão (Status, Tags, Data Início, Notas) e views (Lista, Tabela)
+- [x] **Ideias Futuras** — `'idea'` adicionado ao `ProjectType`; widget "Ideias Futuras" no Dashboard lista projetos deste tipo com status e descrição
 - [x] Planner global: algoritmo de agendamento considera prioridade + prazo + limite de horas/dia; reagendamento disponível globalmente; agenda por dia implementada
 
 ---
@@ -274,7 +274,7 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 - [x] **Lembretes Pendentes** — lista de reminders com `is_dismissed = 0` e `trigger_at` próximo, ordenados por data
 - [x] **Próximas Provas / Defesas** — filtro de `calendar_events` por tipos acadêmicos (`prova`, `defesa`, `trabalho`) com countdown em dias
 - [x] **Progresso dos Projetos** — barra de progresso por projeto ativo (tarefas planeadas e páginas)
-- [ ] **Citação Aleatória** — citação aleatória de `reading_quotes`, renovável a clique. Inserir a funcionalidade de buscar quotes online de temas a definir nas contigurações do widget.
+- [x] **Citação Aleatória** — `QuoteWidget` implementado: mostra citação de `reading_quotes`, renovável a clique, exibe título/autor/localização conforme tamanho do widget
 - [ ] **Widget POMODORO no Dashboard** — Pomodoro standalone com duas visualizações (relógio visual / relógio de areia); cor de acento das configurações; independente do Planner
 
 #### Média prioridade (UI mais rica)

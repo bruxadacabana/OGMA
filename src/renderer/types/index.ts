@@ -43,7 +43,7 @@ declare global {
 
 export type ProjectType =
   | 'academic' | 'creative' | 'research'
-  | 'software' | 'health'  | 'custom'
+  | 'software' | 'health'  | 'hobby' | 'idea' | 'custom'
 
 export type ProjectStatus = 'active' | 'paused' | 'completed' | 'archived'
 
@@ -176,6 +176,8 @@ export const SUBCATEGORIES: Record<ProjectType, string[]> = {
   research: ['Científica', 'Jornalística', 'Pessoal', 'Outro'],
   software: ['Aplicativo Desktop', 'Web', 'Mobile', 'Biblioteca', 'Outro'],
   health:   ['Fitness', 'Nutrição', 'Saúde Mental', 'Geral'],
+  hobby:    ['Arte', 'Música', 'Leitura', 'Jogos', 'Esportes', 'Culinária', 'Artesanato', 'Outro'],
+  idea:     ['Projeto Futuro', 'Negócio', 'Pesquisa', 'Criativo', 'Outro'],
   custom:   [],
 }
 
@@ -185,6 +187,8 @@ export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
   research: 'Pesquisa',
   software: 'Dev de Software',
   health:   'Saúde e Hábitos',
+  hobby:    'Hobby',
+  idea:     'Ideia Futura',
   custom:   'Personalizado',
 }
 
@@ -194,6 +198,8 @@ export const PROJECT_TYPE_ICONS: Record<ProjectType, string> = {
   research: '🔍',
   software: '💻',
   health:   '🌿',
+  hobby:    '🎨',
+  idea:     '💡',
   custom:   '✦',
 }
 
@@ -203,6 +209,8 @@ export const PROJECT_TYPE_DESCRIPTIONS: Record<ProjectType, string> = {
   research: 'Pesquisas científicas, jornalísticas ou pessoais.',
   software: 'Desenvolvimento de aplicativos, APIs, bibliotecas e sistemas.',
   health:   'Rastreamento de hábitos, metas de saúde e rotinas.',
+  hobby:    'Atividades de lazer, passatempos e interesses pessoais.',
+  idea:     'Ideias e projetos futuros para explorar eventualmente.',
   custom:   'Estrutura totalmente personalizada para qualquer propósito.',
 }
 

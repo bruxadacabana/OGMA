@@ -138,6 +138,27 @@ async function seedProjectProperties(projectId: number, projectType: string): Pr
       await addProp('Tags',  'tags',  'multi_select')
       await addProp('Área',  'area',  'multi_select')
     },
+    hobby: async () => {
+      await addProp('Status', 'status', 'select', [
+        ['Quero Aprender', '#8B7355'], ['Em Andamento', '#b8860b'],
+        ['Pausado', '#7A5C2E'], ['Concluído', '#4A6741'],
+      ])
+      await addProp('Tags',        'tags',        'multi_select')
+      await addProp('Data Início', 'data_inicio', 'date')
+      await addProp('Notas',       'notas',       'text')
+    },
+    idea: async () => {
+      await addProp('Status', 'status', 'select', [
+        ['Bruta', '#8B7355'], ['Refinando', '#b8860b'],
+        ['Viável', '#4A6741'], ['Arquivada', '#6B4F72'],
+      ])
+      await addProp('Urgência', 'urgencia', 'select', [
+        ['Baixa', '#4A6741'], ['Média', '#7A5C2E'], ['Alta', '#b8860b'],
+      ])
+      await addProp('Tags',         'tags',         'multi_select')
+      await addProp('Data Captura', 'data_captura', 'date')
+      await addProp('Notas',        'notas',        'text')
+    },
     custom: async () => {
       await addProp('Status', 'status', 'select', [
         ['A Fazer', '#8B7355'], ['Em Andamento', '#b8860b'], ['Concluído', '#4A6741'],
@@ -182,6 +203,15 @@ async function seedProjectViews(
     research: [
       ['Tabela', 'table', null, null],
       ['Lista',  'list',  null, null],
+    ],
+    hobby: [
+      ['Lista',  'list',  null, null],
+      ['Tabela', 'table', null, null],
+    ],
+    idea: [
+      ['Lista',  'list',   null,     null],
+      ['Kanban', 'kanban', 'status', null],
+      ['Tabela', 'table',  null,     null],
     ],
     custom: [
       ['Tabela', 'table',  null,     null],

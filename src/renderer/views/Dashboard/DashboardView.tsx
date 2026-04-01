@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { useAppStore } from '../../store/useAppStore'
-import { PROJECT_TYPE_ICONS, AppSettings, StoredLocation } from '../../types'
+import { PROJECT_TYPE_ICONS, AppSettings, StoredLocation, Project } from '../../types'
 import { fromIpc } from '../../types/errors'
 
 const db = () => (window as any).db
@@ -11,11 +11,11 @@ const db = () => (window as any).db
 export type WidgetSize = 'sm' | 'md' | 'lg'
 type WidgetId =
   | 'stats' | 'projects' | 'recent' | 'prazos' | 'cosmos' | 'wheel' | 'weather' | 'planner'
-  | 'agenda' | 'reminders' | 'provas' | 'proj_progress' | 'quote'
+  | 'agenda' | 'reminders' | 'provas' | 'proj_progress' | 'quote' | 'ideas'
 
 const DEFAULT_ORDER: WidgetId[] = [
   'stats', 'projects', 'recent', 'prazos', 'cosmos', 'wheel', 'weather', 'planner',
-  'agenda', 'reminders', 'provas', 'proj_progress', 'quote',
+  'agenda', 'reminders', 'provas', 'proj_progress', 'quote', 'ideas',
 ]
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -32,11 +32,13 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   provas:       'Próximas Provas',
   proj_progress:'Progresso dos Projetos',
   quote:        'Citação Aleatória',
+  ideas:        'Ideias Futuras',
 }
 const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
   stats: 'md', projects: 'md', recent: 'md', prazos: 'md',
   cosmos: 'md', wheel: 'md', weather: 'md', planner: 'md',
   agenda: 'lg', reminders: 'md', provas: 'md', proj_progress: 'md', quote: 'md',
+  ideas: 'md',
 }
 
 interface Props {
@@ -1629,6 +1631,104 @@ function QuoteWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
   )
 }
 
+// ── IdeasWidget ───────────────────────────────────────────────────────────────
+
+function IdeasWidget({ dark, size, onProjectOpen }: { dark: boolean; size: WidgetSize; onProjectOpen: (id: number) => void }) {
+  const [ideas,   setIdeas]   = useState<Project[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  useEffect(() => {
+    fromIpc<Project[]>(() => db().projects.list(), 'projects:list')
+      .then(r => {
+        if (r.isOk()) setIdeas(r.value.filter(p => p.project_type === 'idea'))
+        setLoading(false)
+      })
+  }, [])
+
+  const STATUS_COLORS: Record<string, string> = {
+    active:    accent,
+    paused:    dark ? '#8A7A62' : '#9C8E7A',
+    completed: '#4A6741',
+    archived:  dark ? '#5A4A3A' : '#B0A090',
+  }
+  const STATUS_LABELS: Record<string, string> = {
+    active: 'Ativa', paused: 'Pausada', completed: 'Concluída', archived: 'Arquivada',
+  }
+
+  const maxVisible = size === 'sm' ? 3 : size === 'md' ? 5 : 10
+
+  return (
+    <div className="card" style={{ background: dark ? '#211D16' : '#EDE7D9', borderColor: dark ? '#3A3020' : '#C4B9A8' }}>
+      <div style={{ padding: size === 'sm' ? '10px 12px' : '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
+            IDEIAS FUTURAS
+          </span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>
+            {ideas.length} {ideas.length === 1 ? 'ideia' : 'ideias'}
+          </span>
+        </div>
+        {loading ? (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ink2 }}>…</span>
+        ) : ideas.length === 0 ? (
+          <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 13, color: ink2 }}>
+            Nenhuma ideia ainda. Crie um projeto do tipo "Ideia Futura".
+          </span>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {ideas.slice(0, maxVisible).map(idea => (
+              <button
+                key={idea.id}
+                onClick={() => onProjectOpen(idea.id)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px',
+                  borderRadius: 4, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
+                  borderLeft: `3px solid ${idea.color ?? accent}`,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = dark ? '#2A2418' : '#E4DDD0')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                <span style={{ fontSize: 14 }}>{idea.icon ?? '💡'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: 'var(--font-display)', fontSize: 13, color: ink,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    {idea.name}
+                  </div>
+                  {idea.description && size !== 'sm' && (
+                    <div style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {idea.description}
+                    </div>
+                  )}
+                </div>
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 9, color: STATUS_COLORS[idea.status] ?? ink2,
+                  flexShrink: 0,
+                }}>
+                  {STATUS_LABELS[idea.status] ?? idea.status}
+                </span>
+              </button>
+            ))}
+            {ideas.length > maxVisible && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, paddingLeft: 8 }}>
+                + {ideas.length - maxVisible} mais
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── DayPlanWidget ─────────────────────────────────────────────────────────────
 
 interface TodayBlock {
@@ -2144,6 +2244,7 @@ export const DashboardView: React.FC<Props> = ({ dark, isActive, onProjectOpen, 
       case 'reminders':     return <RemindersWidget    dark={dark} size={size} isActive={isActive} />
       case 'provas':        return <ProvasWidget       dark={dark} size={size} isActive={isActive} />
       case 'proj_progress': return <ProjProgressWidget dark={dark} size={size} isActive={isActive} />
+      case 'ideas':         return <IdeasWidget        dark={dark} size={size} onProjectOpen={onProjectOpen} />
     }
   }
 
