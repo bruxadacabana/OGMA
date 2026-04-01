@@ -1,6 +1,6 @@
 # OGMA — TODO
 
-> Atualizado: 2026-03-25 (sessão 2)
+> Atualizado: 2026-04-01
 
 ---
 
@@ -43,7 +43,10 @@ Fazer `git commit` após cada funcionalidade ou mudança implementada, com mensa
 - [x] Acrescentar o botão "reagendar" no planner global ao invés de só nos locais dos projetos
 - [x] Verificar se os botões "reagendar" também reagendam tarefas pendentes atrasadas (que devem ser trtadas como urgência máxima)
 - [x] separar limite de horas disponíveis para marcar automaticamente as atividades do planner por dia ao invés de continuar com o mesmo limite de horas para todos os dias
-- [x] Mudar o planner para poder mudar a visualização da parte direita. ALém de exibir tudo o que está em aberto, deveria ser possível ver a agenda (o que tem para fazer por dia ao invés de por deadline). No lado direito, ao invés de ter o "plano de hoje", será exibido o relógio animado do pomodoro ( incluir visualização do tipo relógio/pomodoro visual inspirado em relógio de bolso antigo e relógio de areia (ampulheta) com estrelas).
+- [x] Mudar o planner para poder mudar a visualização da parte direita — tabs AGENDA e TAREFAS ABERTAS implementadas; Pomodoro sempre visível na coluna esquerda
+- [x] Campo de prioridade no formulário de criação de tarefa do GlobalPlanner
+- [ ] **Bug:** filtro por data via clique no mini-calendário do GlobalPlanner não funciona
+- [ ] **Bug:** work_blocks do Planner não aparecem no GlobalCalendarView (só `calendar_events` aparecem)
 
 ---
 
@@ -57,10 +60,10 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Recursos: vista em galeria + detalhe com metadados + conexões a páginas
 - [x] `reading_links`: vincular leitura ↔ página do OGMA
 - [x] Progresso de leitura por páginas ou porcentagem (escolha ao cadastrar)
-- [ ] Meta de leitura anual (tabela `reading_goals`)
-- [ ] Histórico de versões de página (tabela `page_versions` já existe no schema)
+- [ ] Meta de leitura anual — tabela `reading_goals` já existe no schema; falta IPC + UI na Biblioteca + widget no Dashboard
+- [ ] Histórico de versões de página — tabela `page_versions` já existe no schema; falta IPC + UI no PageView
 - [x] Backlinks: mostrar no PageView as páginas que referenciam a atual
-- [ ] Pomodoro / timer com histórico por página (tabela `time_sessions`) — aba "Tempo" no ProjectDashboardView: relógio SVG animado, modo Pomodoro (25/5min), registo manual de sessões (página, duração, data, notas, tags); independente do Planner; sessões ligadas a project_id + page_id, disponíveis globalmente para analytics
+- [ ] **Pomodoro / timer independente com histórico por página** — tabela `time_sessions` e IPC `time:*` já existem; falta a aba "Tempo" no ProjectDashboardView com relógio SVG animado, modo Pomodoro (25/5min), registo manual de sessões (página, duração, data, notas, tags); sessões ligadas a project_id + page_id para analytics
 
 ---
 
@@ -87,9 +90,9 @@ Funcionalidades em falta ou incompletas nas áreas já iniciadas (Biblioteca, Ed
 - [x] Modal de nova página expandido: cor de capa, página pai, propriedades dinâmicas, tags, multi-select
 - [x] IconPicker: navegação ◀▶ entre categorias, scroll, novas sugestões por palavra-chave
 - ~~Script de migração do StudyFlow~~ (cancelado)
-- [ ] Deve ter uma forma de adicionar projetos de forma mais simplificada como ideias futuras e criar um widget que exibe esse tipo específico de ideias para eu relembrá-las
-- [ ] Já tem uma opção de criar projetos do tipo "hobbies"? Esse vai servir para organizar hobbies manuais como crochê, desenho, bijuterias, moda e resina (entre outros) e deve ser configurado como.
-- [ ] eu quero que o planner global seja responsável pelo algoritmo que define quando uma tarefa deve ser realizada levando em conta prioridade, prazo e limite de horas disponíveis/dia e que, quando acrescendo atividades, independente de ser na aba planner global ou na aba planner do projeto, ele deve organizar automaticamente (com a opção aberta caso eu queira reagendar). eu já consigo colocar o limite de horas nas configurações e esse algoritmo já está meio funcionando, só não está sendo organizado no global. além disso, na agenda, quero que a separação de cada dia/cabeçario seja igual em tamanho, fonte, cor e texto de onde está escrito "Agenda (data)" e ainda não está funcionando eu conseguir filtrar tarefas por data ao clicar no calendário... alias, essas atividades devem constar no calendário!!! inclusive na aba do calendário global!
+- [ ] Tipo de projeto **"Hobbies"** — não existe ainda; adicionar `'hobby'` ao `ProjectType` com subcategorias (crochê, desenho, bijuterias, moda, resina…) e propriedades padrão próprias
+- [ ] **Ideias Futuras** — forma rápida de registar um projeto-ideia sem configurar tudo; widget no Dashboard que exibe essas ideias
+- [x] Planner global: algoritmo de agendamento considera prioridade + prazo + limite de horas/dia; reagendamento disponível globalmente; agenda por dia implementada
 
 ---
 
@@ -272,7 +275,7 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 - [x] **Próximas Provas / Defesas** — filtro de `calendar_events` por tipos acadêmicos (`prova`, `defesa`, `trabalho`) com countdown em dias
 - [x] **Progresso dos Projetos** — barra de progresso por projeto ativo (tarefas planeadas e páginas)
 - [ ] **Citação Aleatória** — citação aleatória de `reading_quotes`, renovável a clique. Inserir a funcionalidade de buscar quotes online de temas a definir nas contigurações do widget.
-- [ ] **POMODORO** - Pomodoro com duas visualizações: relógio visual e relógio de areia. A cor principal da animação é a cor de acento definida nas configurações
+- [ ] **Widget POMODORO no Dashboard** — Pomodoro standalone com duas visualizações (relógio visual / relógio de areia); cor de acento das configurações; independente do Planner
 
 #### Média prioridade (UI mais rica)
 - [ ] **Mapa de Calor de Atividade** — grid estilo GitHub de horas estudadas por matéria/página/tag (não por páginas criadas; requer Pomodoro/time_sessions)
@@ -288,7 +291,7 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 ## Fase 50 — Futuro
 
 - [ ] Exportar página como PDF ou Markdown
-- [ ] Pomodoro Timer completo com estatísticas
+- [ ] Pomodoro Timer completo com estatísticas (consolidar com aba Tempo do ProjectDashboard e Widget do Dashboard)
 - [ ] Templates customizados de projeto
 - [ ] IA: integração com Ollama e APIs externas
 
