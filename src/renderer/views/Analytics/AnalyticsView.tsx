@@ -8,15 +8,18 @@ const db = () => (window as any).db
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 interface AnalyticsData {
-  heatmap:          { day: string; minutes: number }[]
-  hours_by_project: { id: number; name: string; color: string; icon: string; project_type: string; hours: number }[]
-  hours_by_type:    { project_type: string; hours: number }[]
-  books_by_month:   { month: string; count: number }[]
-  deep_work_hours:  number
-  peak_hour:        number | null
-  tasks_done:       number
-  tasks_total:      number
-  reading_goal:     { target: number; done: number; year: number } | null
+  heatmap:            { day: string; minutes: number }[]
+  hours_by_project:   { id: number; name: string; color: string; icon: string; project_type: string; hours: number }[]
+  hours_by_type:      { project_type: string; hours: number }[]
+  books_by_month:     { month: string; count: number }[]
+  deep_work_hours:    number
+  peak_hour:          number | null
+  tasks_done:         number
+  tasks_total:        number
+  reading_goal:       { target: number; done: number; year: number } | null
+  reading_absorption: { month: string; added: number; completed: number }[]
+  reading_speed:      { date: string; pages: number }[]
+  activity_by_dow:    { dow: number; minutes: number }[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -53,6 +56,36 @@ function fillMonths(raw: { month: string; count: number }[]): { month: string; c
   return result
 }
 
+// fill last 12 months for absorption (added vs completed)
+function fillAbsorptionMonths(
+  raw: { month: string; added: number; completed: number }[]
+): { month: string; added: number; completed: number }[] {
+  const map = new Map(raw.map(r => [r.month, r]))
+  const result: { month: string; added: number; completed: number }[] = []
+  const now = new Date()
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const row = map.get(key)
+    result.push({ month: key, added: row?.added ?? 0, completed: row?.completed ?? 0 })
+  }
+  return result
+}
+
+// Moon phase from julian date (simplified Meeus)
+function moonPhaseLabel(dateStr: string): string {
+  const date = new Date(dateStr)
+  const jd = date.getTime() / 86400000 + 2440587.5
+  const cycle = 29.53058868
+  const ref = 2451550.1 // known new moon (Jan 6 2000)
+  const age = ((jd - ref) % cycle + cycle) % cycle
+  if (age < 3.7)  return 'Lua Nova'
+  if (age < 11.1) return 'Lua Crescente'
+  if (age < 18.5) return 'Lua Cheia'
+  if (age < 25.9) return 'Lua Minguante'
+  return 'Lua Nova'
+}
+
 // fill last 365 days for heatmap
 function buildHeatmapGrid(raw: { day: string; minutes: number }[]): {
   weeks: { date: string; minutes: number }[][]
@@ -84,6 +117,66 @@ function buildHeatmapGrid(raw: { day: string; minutes: number }[]): {
     weeks.push(week)
   }
   return { weeks }
+}
+
+// ── SVG Grouped Bar Chart (2 series) ─────────────────────────────────────────
+
+function GroupedBarChart({ data, dark, labelA, labelB, colorA, colorB }: {
+  data: { label: string; a: number; b: number }[]
+  dark: boolean
+  labelA: string
+  labelB: string
+  colorA: string
+  colorB: string
+}) {
+  const ink2 = dark ? '#8A7A62' : '#9C8E7A'
+  const W = 400; const H = 130
+  const padL = 8; const padB = 28; const padT = 8
+  const chartH = H - padB - padT
+  const chartW = W - padL
+
+  if (data.length === 0) return <p className="analytics-empty">Sem dados ainda.</p>
+
+  const max = Math.max(...data.flatMap(d => [d.a, d.b]), 0.1)
+  const groupW = chartW / data.length
+  const barW = Math.min(14, (groupW - 6) / 2)
+  const gap = 2
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H }}>
+        <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke={ink2} strokeWidth={0.5} opacity={0.3} />
+        <line x1={padL} y1={H - padB} x2={W} y2={H - padB} stroke={ink2} strokeWidth={0.5} opacity={0.3} />
+        {data.map((d, i) => {
+          const gx = padL + i * groupW + groupW / 2
+          const hA = (d.a / max) * chartH
+          const hB = (d.b / max) * chartH
+          const xA = gx - barW - gap / 2
+          const xB = gx + gap / 2
+          return (
+            <g key={i}>
+              <rect x={xA} y={padT + chartH - hA} width={barW} height={hA} fill={colorA} opacity={0.8} rx={1} />
+              <rect x={xB} y={padT + chartH - hB} width={barW} height={hB} fill={colorB} opacity={0.8} rx={1} />
+              <text x={gx} y={H - padB + 12} textAnchor="middle"
+                fontFamily="var(--font-mono)" fontSize={7} fill={ink2}>
+                {d.label.length > 5 ? d.label.slice(0, 5) : d.label}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+      <div style={{ display: 'flex', gap: 16, marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 10, height: 10, background: colorA, borderRadius: 1, opacity: 0.8 }} />
+          {labelA}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 10, height: 10, background: colorB, borderRadius: 1, opacity: 0.8 }} />
+          {labelB}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── SVG Bar Chart ─────────────────────────────────────────────────────────────
@@ -331,6 +424,37 @@ export function AnalyticsView({ dark }: { dark: boolean }) {
     ? data.hours_by_type.map(t => ({ label: t.project_type, value: t.hours, color: accent }))
     : []
 
+  // Reading absorption: last 12 months filled
+  const absorptionMonths = data ? fillAbsorptionMonths(data.reading_absorption) : []
+
+  // Reading speed: avg pages/day last 7 days
+  const avgPagesPerDay = data && data.reading_speed.length > 0
+    ? Math.round(data.reading_speed.reduce((s, r) => s + r.pages, 0) / 7)
+    : null
+
+  // Activity by day of week: Sun=0 → Sat=6, reorder to Mon–Sun
+  const DOW_LABELS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
+  const dowMap = new Map((data?.activity_by_dow ?? []).map(r => [r.dow, r.minutes]))
+  // JS strftime('%w'): 0=Sun, 1=Mon...6=Sat → reorder to Mon(1)…Sun(0)
+  const dowData = [1,2,3,4,5,6,0].map((d, i) => ({
+    label: DOW_LABELS[i],
+    value: Math.round((dowMap.get(d) ?? 0) / 60 * 10) / 10,
+  }))
+
+  // Produtividade por Fase Lunar: group heatmap days by moon phase
+  const lunarMap = new Map<string, number>()
+  if (data) {
+    for (const { day, minutes } of data.heatmap) {
+      const phase = moonPhaseLabel(day)
+      lunarMap.set(phase, (lunarMap.get(phase) ?? 0) + minutes)
+    }
+  }
+  const LUNAR_ORDER = ['Lua Nova', 'Lua Crescente', 'Lua Cheia', 'Lua Minguante']
+  const lunarData = LUNAR_ORDER.map(phase => ({
+    label: phase.replace('Lua ', ''),
+    value: Math.round((lunarMap.get(phase) ?? 0) / 60 * 10) / 10,
+  }))
+
   return (
     <div className="analytics-root">
       {/* ── Title ──────────────────────────────────────────────────────────── */}
@@ -547,6 +671,121 @@ export function AnalyticsView({ dark }: { dark: boolean }) {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* ── Row: Absorção Literária + Velocidade de Leitura ───────────── */}
+        <div className="analytics-grid-2">
+          <div className="analytics-card">
+            <div className="analytics-card-title">Taxa de Absorção Literária — Últimos 12 meses</div>
+            {absorptionMonths.every(m => m.added === 0 && m.completed === 0) ? (
+              <p className="analytics-empty">Adicione leituras à Biblioteca para ver a absorção.</p>
+            ) : (
+              <GroupedBarChart
+                dark={dark}
+                data={absorptionMonths.map(m => ({
+                  label: fmtMonth(m.month).slice(0, 3),
+                  a: m.added,
+                  b: m.completed,
+                }))}
+                labelA="Adicionados"
+                labelB="Concluídos"
+                colorA={dark ? '#6B8E6B' : '#5A7A5A'}
+                colorB={accent}
+              />
+            )}
+            {!absorptionMonths.every(m => m.added === 0 && m.completed === 0) && (() => {
+              const totalAdded = absorptionMonths.reduce((s, m) => s + m.added, 0)
+              const totalDone  = absorptionMonths.reduce((s, m) => s + m.completed, 0)
+              const ratio = totalAdded > 0 ? Math.round((totalDone / totalAdded) * 100) : null
+              return (
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginTop: 10 }}>
+                  {totalDone} concluídos de {totalAdded} adicionados
+                  {ratio !== null && ` · ${ratio}% absorvidos`}
+                </p>
+              )
+            })()}
+          </div>
+
+          <div className="analytics-card">
+            <div className="analytics-card-title">Velocidade de Leitura — Últimos 7 dias</div>
+            {data!.reading_speed.length === 0 ? (
+              <p className="analytics-empty">Registe sessões de leitura na Biblioteca para ver o ritmo.</p>
+            ) : (<>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 14 }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 36, color: accent, lineHeight: 1 }}>
+                  {avgPagesPerDay ?? '—'}
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>pág/dia (média)</span>
+              </div>
+              {/* Sparkline: pages per day */}
+              {(() => {
+                const days = Array.from({ length: 7 }, (_, i) => {
+                  const d = new Date()
+                  d.setDate(d.getDate() - (6 - i))
+                  const key = d.toISOString().slice(0, 10)
+                  const found = data!.reading_speed.find(r => r.date === key)
+                  return { label: ['D-6','D-5','D-4','D-3','D-2','Ont.','Hoje'][i], value: found?.pages ?? 0 }
+                })
+                return (
+                  <BarChart
+                    dark={dark}
+                    data={days.map(d => ({ label: d.label, value: d.value }))}
+                    valueLabel={v => v > 0 ? String(v) : ''}
+                  />
+                )
+              })()}
+            </>)}
+          </div>
+        </div>
+
+        {/* ── Row: Actividade por Dia da Semana + Fase Lunar ─────────────── */}
+        <div className="analytics-grid-2">
+          <div className="analytics-card">
+            <div className="analytics-card-title">Actividade por Dia da Semana — Últimos 90 dias</div>
+            {dowData.every(d => d.value === 0) ? (
+              <p className="analytics-empty">Sem sessões de foco registadas.</p>
+            ) : (
+              <BarChart
+                dark={dark}
+                data={dowData}
+                valueLabel={v => `${v}h`}
+              />
+            )}
+            {!dowData.every(d => d.value === 0) && (() => {
+              const best = dowData.reduce((a, b) => b.value > a.value ? b : a)
+              return (
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginTop: 10 }}>
+                  Dia mais produtivo: <span style={{ color: accent }}>{best.label}</span> ({best.value}h registadas)
+                </p>
+              )
+            })()}
+          </div>
+
+          <div className="analytics-card">
+            <div className="analytics-card-title">Produtividade por Fase Lunar</div>
+            {lunarData.every(d => d.value === 0) ? (
+              <p className="analytics-empty">
+                Sem sessões de foco registadas. As fases serão calculadas automaticamente.
+              </p>
+            ) : (<>
+              <BarChart
+                dark={dark}
+                data={lunarData.map(d => ({ label: d.label, value: d.value }))}
+                valueLabel={v => `${v}h`}
+              />
+              {(() => {
+                const best = lunarData.reduce((a, b) => b.value > a.value ? b : a)
+                const phaseEmoji: Record<string, string> = {
+                  'Nova': '🌑', 'Crescente': '🌒', 'Cheia': '🌕', 'Minguante': '🌘'
+                }
+                return (
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2, marginTop: 10 }}>
+                    {phaseEmoji[best.label] ?? '●'} Pico na <span style={{ color: accent }}>Lua {best.label}</span> — {best.value}h registadas
+                  </p>
+                )
+              })()}
+            </>)}
           </div>
         </div>
 

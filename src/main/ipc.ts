@@ -1446,6 +1446,9 @@ export function registerIpcHandlers(): void {
       peakHour,
       tasksCompletion,
       readingGoal,
+      readingAbsorption,
+      readingSpeed,
+      activityByDow,
     ] = await Promise.all([
       // Activity heatmap: last 365 days of time_sessions
       dbAll(`
@@ -1513,6 +1516,36 @@ export function registerIpcHandlers(): void {
         FROM planned_tasks
         WHERE updated_at >= date('now', '-30 days')
       `),
+      // Reading absorption: added vs completed per month (last 12 months)
+      dbAll(`
+        SELECT month, SUM(added) AS added, SUM(completed) AS completed
+        FROM (
+          SELECT strftime('%Y-%m', created_at) AS month, 1 AS added, 0 AS completed
+          FROM readings
+          WHERE workspace_id = ? AND created_at >= date('now', '-12 months')
+          UNION ALL
+          SELECT strftime('%Y-%m', date_end) AS month, 0 AS added, 1 AS completed
+          FROM readings
+          WHERE workspace_id = ? AND status = 'done'
+            AND date_end IS NOT NULL AND date_end >= date('now', '-12 months')
+        )
+        GROUP BY month ORDER BY month
+      `, wsId, wsId),
+      // Reading speed: pages per day from reading_sessions (last 7 days)
+      dbAll(`
+        SELECT date, SUM(page_end - page_start) AS pages
+        FROM reading_sessions
+        WHERE date >= date('now', '-7 days')
+        GROUP BY date ORDER BY date
+      `),
+      // Activity by day of week: time_sessions last 90 days
+      dbAll(`
+        SELECT CAST(strftime('%w', started_at) AS INTEGER) AS dow,
+               SUM(duration_min) AS minutes
+        FROM time_sessions
+        WHERE started_at >= date('now', '-90 days')
+        GROUP BY dow ORDER BY dow
+      `),
       // Reading goal progress
       dbGet(`
         SELECT rg.target,
@@ -1528,15 +1561,18 @@ export function registerIpcHandlers(): void {
     ])
 
     return {
-      heatmap:          heatmap          ?? [],
-      hours_by_project: hoursByProject   ?? [],
-      hours_by_type:    hoursByType      ?? [],
-      books_by_month:   booksByMonth     ?? [],
-      deep_work_hours:  deepWork?.hours  ?? 0,
-      peak_hour:        peakHour?.hour   ?? null,
-      tasks_done:       tasksCompletion?.done  ?? 0,
-      tasks_total:      tasksCompletion?.total ?? 0,
-      reading_goal:     readingGoal ? { target: readingGoal.target, done: readingGoal.done, year } : null,
+      heatmap:            heatmap          ?? [],
+      hours_by_project:   hoursByProject   ?? [],
+      hours_by_type:      hoursByType      ?? [],
+      books_by_month:     booksByMonth     ?? [],
+      deep_work_hours:    deepWork?.hours  ?? 0,
+      peak_hour:          peakHour?.hour   ?? null,
+      tasks_done:         tasksCompletion?.done  ?? 0,
+      tasks_total:        tasksCompletion?.total ?? 0,
+      reading_goal:       readingGoal ? { target: readingGoal.target, done: readingGoal.done, year } : null,
+      reading_absorption: readingAbsorption ?? [],
+      reading_speed:      readingSpeed ?? [],
+      activity_by_dow:    activityByDow ?? [],
     }
   })
 

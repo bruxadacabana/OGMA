@@ -234,14 +234,14 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 
 ## Fase 12 — Analytics (todos vem desativados por padrão e são ativados nas configurações: vai abrir uma janela centralizada com um checkbox para marcar os que deseja ativar)
 
-- [ ] Pico de Produtividade: "Você é uma criatura da [Manhã/Noite]", baseado no horário em que a maioria das páginas é editada.
-- [ ] Taxa de Absorção Literária: Quantos recursos (livros/artigos) foram concluídos no mês vs. adicionados à lista de leitura.
+- [x] Pico de Produtividade: "Você é uma criatura da [Manhã/Noite]", baseado no horário em que a maioria das páginas é editada.
+- [x] Taxa de Absorção Literária: Quantos recursos (livros/artigos) foram concluídos no mês vs. adicionados à lista de leitura.
 - [ ] Páginas por "Área do Conhecimento": Um gráfico de pizza ou barras mostrando se você está dedicando mais tempo a Letras, Cibersegurança ou Hobbies Manuais.
-- [ ] Produtividade por Fase Lunar: Uma estatística curiosa mostrando em qual fase da lua você costuma concluir mais tarefas (ex: "Sua produtividade aumenta 20% na Lua Crescente").
+- [x] Produtividade por Fase Lunar: Uma estatística curiosa mostrando em qual fase da lua você costuma concluir mais tarefas (ex: "Sua produtividade aumenta 20% na Lua Crescente").
 - [ ] Progresso da Estação: Quanto falta para o próximo Sabá (já existe na Roda, mas pode ser um valor percentual de "Preparação para o Equinócio/Solstício").
-- [ ] Horas de Voo (Deep Work): Total de horas logadas nos work_blocks do Planner.
-- [ ] Velocidade de Leitura: Média de páginas lidas por dia nos últimos 7 dias.
-- [ ] Radar de Polímata (Equilíbrio de Áreas): Já que você tem diferentes project_type (Acadêmico, Escrita, Cibersegurança, etc.), essa métrica mostra para onde sua energia está indo. **O que medir:** Porcentagem de tarefas concluídas ou tempo logado por categoria de projeto. **Estética**: Um gráfico de radar ou uma lista simples: "Este mês, sua mente esteve 40% em Letras, 30% em Cibersegurança e 30% em Hobbies" **Objetivo**: Garantir que nenhum pilar seja esquecido.
+- [x] Horas de Voo (Deep Work): Total de horas logadas nos work_blocks do Planner.
+- [x] Velocidade de Leitura: Média de páginas lidas por dia nos últimos 7 dias.
+- [x] Radar de Polímata (Equilíbrio de Áreas): Já que você tem diferentes project_type (Acadêmico, Escrita, Cibersegurança, etc.), essa métrica mostra para onde sua energia está indo. **O que medir:** Porcentagem de tarefas concluídas ou tempo logado por categoria de projeto. **Estética**: Um gráfico de radar ou uma lista simples: "Este mês, sua mente esteve 40% em Letras, 30% em Cibersegurança e 30% em Hobbies" **Objetivo**: Garantir que nenhum pilar seja esquecido.
 
 ### Por projeto / académico
 - [ ] **Horas por projecto** — gráfico de barras com `work_blocks` agrupados por projecto
@@ -257,7 +257,7 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 ### Conhecimento
 - [ ] **Páginas mais conectadas** — top backlinks (hubs de conhecimento)
 - [ ] **Tags mais usadas** — evolução temporal
-- [ ] **Actividade por dia da semana** — padrão de produtividade
+- [x] **Actividade por dia da semana** — padrão de produtividade
 
 ---
 
