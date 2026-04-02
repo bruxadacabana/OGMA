@@ -12,10 +12,12 @@ export type WidgetSize = 'sm' | 'md' | 'lg'
 type WidgetId =
   | 'stats' | 'projects' | 'recent' | 'prazos' | 'cosmos' | 'wheel' | 'weather' | 'planner'
   | 'agenda' | 'reminders' | 'provas' | 'proj_progress' | 'quote' | 'ideas'
+  | 'reading_goal' | 'heatmap' | 'pomodoro'
 
 const DEFAULT_ORDER: WidgetId[] = [
   'stats', 'projects', 'recent', 'prazos', 'cosmos', 'wheel', 'weather', 'planner',
   'agenda', 'reminders', 'provas', 'proj_progress', 'quote', 'ideas',
+  'reading_goal', 'heatmap', 'pomodoro',
 ]
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -33,12 +35,15 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   proj_progress:'Progresso dos Projetos',
   quote:        'Citação Aleatória',
   ideas:        'Ideias Futuras',
+  reading_goal: 'Meta de Leitura',
+  heatmap:      'Mapa de Atividade',
+  pomodoro:     'Pomodoro',
 }
 const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
   stats: 'md', projects: 'md', recent: 'md', prazos: 'md',
   cosmos: 'md', wheel: 'md', weather: 'md', planner: 'md',
   agenda: 'lg', reminders: 'md', provas: 'md', proj_progress: 'md', quote: 'md',
-  ideas: 'md',
+  ideas: 'md', reading_goal: 'md', heatmap: 'lg', pomodoro: 'md',
 }
 
 interface Props {
@@ -1729,6 +1734,387 @@ function IdeasWidget({ dark, size, onProjectOpen }: { dark: boolean; size: Widge
   )
 }
 
+// ── ReadingGoalWidget ─────────────────────────────────────────────────────────
+
+function ReadingGoalWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+  const [progress, setProgress] = useState<{ target: number | null; done: number } | null>(null)
+  const [wsId,     setWsId]     = useState<number | null>(null)
+  const year = new Date().getFullYear()
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+
+  useEffect(() => {
+    fromIpc<any>(() => db().workspace.get(), 'getWsForGoal')
+      .then(r => r.match(ws => setWsId(ws.id), _e => {}))
+  }, [])
+
+  useEffect(() => {
+    if (!wsId) return
+    fromIpc<any>(() => db().readingGoals.progress(wsId, year), 'readingGoalWidget')
+      .then(r => r.match(d => setProgress(d), _e => {}))
+  }, [wsId, year])
+
+  const target = progress?.target ?? null
+  const done   = progress?.done ?? 0
+  const pct    = target && target > 0 ? Math.min(1, done / target) : 0
+
+  // SVG arc gauge
+  const R = 54; const CX = 70; const CY = 70
+  const circ = 2 * Math.PI * R
+  const trackC = dark ? '#2A2418' : '#D8D0C0'
+
+  return (
+    <div className="card" style={{ background: dark ? '#211D16' : '#EDE7D9', borderColor: dark ? '#3A3020' : '#C4B9A8' }}>
+      <div style={{ padding: size === 'sm' ? '10px 12px' : '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
+          META DE LEITURA {year}
+        </span>
+        {!target ? (
+          <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 13, color: ink2 }}>
+            Defina uma meta na Biblioteca para ver o progresso.
+          </span>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {/* Gauge SVG */}
+            <svg viewBox="0 0 140 140" style={{ width: 100, height: 100, flexShrink: 0 }}>
+              <circle cx={CX} cy={CY} r={R} fill="none" stroke={trackC} strokeWidth={9} />
+              <circle cx={CX} cy={CY} r={R} fill="none"
+                stroke={pct >= 1 ? '#4A6741' : accent}
+                strokeWidth={9}
+                strokeLinecap="round"
+                strokeDasharray={circ}
+                strokeDashoffset={circ * (1 - pct)}
+                transform={`rotate(-90 ${CX} ${CY})`}
+                style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+              />
+              <text x={CX} y={CY - 4} textAnchor="middle"
+                fontFamily="var(--font-mono)" fontSize={22} fontWeight={300}
+                fill={pct >= 1 ? '#4A6741' : accent}>
+                {done}
+              </text>
+              <text x={CX} y={CY + 12} textAnchor="middle"
+                fontFamily="var(--font-mono)" fontSize={9} fill={ink2} letterSpacing={0}>
+                de {target}
+              </text>
+            </svg>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 18,
+                color: pct >= 1 ? '#4A6741' : accent }}>
+                {Math.round(pct * 100)}%
+              </span>
+              {pct >= 1 ? (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#4A6741' }}>
+                  ✓ Meta atingida!
+                </span>
+              ) : (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2 }}>
+                  {target - done} livro{target - done !== 1 ? 's' : ''} restante{target - done !== 1 ? 's' : ''}
+                </span>
+              )}
+              {target > 0 && size !== 'sm' && (() => {
+                const now = new Date()
+                const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000)
+                const expected  = Math.round((dayOfYear / 365) * target)
+                const diff = done - expected
+                return (
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9,
+                    color: diff >= 0 ? '#4A6741' : dark ? '#C45A40' : '#8B3A2A' }}>
+                    {diff >= 0 ? `+${diff}` : diff} vs. esperado
+                  </span>
+                )
+              })()}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── HeatmapWidget ─────────────────────────────────────────────────────────────
+
+function HeatmapWidget({ dark, size, isActive }: { dark: boolean; size: WidgetSize; isActive: boolean }) {
+  const [heatmap, setHeatmap] = useState<{ day: string; minutes: number }[]>([])
+  const [loaded,  setLoaded]  = useState(false)
+
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = dark ? '#D4A820' : '#b8860b'
+  const base   = dark ? '#2A2418' : '#D8D0C0'
+
+  useEffect(() => {
+    if (!isActive || loaded) return
+    fromIpc<any>(() => db().analytics.global(), 'heatmapWidget')
+      .then(r => {
+        r.match(d => setHeatmap(d.heatmap ?? []), _e => {})
+        setLoaded(true)
+      })
+  }, [isActive, loaded])
+
+  // build compact grid: last N weeks depending on size
+  const weeks = size === 'sm' ? 12 : size === 'md' ? 26 : 52
+  const CELL  = size === 'sm' ? 9  : 10
+  const GAP   = 2
+
+  const map = new Map(heatmap.map(r => [r.day, r.minutes]))
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const start = new Date(today)
+  start.setDate(start.getDate() - weeks * 7 + 1)
+  const dow = (start.getDay() + 6) % 7
+  start.setDate(start.getDate() - dow)
+
+  const grid: { date: string; minutes: number }[][] = []
+  const cur = new Date(start)
+  while (cur <= today) {
+    const week: { date: string; minutes: number }[] = []
+    for (let d = 0; d < 7; d++) {
+      const key = cur <= today ? cur.toISOString().slice(0, 10) : ''
+      week.push({ date: key, minutes: key ? (map.get(key) ?? 0) : -1 })
+      cur.setDate(cur.getDate() + 1)
+    }
+    grid.push(week)
+  }
+
+  const intensity = (min: number) => {
+    if (min < 0)   return 'transparent'
+    if (min === 0) return base
+    if (min < 30)  return accent + '44'
+    if (min < 60)  return accent + '88'
+    if (min < 120) return accent + 'BB'
+    return accent
+  }
+
+  const totalMins = heatmap
+    .filter(r => r.day >= new Date(today.getFullYear(), today.getMonth() - 1, today.getDate()).toISOString().slice(0, 10))
+    .reduce((s, r) => s + r.minutes, 0)
+
+  return (
+    <div className="card" style={{ background: dark ? '#211D16' : '#EDE7D9', borderColor: dark ? '#3A3020' : '#C4B9A8' }}>
+      <div style={{ padding: size === 'sm' ? '10px 12px' : '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
+            MAPA DE ATIVIDADE
+          </span>
+          {totalMins > 0 && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent }}>
+              {Math.round(totalMins / 60)}h este mês
+            </span>
+          )}
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <svg
+            viewBox={`0 0 ${grid.length * (CELL + GAP)} ${7 * (CELL + GAP)}`}
+            style={{ width: grid.length * (CELL + GAP), height: 7 * (CELL + GAP), display: 'block' }}>
+            {grid.map((week, wi) =>
+              week.map((cell, di) => {
+                if (!cell.date) return null
+                return (
+                  <rect key={`${wi}-${di}`}
+                    x={wi * (CELL + GAP)} y={di * (CELL + GAP)}
+                    width={CELL} height={CELL} rx={1}
+                    fill={intensity(cell.minutes)}>
+                    <title>{cell.date}: {cell.minutes}min de foco</title>
+                  </rect>
+                )
+              })
+            )}
+          </svg>
+        </div>
+        {heatmap.length === 0 && (
+          <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 12, color: ink2 }}>
+            Registe sessões de foco para ver o mapa.
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── PomodoroWidget ────────────────────────────────────────────────────────────
+
+function PomodoroWidget({ dark, size }: { dark: boolean; size: WidgetSize }) {
+  const { workspace, pushToast } = useAppStore()
+
+  type TimerMode   = 'focus' | 'break'
+  type TimerStatus = 'idle' | 'running' | 'paused'
+  const FOCUS_MIN = 25
+  const BREAK_MIN = 5
+
+  const [mode,         setMode]         = useState<TimerMode>('focus')
+  const [status,       setStatus]       = useState<TimerStatus>('idle')
+  const [remainSecs,   setRemainSecs]   = useState(FOCUS_MIN * 60)
+  const [totalSecs,    setTotalSecs]    = useState(FOCUS_MIN * 60)
+  const [sessionStart, setSessionStart] = useState<Date | null>(null)
+  const [todayMins,    setTodayMins]    = useState(0)
+
+  const intervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const ink    = dark ? '#E8DFC8' : '#2C2416'
+  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
+  const accent = mode === 'focus'
+    ? (dark ? '#D4A820' : '#b8860b')
+    : (dark ? '#4A8A60' : '#3D7A52')
+  const trackC = dark ? '#2A2418' : '#D8D0C0'
+
+  // Load today's focus
+  useEffect(() => {
+    fromIpc<{ minutes: number }>(() => db().analytics.todayFocus(), 'pomodoroToday')
+      .then(r => r.match(d => setTodayMins(d.minutes), _e => {}))
+  }, [])
+
+  const stopInterval = () => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
+  }
+  useEffect(() => () => stopInterval(), [])
+
+  useEffect(() => {
+    if (remainSecs === 0 && status === 'running') {
+      stopInterval()
+      setStatus('idle')
+      if (mode === 'focus' && sessionStart) {
+        saveSession(FOCUS_MIN, sessionStart)
+        setMode('break'); setRemainSecs(BREAK_MIN * 60); setTotalSecs(BREAK_MIN * 60)
+        pushToast({ kind: 'success', title: 'Pomodoro concluído! ☕', detail: `Pausa de ${BREAK_MIN} min.` })
+      } else if (mode === 'break') {
+        setMode('focus'); setRemainSecs(FOCUS_MIN * 60); setTotalSecs(FOCUS_MIN * 60)
+        pushToast({ kind: 'info', title: 'Pausa terminada!', detail: 'Próximo Pomodoro.' })
+      }
+      setSessionStart(null)
+    }
+  }, [remainSecs, status])
+
+  const saveSession = async (durationMin: number, start: Date) => {
+    if (!workspace) return
+    await fromIpc<any>(() => db().time.create({
+      workspace_id: workspace.id,
+      project_id:   null,
+      page_id:      null,
+      duration_min: durationMin,
+      session_type: 'pomodoro',
+      notes:        'Dashboard Pomodoro',
+      tags:         null,
+      started_at:   start.toISOString(),
+      ended_at:     new Date().toISOString(),
+    }), 'pomodoroSave')
+    setTodayMins(prev => prev + durationMin)
+  }
+
+  const start = () => {
+    setSessionStart(new Date())
+    setStatus('running')
+    intervalRef.current = setInterval(() => setRemainSecs(p => p <= 1 ? 0 : p - 1), 1000)
+  }
+  const pause = () => { stopInterval(); setStatus('paused') }
+  const resume = () => {
+    setStatus('running')
+    intervalRef.current = setInterval(() => setRemainSecs(p => p <= 1 ? 0 : p - 1), 1000)
+  }
+  const reset = () => {
+    stopInterval(); setStatus('idle'); setSessionStart(null)
+    const s = (mode === 'focus' ? FOCUS_MIN : BREAK_MIN) * 60
+    setRemainSecs(s); setTotalSecs(s)
+  }
+  const finishEarly = async () => {
+    if (!sessionStart || mode !== 'focus') return
+    stopInterval(); setStatus('idle')
+    const elapsed = Math.round((Date.now() - sessionStart.getTime()) / 60000)
+    if (elapsed >= 1) { await saveSession(elapsed, sessionStart) }
+    setSessionStart(null); setMode('focus')
+    setRemainSecs(FOCUS_MIN * 60); setTotalSecs(FOCUS_MIN * 60)
+  }
+
+  const mm = String(Math.floor(remainSecs / 60)).padStart(2, '0')
+  const ss = String(remainSecs % 60).padStart(2, '0')
+  const R  = 54; const CX = 70; const CY = 70
+  const circ = 2 * Math.PI * R
+  const dashOff = circ * (1 - (totalSecs > 0 ? remainSecs / totalSecs : 1))
+
+  const compact = size === 'sm'
+
+  return (
+    <div className="card" style={{ background: dark ? '#211D16' : '#EDE7D9', borderColor: dark ? '#3A3020' : '#C4B9A8' }}>
+      <div style={{
+        padding: compact ? '10px 12px' : '14px 16px',
+        display: 'flex',
+        flexDirection: compact ? 'row' : 'column',
+        alignItems: 'center',
+        gap: compact ? 12 : 10,
+      }}>
+        {/* Header */}
+        {!compact && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: ink2 }}>
+              POMODORO
+            </span>
+            {todayMins > 0 && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: accent }}>
+                {Math.floor(todayMins / 60) > 0 ? `${Math.floor(todayMins / 60)}h ` : ''}{todayMins % 60}min hoje
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Clock SVG */}
+        <svg viewBox="0 0 140 140"
+          style={{ width: compact ? 80 : 120, height: compact ? 80 : 120, flexShrink: 0 }}>
+          <circle cx={CX} cy={CY} r={R} fill="none" stroke={trackC} strokeWidth={8} />
+          <circle cx={CX} cy={CY} r={R} fill="none"
+            stroke={accent} strokeWidth={8}
+            strokeLinecap="round"
+            strokeDasharray={circ}
+            strokeDashoffset={dashOff}
+            transform={`rotate(-90 ${CX} ${CY})`}
+            style={{ transition: status === 'running' ? 'stroke-dashoffset 1s linear' : 'stroke-dashoffset 0.3s ease',
+              filter: status === 'running' ? `drop-shadow(0 0 4px ${accent}88)` : 'none' }}
+          />
+          <circle cx={CX} cy={CY} r={R - 12} fill={dark ? '#1A160E' : '#F5F0E8'} />
+          <text x={CX} y={CY - 8} textAnchor="middle"
+            fontFamily="var(--font-mono)" fontSize={compact ? 6 : 8}
+            letterSpacing={2} fill={accent} opacity={0.8}>
+            {mode === 'focus' ? 'FOCO' : 'PAUSA'}
+          </text>
+          <text x={CX} y={CY + 8} textAnchor="middle"
+            fontFamily="var(--font-mono)" fontSize={compact ? 16 : 22}
+            fontWeight={300} fill={ink} style={{ letterSpacing: '-0.5px' }}>
+            {mm}:{ss}
+          </text>
+          {status === 'running' && (
+            <circle cx={CX} cy={CY + 20} r={2.5} fill={accent}>
+              <animate attributeName="opacity" values="1;0.3;1" dur="1.2s" repeatCount="indefinite" />
+            </circle>
+          )}
+        </svg>
+
+        {/* Controls */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+          {status === 'idle' && (
+            <button className="btn btn-sm" style={{ borderColor: accent, color: accent }}
+              onClick={start}>▶ Iniciar</button>
+          )}
+          {status === 'running' && (<>
+            <button className="btn btn-sm" style={{ borderColor: dark ? '#3A3020' : '#C4B9A8', color: ink2 }}
+              onClick={pause}>⏸ Pausar</button>
+            {mode === 'focus' && (
+              <button className="btn btn-sm" style={{ borderColor: dark ? '#3A3020' : '#C4B9A8', color: ink2 }}
+                onClick={finishEarly}>✓</button>
+            )}
+          </>)}
+          {status === 'paused' && (<>
+            <button className="btn btn-sm" style={{ borderColor: accent, color: accent }}
+              onClick={resume}>▶ Retomar</button>
+            {mode === 'focus' && (
+              <button className="btn btn-sm" style={{ borderColor: dark ? '#3A3020' : '#C4B9A8', color: ink2 }}
+                onClick={finishEarly}>✓</button>
+            )}
+          </>)}
+          <button className="btn btn-ghost btn-sm" style={{ color: ink2 }} onClick={reset}>↺</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── DayPlanWidget ─────────────────────────────────────────────────────────────
 
 interface TodayBlock {
@@ -2245,6 +2631,9 @@ export const DashboardView: React.FC<Props> = ({ dark, isActive, onProjectOpen, 
       case 'provas':        return <ProvasWidget       dark={dark} size={size} isActive={isActive} />
       case 'proj_progress': return <ProjProgressWidget dark={dark} size={size} isActive={isActive} />
       case 'ideas':         return <IdeasWidget        dark={dark} size={size} onProjectOpen={onProjectOpen} />
+      case 'reading_goal':  return <ReadingGoalWidget  dark={dark} size={size} />
+      case 'heatmap':       return <HeatmapWidget      dark={dark} size={size} isActive={isActive} />
+      case 'pomodoro':      return <PomodoroWidget     dark={dark} size={size} />
     }
   }
 

@@ -1430,6 +1430,128 @@ export function registerIpcHandlers(): void {
     `, project_id)
   )
 
+  // ── Analytics ─────────────────────────────────────────────────────────────
+
+  api('analytics:global', async () => {
+    const ws = await dbGet('SELECT id FROM workspaces LIMIT 1')
+    const wsId = ws?.id ?? 1
+    const year = new Date().getFullYear()
+
+    const [
+      heatmap,
+      hoursByProject,
+      hoursByType,
+      booksByMonth,
+      deepWork,
+      peakHour,
+      tasksCompletion,
+      readingGoal,
+    ] = await Promise.all([
+      // Activity heatmap: last 365 days of time_sessions
+      dbAll(`
+        SELECT date(started_at) AS day, SUM(duration_min) AS minutes
+        FROM time_sessions
+        WHERE started_at >= date('now', '-365 days')
+        GROUP BY day
+        ORDER BY day
+      `),
+      // Hours by project: last 30 days
+      dbAll(`
+        SELECT p.id, p.name, p.color, p.icon, p.project_type,
+               ROUND(SUM(ts.duration_min) / 60.0, 1) AS hours
+        FROM time_sessions ts
+        JOIN projects p ON p.id = ts.project_id
+        WHERE ts.started_at >= date('now', '-30 days')
+          AND ts.project_id IS NOT NULL
+        GROUP BY p.id
+        ORDER BY hours DESC
+        LIMIT 10
+      `),
+      // Hours by project type: last 30 days (radar)
+      dbAll(`
+        SELECT p.project_type,
+               ROUND(SUM(ts.duration_min) / 60.0, 2) AS hours
+        FROM time_sessions ts
+        JOIN projects p ON p.id = ts.project_id
+        WHERE ts.started_at >= date('now', '-30 days')
+          AND ts.project_id IS NOT NULL
+        GROUP BY p.project_type
+        ORDER BY hours DESC
+      `),
+      // Books completed by month: last 12 months
+      dbAll(`
+        SELECT strftime('%Y-%m', date_end) AS month, COUNT(*) AS count
+        FROM readings
+        WHERE status = 'done'
+          AND date_end IS NOT NULL
+          AND date_end >= date('now', '-12 months')
+          AND workspace_id = ?
+        GROUP BY month
+        ORDER BY month
+      `, wsId),
+      // Deep work hours from work_blocks: last 30 days
+      dbGet(`
+        SELECT ROUND(COALESCE(SUM(logged_hours), 0), 1) AS hours
+        FROM work_blocks
+        WHERE status = 'done'
+          AND date >= date('now', '-30 days')
+      `),
+      // Peak productivity hour
+      dbGet(`
+        SELECT CAST(strftime('%H', started_at) AS INTEGER) AS hour,
+               SUM(duration_min) AS minutes
+        FROM time_sessions
+        GROUP BY hour
+        ORDER BY minutes DESC
+        LIMIT 1
+      `),
+      // Tasks completion rate: last 30 days
+      dbGet(`
+        SELECT
+          COUNT(CASE WHEN status IN ('completed','done') THEN 1 END) AS done,
+          COUNT(*) AS total
+        FROM planned_tasks
+        WHERE updated_at >= date('now', '-30 days')
+      `),
+      // Reading goal progress
+      dbGet(`
+        SELECT rg.target,
+               (SELECT COUNT(*) FROM readings r2
+                WHERE r2.workspace_id = rg.workspace_id
+                  AND r2.status = 'done'
+                  AND substr(r2.date_end, 1, 4) = CAST(rg.year AS TEXT)
+               ) AS done
+        FROM reading_goals rg
+        WHERE rg.workspace_id = ? AND rg.year = ?
+        LIMIT 1
+      `, wsId, year),
+    ])
+
+    return {
+      heatmap:          heatmap          ?? [],
+      hours_by_project: hoursByProject   ?? [],
+      hours_by_type:    hoursByType      ?? [],
+      books_by_month:   booksByMonth     ?? [],
+      deep_work_hours:  deepWork?.hours  ?? 0,
+      peak_hour:        peakHour?.hour   ?? null,
+      tasks_done:       tasksCompletion?.done  ?? 0,
+      tasks_total:      tasksCompletion?.total ?? 0,
+      reading_goal:     readingGoal ? { target: readingGoal.target, done: readingGoal.done, year } : null,
+    }
+  })
+
+  api('analytics:todayFocus', async () => {
+    const ws = await dbGet('SELECT id FROM workspaces LIMIT 1')
+    const wsId = ws?.id ?? 1
+    const result = await dbGet(`
+      SELECT COALESCE(SUM(duration_min), 0) AS minutes
+      FROM time_sessions
+      WHERE workspace_id = ?
+        AND date(started_at) = date('now')
+    `, wsId)
+    return { minutes: result?.minutes ?? 0 }
+  })
+
   // ── Metas de leitura ──────────────────────────────────────────────────────
 
   api('reading:goals:get', async ({ workspace_id, year }: { workspace_id: number; year: number }) =>

@@ -153,6 +153,10 @@ contextBridge.exposeInMainWorld('db', {
     projectsProgress: () => api('dashboard:projectsProgress'),
     randomQuote:      () => api('dashboard:randomQuote'),
   },
+  analytics: {
+    global:     () => api('analytics:global'),
+    todayFocus: () => api('analytics:todayFocus'),
+  },
   planner: {
     listTasks:     (project_id: number)               => api('planner:listTasks',     { project_id }),
     createTask:    (d: any)                           => api('planner:createTask',    d),

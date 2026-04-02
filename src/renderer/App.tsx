@@ -15,6 +15,7 @@ import { SettingsView } from './views/Settings/SettingsView'
 import { LibraryView } from './views/Library/LibraryView'
 import { GlobalCalendarView } from './views/GlobalCalendar/GlobalCalendarView'
 import { GlobalPlannerView } from './views/GlobalPlanner/GlobalPlannerView'
+import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { useAppStore } from './store/useAppStore'
 import { Project, Page, PROJECT_TYPE_ICONS, AppSettings } from './types'
 
@@ -311,7 +312,7 @@ export default function App() {
         {view === 'planner'   && <GlobalPlannerView dark={dark} onProjectOpen={handleProjectSelect} />}
         {view === 'library'   && <LibraryView dark={dark} activeSub={activeSub}
             onNavigateSub={s => { setActiveSub(s); setSection('library'); setView('library') }} />}
-        {view === 'analytics' && <PlaceholderView title="Analytics"     dark={dark} />}
+        {view === 'analytics' && <AnalyticsView dark={dark} />}
         {view === 'settings'  && <SettingsView dark={dark} onToggleTheme={toggleTheme} fontSizeValue={fontSizeValue} onFontSize={handleFontSize} />}
       </div>
 
