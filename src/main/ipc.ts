@@ -1445,10 +1445,10 @@ export function registerIpcHandlers(): void {
       deepWork,
       peakHour,
       tasksCompletion,
-      readingGoal,
       readingAbsorption,
       readingSpeed,
       activityByDow,
+      readingGoal,
     ] = await Promise.all([
       // Activity heatmap: last 365 days of time_sessions
       dbAll(`
@@ -1573,6 +1573,129 @@ export function registerIpcHandlers(): void {
       reading_absorption: readingAbsorption ?? [],
       reading_speed:      readingSpeed ?? [],
       activity_by_dow:    activityByDow ?? [],
+    }
+  })
+
+  api('analytics:project', async ({ project_id }: { project_id: number }) => {
+    const [
+      pagesCount,
+      tasksStats,
+      focusTotal,
+      focusMonth,
+      lastSession,
+      nextDeadline,
+      heatmap,
+      recentPages,
+      upcomingTasks,
+      upcomingEvents,
+      backlinksCount,
+      tagsCount,
+      recentSessions,
+    ] = await Promise.all([
+      // Total de páginas
+      dbGet(`SELECT COUNT(*) AS count FROM pages WHERE project_id = ?`, project_id),
+      // Tarefas: total, concluídas, atrasadas
+      dbGet(`
+        SELECT
+          COUNT(*) AS total,
+          COUNT(CASE WHEN status IN ('completed','done') THEN 1 END) AS done,
+          COUNT(CASE WHEN status NOT IN ('completed','done')
+                      AND deadline IS NOT NULL
+                      AND deadline < date('now') THEN 1 END) AS overdue
+        FROM planned_tasks WHERE project_id = ?
+      `, project_id),
+      // Horas de foco total
+      dbGet(`
+        SELECT ROUND(COALESCE(SUM(duration_min), 0) / 60.0, 1) AS hours
+        FROM time_sessions WHERE project_id = ?
+      `, project_id),
+      // Horas de foco últimos 30 dias
+      dbGet(`
+        SELECT ROUND(COALESCE(SUM(duration_min), 0) / 60.0, 1) AS hours
+        FROM time_sessions
+        WHERE project_id = ? AND started_at >= date('now', '-30 days')
+      `, project_id),
+      // Última sessão de foco
+      dbGet(`
+        SELECT started_at FROM time_sessions
+        WHERE project_id = ? ORDER BY started_at DESC LIMIT 1
+      `, project_id),
+      // Próximo prazo
+      dbGet(`
+        SELECT title, deadline FROM planned_tasks
+        WHERE project_id = ? AND status NOT IN ('completed','done')
+          AND deadline IS NOT NULL AND deadline >= date('now')
+        ORDER BY deadline ASC LIMIT 1
+      `, project_id),
+      // Heatmap últimas 8 semanas (56 dias)
+      dbAll(`
+        SELECT date(started_at) AS day, SUM(duration_min) AS minutes
+        FROM time_sessions
+        WHERE project_id = ? AND started_at >= date('now', '-56 days')
+        GROUP BY day ORDER BY day
+      `, project_id),
+      // Páginas recentes (últimas 6 editadas)
+      dbAll(`
+        SELECT id, title, icon, updated_at FROM pages
+        WHERE project_id = ? ORDER BY updated_at DESC LIMIT 6
+      `, project_id),
+      // Próximas tarefas abertas
+      dbAll(`
+        SELECT id, title, deadline, priority, status, estimated_hours
+        FROM planned_tasks
+        WHERE project_id = ? AND status NOT IN ('completed','done')
+        ORDER BY
+          CASE WHEN deadline IS NOT NULL AND deadline < date('now') THEN 0
+               WHEN deadline IS NOT NULL THEN 1
+               ELSE 2 END,
+          deadline ASC, priority DESC
+        LIMIT 7
+      `, project_id),
+      // Próximos eventos (30 dias)
+      dbAll(`
+        SELECT id, title, event_type, start_dt AS start_at
+        FROM calendar_events
+        WHERE project_id = ? AND start_dt >= date('now') AND start_dt <= date('now', '+30 days')
+        ORDER BY start_dt ASC LIMIT 6
+      `, project_id),
+      // Total de backlinks recebidos por páginas do projecto
+      dbGet(`
+        SELECT COUNT(*) AS count FROM page_backlinks pb
+        JOIN pages p ON p.id = pb.target_page_id
+        WHERE p.project_id = ?
+      `, project_id),
+      // Tags usadas no projecto
+      dbGet(`
+        SELECT COUNT(DISTINCT t.id) AS count
+        FROM tags t
+        JOIN page_tags pt ON pt.tag_id = t.id
+        JOIN pages p ON p.id = pt.page_id
+        WHERE p.project_id = ?
+      `, project_id),
+      // Sessões recentes (para health/hobby)
+      dbAll(`
+        SELECT id, started_at, duration_min, label FROM time_sessions
+        WHERE project_id = ?
+        ORDER BY started_at DESC LIMIT 8
+      `, project_id),
+    ])
+
+    return {
+      pages_count:      pagesCount?.count     ?? 0,
+      tasks_total:      tasksStats?.total      ?? 0,
+      tasks_done:       tasksStats?.done       ?? 0,
+      tasks_overdue:    tasksStats?.overdue    ?? 0,
+      focus_hours:      focusTotal?.hours      ?? 0,
+      focus_hours_30d:  focusMonth?.hours      ?? 0,
+      last_session:     lastSession?.started_at ?? null,
+      next_deadline:    nextDeadline ?? null,
+      heatmap:          heatmap      ?? [],
+      recent_pages:     recentPages  ?? [],
+      upcoming_tasks:   upcomingTasks ?? [],
+      upcoming_events:  upcomingEvents ?? [],
+      backlinks_count:  backlinksCount?.count ?? 0,
+      tags_count:       tagsCount?.count      ?? 0,
+      recent_sessions:  recentSessions ?? [],
     }
   })
 

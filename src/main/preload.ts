@@ -156,6 +156,7 @@ contextBridge.exposeInMainWorld('db', {
   analytics: {
     global:     () => api('analytics:global'),
     todayFocus: () => api('analytics:todayFocus'),
+    project:    (project_id: number) => api('analytics:project', { project_id }),
   },
   planner: {
     listTasks:     (project_id: number)               => api('planner:listTasks',     { project_id }),

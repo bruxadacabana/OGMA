@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Project, Page, PROJECT_TYPE_LABELS, PROJECT_TYPE_ICONS } from '../../types'
 import { CosmosLayer } from '../../components/Cosmos/CosmosLayer'
 import { useAppStore } from '../../store/useAppStore'
-import { fromIpc } from '../../types/errors'
 import { ViewRenderer } from './ViewRenderer'
 import { NewViewModal } from '../../components/Views/NewViewModal'
 import { ManagePropertiesModal } from '../../components/Properties/ManagePropertiesModal'
 import { PlannerTab } from './PlannerTab'
 import { StudyTimerTab } from './StudyTimerTab'
+import { ProjectLocalDashboard } from './ProjectLocalDashboard'
 import './ProjectDashboardView.css'
 
 interface Props {
@@ -83,296 +83,197 @@ function ProjectHeader({ project, dark, onEdit }: {
   )
 }
 
-// ── Leituras vinculadas ───────────────────────────────────────────────────────
-
-const EVENT_ICONS: Record<string, string> = {
-  prova: '📝', trabalho: '📋', seminario: '🎙', defesa: '🎓',
-  prazo: '⏰', reuniao: '👥', outro: '◦',
-}
-const EVENT_COLORS_MAP: Record<string, string> = {
-  prova: '#8B3A2A', trabalho: '#2C5F8A', seminario: '#6B4F72',
-  defesa: '#b8860b', prazo: '#7A5C2E', reuniao: '#4A6741', outro: '#8B7355',
-}
-
-function UpcomingEventsPanel({ projectId, dark, onPageOpen }: {
-  projectId: number; dark: boolean; onPageOpen: (page: any) => void
-}) {
-  const [events, setEvents] = useState<any[]>([])
-
-  const ink    = dark ? '#E8DFC8' : '#2C2416'
-  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
-  const border = dark ? '#3A3020' : '#C4B9A8'
-  const cardBg = dark ? '#211D16' : '#EDE7D9'
-  const accent = dark ? '#D4A820' : '#b8860b'
-
-  useEffect(() => {
-    fromIpc<any[]>(() => (window as any).db.events.listForProject(projectId), 'eventsForProject')
-      .then(r => r.match(data => {
-        const today = new Date().toISOString().slice(0, 10)
-        setEvents(data.filter((e: any) => e.start_dt >= today).slice(0, 10))
-      }, _e => {}))
-  }, [projectId])
-
-  if (events.length === 0) return null
-
-  return (
-    <div style={{ padding: '8px 20px 4px', background: cardBg, borderBottom: `1px solid ${border}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.14em', color: ink2 }}>
-          PRÓXIMAS ACTIVIDADES
-        </span>
-      </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {events.map((ev: any) => {
-          const color = EVENT_COLORS_MAP[ev.event_type ?? 'outro'] ?? '#8B7355'
-          const dt    = ev.start_dt?.slice(0, 10) ?? ''
-          const dtFmt = dt ? new Date(dt + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : ''
-          return (
-            <button key={ev.id}
-              onClick={() => ev.page_id && onPageOpen({ id: ev.linked_page_id, project_id: projectId })}
-              title={`${ev.title}${ev.page_title ? ' · ' + ev.page_title : ''}`}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '3px 8px 3px 6px', border: `1px solid ${color}44`,
-                borderLeft: `3px solid ${color}`, borderRadius: 2,
-                background: color + '11', cursor: ev.linked_page_id ? 'pointer' : 'default',
-                fontFamily: 'var(--font-mono)', fontSize: 10, color: ink,
-                maxWidth: 220,
-              }}>
-              <span>{EVENT_ICONS[ev.event_type ?? 'outro']}</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                {ev.title}
-              </span>
-              <span style={{ fontSize: 9, color, flexShrink: 0 }}>{dtFmt}</span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  want: 'Quer ler', reading: 'Lendo', done: 'Lido', abandoned: 'Abandonado',
-}
-const STATUS_COLORS: Record<string, string> = {
-  want: '#8B7355', reading: '#b8860b', done: '#4A6741', abandoned: '#8B3A2A',
-}
-
-function LinkedReadingsPanel({ projectId, dark, onPageOpen, pages }: {
-  projectId: number; dark: boolean; onPageOpen: (page: any) => void; pages: any[]
-}) {
-  const [readings, setReadings] = useState<any[]>([])
-  const db = () => (window as any).db
-  const border = dark ? '#3A3020' : '#C4B9A8'
-  const ink    = dark ? '#E8DFC8' : '#2C2416'
-  const ink2   = dark ? '#8A7A62' : '#9C8E7A'
-  const bg     = dark ? '#211D16' : '#EDE7D9'
-
-  useEffect(() => {
-    fromIpc<any[]>(() => db().readingLinks.listForProject(projectId), 'listReadingsForProject')
-      .then(r => r.match(data => setReadings(data), _e => {}))
-  }, [projectId])
-
-  if (readings.length === 0) return null
-
-  return (
-    <div style={{
-      borderBottom: `1px solid ${border}`, padding: '8px 16px',
-      display: 'flex', gap: 10, overflowX: 'auto', alignItems: 'stretch',
-      background: dark ? '#1A1610' : '#F5F0E8',
-    }}>
-      <span style={{
-        fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em',
-        color: ink2, textTransform: 'uppercase', flexShrink: 0,
-        alignSelf: 'center', writingMode: 'vertical-rl', transform: 'rotate(180deg)',
-        paddingRight: 4,
-      }}>Leituras</span>
-      {readings.map((r: any) => {
-        let meta: any = {}
-        try { if (r.metadata_json) meta = JSON.parse(r.metadata_json) } catch {}
-        const cover    = r.cover_path || meta.cover_url || meta.cover_url_m || meta.thumbnail_url
-        const progress = r.progress_type === 'percent'
-          ? (r.progress_percent ?? null)
-          : (r.total_pages > 0 ? Math.round((r.current_page / r.total_pages) * 100) : null)
-        const statusColor = STATUS_COLORS[r.status] ?? ink2
-        const page = pages.find((p: any) => p.id === r.page_id)
-
-        return (
-          <button
-            key={`${r.id}-${r.page_id}`}
-            onClick={() => page && onPageOpen(page)}
-            style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4,
-              background: bg, border: `1px solid ${border}`, borderRadius: 3,
-              padding: '6px 8px', cursor: page ? 'pointer' : 'default',
-              minWidth: 120, maxWidth: 150, flexShrink: 0, textAlign: 'left',
-              transition: 'border-color 120ms',
-            }}
-            onMouseEnter={e => { if (page) (e.currentTarget as HTMLElement).style.borderColor = statusColor }}
-            onMouseLeave={e => { if (page) (e.currentTarget as HTMLElement).style.borderColor = border }}
-            title={page ? `Abrir: ${r.page_title}` : r.title}
-          >
-            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', width: '100%' }}>
-              {cover ? (
-                <img src={cover} alt="" style={{
-                  width: 28, height: 40, objectFit: 'cover', borderRadius: 1, flexShrink: 0,
-                  border: `1px solid ${border}`,
-                }} />
-              ) : (
-                <div style={{
-                  width: 28, height: 40, borderRadius: 1, flexShrink: 0, background: statusColor + '22',
-                  border: `1px solid ${statusColor}44`, display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', fontSize: 14,
-                }}>
-                  {r.reading_type === 'article' ? '📄' : '📖'}
-                </div>
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 11,
-                  color: ink, lineHeight: 1.3,
-                  overflow: 'hidden', display: '-webkit-box',
-                  WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                }}>
-                  {r.title}
-                </div>
-                <div style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 9, color: statusColor,
-                  marginTop: 2, letterSpacing: '0.04em',
-                }}>
-                  {STATUS_LABELS[r.status] ?? r.status}
-                </div>
-              </div>
-            </div>
-
-            {progress !== null && (
-              <div style={{ width: '100%', height: 2, background: border, borderRadius: 1, marginTop: 2 }}>
-                <div style={{
-                  width: `${progress}%`, height: '100%',
-                  background: statusColor, borderRadius: 1,
-                }} />
-              </div>
-            )}
-
-            {r.page_title && (
-              <div style={{
-                fontFamily: 'var(--font-mono)', fontSize: 9, color: ink2,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                width: '100%', borderTop: `1px solid ${border}`, paddingTop: 3, marginTop: 2,
-              }}>
-                {r.page_icon ?? '📄'} {r.page_title}
-              </div>
-            )}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 // ── View principal ────────────────────────────────────────────────────────────
+
+type Section = 'dashboard' | 'planner' | 'tempo'
 
 export const ProjectDashboardView: React.FC<Props> = ({
   project, dark, onPageOpen, onEdit, onNewPage,
 }) => {
-  const { pages, projectProperties, projectViews, activeViewId, setActiveView, loadViews, loadProperties, loadPages } = useAppStore()
-  const [showNewView,     setShowNewView]     = useState(false)
-  const [showManageProps, setShowManageProps] = useState(false)
-  const [showPlanner,     setShowPlanner]     = useState(false)
-  const [showTime,        setShowTime]        = useState(false)
+  const {
+    pages, projectProperties, projectViews,
+    activeViewId, setActiveView,
+    loadViews, loadProperties, loadPages,
+  } = useAppStore()
+
+  const [section,          setSection]          = useState<Section>('dashboard')
+  const [activeView,       setActiveViewLocal]  = useState<number | null>(null)
+  const [showViewsDropdown,setShowViewsDropdown] = useState(false)
+  const [showNewView,      setShowNewView]      = useState(false)
+  const [showManageProps,  setShowManageProps]  = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const ink    = dark ? '#E8DFC8' : '#2C2416'
   const ink2   = dark ? '#8A7A62' : '#9C8E7A'
   const border = dark ? '#3A3020' : '#C4B9A8'
   const color  = project.color ?? '#8B7355'
+  const bg     = dark ? '#1A1610' : '#F5F0E8'
+  const cardBg = dark ? '#211D16' : '#EDE7D9'
 
-  const activeView  = projectViews.find(v => v.id === activeViewId) ?? projectViews[0] ?? null
-  const noScroll    = !showPlanner && !showTime && (
-                      activeView?.view_type === 'kanban'
-                   || activeView?.view_type === 'calendar'
-                   || activeView?.view_type === 'timeline'
-                   )
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showViewsDropdown) return
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowViewsDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showViewsDropdown])
+
+  const openView = (viewId: number) => {
+    setActiveViewLocal(viewId)
+    setActiveView(viewId)
+    setSection('dashboard') // sai de planner/tempo, usa activeView para detectar
+    setShowViewsDropdown(false)
+  }
+
+  const openDashboard = () => {
+    setActiveViewLocal(null)
+    setSection('dashboard')
+  }
+
+  const currentView = activeView != null
+    ? projectViews.find(v => v.id === activeView) ?? null
+    : null
+
+  const showingView = section === 'dashboard' && activeView != null && currentView != null
+
+  const noScroll = showingView && (
+    currentView?.view_type === 'kanban'
+    || currentView?.view_type === 'calendar'
+    || currentView?.view_type === 'timeline'
+  )
+
+  // toolbar button style helper
+  const toolbarBtn = (active: boolean) => ({
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    gap: 5,
+    padding: '6px 12px',
+    border: 'none',
+    borderBottom: `2px solid ${active ? color : 'transparent'}`,
+    background: 'transparent',
+    cursor: 'pointer' as const,
+    fontFamily: 'var(--font-mono)',
+    fontSize: 10,
+    letterSpacing: '0.08em',
+    color: active ? color : ink2,
+    transition: 'color 120ms, border-color 120ms',
+    whiteSpace: 'nowrap' as const,
+    marginBottom: -1,
+  })
 
   return (
     <div className={`proj-dashboard-root${noScroll ? ' proj-dashboard-root--kanban' : ''}`}>
 
-      {/* Header + tabs — sempre visíveis */}
+      {/* ── Header + toolbar — sempre visíveis ───────────────────────── */}
       <div className="proj-dashboard-top">
         <ProjectHeader project={project} dark={dark} onEdit={onEdit} />
 
-        <LinkedReadingsPanel
-          projectId={project.id}
-          dark={dark}
-          onPageOpen={onPageOpen}
-          pages={pages}
-        />
-
-        <UpcomingEventsPanel
-          projectId={project.id}
-          dark={dark}
-          onPageOpen={onPageOpen}
-        />
-
-        <div className="view-tabs" style={{ borderColor: border }}>
-          {projectViews.map(v => (
-            <button
-              key={v.id}
-              className={`view-tab${!showPlanner && !showTime && activeViewId === v.id ? ' view-tab--active' : ''}`}
-              onClick={() => { setShowPlanner(false); setShowTime(false); setActiveView(v.id) }}
-              style={{
-                color: !showPlanner && !showTime && activeViewId === v.id ? color : ink2,
-                borderBottomColor: !showPlanner && !showTime && activeViewId === v.id ? color : 'transparent',
-              }}
-            >
-              <span style={{ fontSize: 12 }}>{VIEW_TYPE_ICONS[v.view_type] ?? '◦'}</span>
-              {v.name}
-            </button>
-          ))}
+        {/* Toolbar */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 0,
+          borderBottom: `1px solid ${border}`,
+          padding: '0 4px',
+        }}>
+          {/* ◉ Início */}
           <button
-            className="btn btn-ghost btn-sm"
-            style={{ color: ink2, fontSize: 10, padding: '2px 6px' }}
-            onClick={() => setShowNewView(true)}
-            title="Nova vista"
+            style={toolbarBtn(section === 'dashboard' && activeView == null)}
+            onClick={openDashboard}
           >
-            + Vista
+            <span style={{ fontSize: 11 }}>◉</span>
+            Início
           </button>
-          {/* Aba Planner */}
+
+          {/* ▼ Vistas (dropdown) */}
+          <div ref={dropdownRef} style={{ position: 'relative' }}>
+            <button
+              style={{
+                ...toolbarBtn(showingView),
+                paddingRight: 8,
+              }}
+              onClick={() => setShowViewsDropdown(v => !v)}
+            >
+              {currentView && showingView
+                ? <><span style={{ fontSize: 11 }}>{VIEW_TYPE_ICONS[currentView.view_type] ?? '◦'}</span>{currentView.name}</>
+                : <><span style={{ fontSize: 11 }}>☰</span>Vistas</>
+              }
+              <span style={{ fontSize: 9, marginLeft: 2, opacity: 0.7 }}>▾</span>
+            </button>
+
+            {showViewsDropdown && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, zIndex: 100,
+                background: cardBg, border: `1px solid ${border}`, borderRadius: 2,
+                boxShadow: `3px 3px 0 ${dark ? '#1A1610' : '#C4B9A8'}`,
+                minWidth: 180, padding: '4px 0',
+              }}>
+                {projectViews.map(v => (
+                  <button key={v.id}
+                    onClick={() => openView(v.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '7px 14px', width: '100%', border: 'none',
+                      background: activeView === v.id ? color + '18' : 'transparent',
+                      cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 10,
+                      color: activeView === v.id ? color : ink2,
+                      borderLeft: `3px solid ${activeView === v.id ? color : 'transparent'}`,
+                    }}
+                  >
+                    <span>{VIEW_TYPE_ICONS[v.view_type] ?? '◦'}</span>
+                    {v.name}
+                  </button>
+                ))}
+                <div style={{ borderTop: `1px solid ${border}`, margin: '4px 0' }} />
+                <button
+                  onClick={() => { setShowViewsDropdown(false); setShowNewView(true) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '7px 14px', width: '100%', border: 'none',
+                    background: 'transparent', cursor: 'pointer',
+                    fontFamily: 'var(--font-mono)', fontSize: 10, color: ink2,
+                    borderLeft: '3px solid transparent',
+                  }}
+                >
+                  + Nova vista
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Planner */}
           <button
-            className={`view-tab${showPlanner ? ' view-tab--active' : ''}`}
-            onClick={() => { setShowPlanner(true); setShowTime(false) }}
-            style={{
-              color: showPlanner ? color : ink2,
-              borderBottomColor: showPlanner ? color : 'transparent',
-            }}
+            style={toolbarBtn(section === 'planner')}
+            onClick={() => { setSection('planner'); setActiveViewLocal(null) }}
           >
-            <span style={{ fontSize: 12 }}>⊞</span>
+            <span style={{ fontSize: 11 }}>⊞</span>
             Planner
           </button>
-          {/* Aba Tempo / Pomodoro */}
+
+          {/* Tempo */}
           <button
-            className={`view-tab${showTime ? ' view-tab--active' : ''}`}
-            onClick={() => { setShowTime(true); setShowPlanner(false) }}
-            style={{
-              color: showTime ? color : ink2,
-              borderBottomColor: showTime ? color : 'transparent',
-            }}
+            style={toolbarBtn(section === 'tempo')}
+            onClick={() => { setSection('tempo'); setActiveViewLocal(null) }}
           >
-            <span style={{ fontSize: 12 }}>◎</span>
+            <span style={{ fontSize: 11 }}>◎</span>
             Tempo
           </button>
+
           <div style={{ flex: 1 }} />
+
+          {/* Props + Nova página */}
           <button
             className="btn btn-ghost btn-sm"
-            style={{ color: ink2, fontSize: 10, padding: '2px 6px' }}
+            style={{ color: ink2, fontSize: 10, padding: '2px 8px' }}
             onClick={() => setShowManageProps(true)}
-            title="Gerenciar propriedades"
           >
             ⚙ Props
           </button>
           <button
             className="btn btn-ghost btn-sm"
-            style={{ color: ink2, fontSize: 10, padding: '2px 6px' }}
+            style={{ color: ink2, fontSize: 10, padding: '2px 8px' }}
             onClick={onNewPage}
           >
             + Página
@@ -380,15 +281,15 @@ export const ProjectDashboardView: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Conteúdo */}
+      {/* ── Conteúdo ──────────────────────────────────────────────────── */}
       <div className={`proj-dashboard-content${noScroll ? ' proj-dashboard-content--noscroll' : ''}`}>
-        {showTime ? (
+        {section === 'tempo' ? (
           <StudyTimerTab projectId={project.id} dark={dark} pages={pages} />
-        ) : showPlanner ? (
+        ) : section === 'planner' ? (
           <PlannerTab projectId={project.id} dark={dark} pages={pages} />
-        ) : activeView ? (
+        ) : showingView ? (
           <ViewRenderer
-            view={activeView}
+            view={currentView!}
             project={project}
             pages={pages}
             properties={projectProperties}
@@ -397,19 +298,13 @@ export const ProjectDashboardView: React.FC<Props> = ({
             onNewPage={onNewPage}
           />
         ) : (
-          <div className="proj-empty-state" style={{ color: ink2 }}>
-            <span style={{ fontSize: 36, opacity: 0.4 }}>✦</span>
-            <span style={{
-              fontFamily: 'var(--font-display)', fontStyle: 'italic',
-              fontSize: 18, color: ink,
-            }}>
-              Nenhuma vista configurada
-            </span>
-            <button className="btn btn-sm" onClick={() => setShowNewView(true)}
-              style={{ borderColor: color, color }}>
-              + Criar vista
-            </button>
-          </div>
+          <ProjectLocalDashboard
+            project={project}
+            dark={dark}
+            pages={pages}
+            onPageOpen={onPageOpen}
+            onOpenPlanner={() => setSection('planner')}
+          />
         )}
       </div>
 
@@ -419,7 +314,7 @@ export const ProjectDashboardView: React.FC<Props> = ({
           properties={projectProperties}
           dark={dark}
           onClose={() => setShowNewView(false)}
-          onCreated={(viewId) => { setActiveView(viewId) }}
+          onCreated={(viewId) => { openView(viewId) }}
         />
       )}
 

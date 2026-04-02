@@ -220,6 +220,90 @@
 html.dark .page-row:hover {
   background: rgba(232,223,200,0.05);
 }
+/* ── Dashboard Local ────────────────────────────────────── */
+
+.proj-local-dashboard {
+  display: flex;
+  gap: 20px;
+  padding: 20px 28px 40px;
+  min-height: 100%;
+  align-items: flex-start;
+}
+
+.proj-local-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 190px;
+  flex-shrink: 0;
+}
+
+.proj-local-stat-card {
+  border: 1px solid;
+  border-radius: 2px;
+  padding: 10px 12px;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.08);
+  animation: paperFall 0.22s ease-out both;
+}
+
+.proj-local-stat-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.proj-local-stat-value {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.proj-local-stat-sub {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+}
+
+.proj-local-widgets {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-content: start;
+}
+
+.proj-local-widget {
+  border: 1px solid;
+  border-radius: 2px;
+  padding: 14px 16px;
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.06);
+  animation: paperFall 0.22s ease-out both;
+}
+
+.proj-local-widget--wide {
+  grid-column: 1 / -1;
+}
+
+.proj-local-widget--add {
+  border-style: dashed;
+  box-shadow: none;
+  background: transparent !important;
+}
+
+.proj-local-widget-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* ── Kanban summary ─────────────────────────────────────── */
 .kanban-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
