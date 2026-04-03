@@ -4,6 +4,8 @@ Gerenciador unificado de projetos, estudos e leituras.
 Estética de papel envelhecido · máquina de escrever · cosmos.
 Stack: Electron + React + TypeScript + @libsql/client (Turso).
 
+> **Plataformas suportadas:** CachyOS (Arch Linux) e Windows 10.
+
 ---
 
 ## Pré-requisitos
@@ -12,7 +14,7 @@ Stack: Electron + React + TypeScript + @libsql/client (Turso).
 
 O `npm` vem junto com o Node.js — não é necessário instalá-lo separadamente.
 
-**Linux / macOS** — via `nvm` (recomendado):
+**CachyOS / Arch Linux** — via `nvm` (recomendado):
 ```bash
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 # Reinicie o terminal, depois:
@@ -20,7 +22,7 @@ nvm install 22
 nvm use 22
 ```
 
-**Windows** — via `nvm-windows`:
+**Windows 10** — via `nvm-windows`:
 1. Baixe e instale o [nvm-windows](https://github.com/coreybutler/nvm-windows/releases/latest) (`nvm-setup.exe`)
 2. Abra um terminal como Administrador e execute:
 ```powershell
@@ -28,7 +30,7 @@ nvm install 22
 nvm use 22
 ```
 
-**Alternativa (qualquer plataforma):** Baixe o instalador diretamente em [nodejs.org](https://nodejs.org) e escolha a versão LTS.
+**Alternativa:** Baixe o instalador diretamente em [nodejs.org](https://nodejs.org) e escolha a versão LTS.
 
 Para verificar se a instalação funcionou:
 ```bash
@@ -38,16 +40,14 @@ npm -v    # deve mostrar 10.x.x ou superior
 
 ### Git
 
-- **Linux:** `sudo pacman -S git` (Arch/CachyOS) · `sudo apt install git` (Debian/Ubuntu)
-- **macOS:** `brew install git` ou `xcode-select --install`
-- **Windows:** [git-scm.com/downloads](https://git-scm.com/downloads)
+- **CachyOS:** `sudo pacman -S git`
+- **Windows 10:** [git-scm.com/downloads](https://git-scm.com/downloads)
 
-### Dependências adicionais (Linux)
+### Dependências adicionais (CachyOS)
 
 O script `iniciar.sh` usa `xdotool` para trazer a janela ao foco se o OGMA já estiver aberto:
 ```bash
-sudo pacman -S xdotool      # Arch/CachyOS
-sudo apt install xdotool    # Debian/Ubuntu
+sudo pacman -S xdotool
 ```
 > Opcional — o OGMA funciona normalmente sem ele, apenas o foco automático deixará de funcionar.
 
@@ -68,8 +68,8 @@ npm run dev
 ```
 
 **Atalhos por plataforma:**
-- **Linux:** `./iniciar.sh` — detecta se já está rodando, trata Wayland/X11, redireciona logs para `/tmp/ogma.log`
-- **Windows:** `iniciar.bat` ou `iniciar.vbs` (sem janela de terminal)
+- **CachyOS:** `./iniciar.sh` — detecta se já está rodando, trata Wayland/X11, redireciona logs para `/tmp/ogma.log`
+- **Windows 10:** `iniciar.bat` ou `iniciar.vbs` (sem janela de terminal)
 
 ---
 
@@ -84,9 +84,9 @@ Para ativar a sincronização:
 1. Crie uma conta gratuita em [turso.tech](https://turso.tech).
 2. Instale a CLI do Turso:
    ```bash
-   # Linux/macOS
+   # CachyOS
    curl -sSfL https://get.tur.so/install.sh | bash
-   # Windows: use WSL ou siga a documentação oficial
+   # Windows 10: use WSL ou siga a documentação oficial em turso.tech
    ```
 3. Autentique-se:
    ```bash
