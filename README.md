@@ -6,60 +6,109 @@ Stack: Electron + React + TypeScript + @libsql/client (Turso).
 
 ---
 
-## ☁️ Sincronização e Banco de Dados (Turso)
+## Pré-requisitos
 
-O OGMA utiliza uma arquitetura *offline-first* com *embedded replicas*. Isso significa que o banco de dados funciona localmente na sua máquina para máxima velocidade e disponibilidade offline, sincronizando as alterações com a nuvem (Turso) em background.
+### Node.js >= 22 LTS (inclui npm)
 
-Para configurar a sincronização na nuvem:
+O `npm` vem junto com o Node.js — não é necessário instalá-lo separadamente.
+
+**Linux / macOS** — via `nvm` (recomendado):
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+# Reinicie o terminal, depois:
+nvm install 22
+nvm use 22
+```
+
+**Windows** — via `nvm-windows`:
+1. Baixe e instale o [nvm-windows](https://github.com/coreybutler/nvm-windows/releases/latest) (`nvm-setup.exe`)
+2. Abra um terminal como Administrador e execute:
+```powershell
+nvm install 22
+nvm use 22
+```
+
+**Alternativa (qualquer plataforma):** Baixe o instalador diretamente em [nodejs.org](https://nodejs.org) e escolha a versão LTS.
+
+Para verificar se a instalação funcionou:
+```bash
+node -v   # deve mostrar v22.x.x
+npm -v    # deve mostrar 10.x.x ou superior
+```
+
+### Git
+
+- **Linux:** `sudo pacman -S git` (Arch/CachyOS) · `sudo apt install git` (Debian/Ubuntu)
+- **macOS:** `brew install git` ou `xcode-select --install`
+- **Windows:** [git-scm.com/downloads](https://git-scm.com/downloads)
+
+### Dependências adicionais (Linux)
+
+O script `iniciar.sh` usa `xdotool` para trazer a janela ao foco se o OGMA já estiver aberto:
+```bash
+sudo pacman -S xdotool      # Arch/CachyOS
+sudo apt install xdotool    # Debian/Ubuntu
+```
+> Opcional — o OGMA funciona normalmente sem ele, apenas o foco automático deixará de funcionar.
+
+---
+
+## Instalação e Execução
+
+```bash
+# 1. Clone o repositório
+git clone <url-do-repositório>
+cd OGMA
+
+# 2. Instale as dependências
+npm install
+
+# 3. Inicie em modo desenvolvimento
+npm run dev
+```
+
+**Atalhos por plataforma:**
+- **Linux:** `./iniciar.sh` — detecta se já está rodando, trata Wayland/X11, redireciona logs para `/tmp/ogma.log`
+- **Windows:** `iniciar.bat` ou `iniciar.vbs` (sem janela de terminal)
+
+---
+
+## ☁️ Sincronização com a Nuvem (Turso) — Opcional
+
+O OGMA usa arquitetura *offline-first*: funciona 100% localmente e sincroniza em background com o Turso quando configurado.
+
+> **Uso offline puro:** não configure o arquivo `data/.env`. O OGMA detectará a ausência das credenciais e funcionará só no modo local.
+
+Para ativar a sincronização:
 
 1. Crie uma conta gratuita em [turso.tech](https://turso.tech).
 2. Instale a CLI do Turso:
-   - Linux/macOS: `curl -sSfL https://get.tur.so/install.sh | bash`
-   - Windows: Siga as instruções na documentação oficial ou use o WSL.
-3. Autentique-se na CLI:
+   ```bash
+   # Linux/macOS
+   curl -sSfL https://get.tur.so/install.sh | bash
+   # Windows: use WSL ou siga a documentação oficial
+   ```
+3. Autentique-se:
    ```bash
    turso auth login
    ```
-4. Crie o banco de dados remoto:
+4. Crie o banco remoto:
    ```bash
    turso db create ogma
    ```
-5. Obtenha a URL do seu banco (copie o endereço que começa com `libsql://`):
+5. Obtenha a URL (começa com `libsql://`):
    ```bash
    turso db show ogma
    ```
-6. Gere um token de autenticação:
+6. Gere um token:
    ```bash
    turso db tokens create ogma
    ```
-7. Na raiz do projeto, dentro da pasta `data/`, crie um arquivo chamado `.env` (este arquivo é ignorado pelo Git) e adicione suas credenciais:
+7. Crie o arquivo `data/.env` na raiz do projeto:
    ```env
    TURSO_URL=libsql://sua-url-aqui.turso.io
    TURSO_TOKEN=seu_token_aqui
    ```
-
-> **Nota para uso 100% Offline:** Se você não quiser sincronizar com a nuvem, basta **não** configurar o arquivo `data/.env`. O OGMA detectará a ausência das credenciais e funcionará puramente no modo local.
-
----
-
-## 🛠️ Setup de Desenvolvimento
-
-Como o projeto agora utiliza o `@libsql/client`, **não** é mais necessário instalar ferramentas de compilação C++ (Visual Studio Build Tools) ou Python.
-
-**Pré-requisitos:**
-- Node.js >= 22 LTS (recomendado o uso de `nvm` ou `fnm`)
-- Git
-
-```bash
-# Instalar dependências
-npm install
-
-# Iniciar em modo desenvolvimento
-npm run dev
-
-# (Opcional) Script de conveniência para Linux
-./iniciar.sh
-```
 
 ---
 
@@ -77,7 +126,7 @@ npm run dev
 
 ## 📁 Estrutura de Dados Locais
 
-Todos os dados locais ficam salvos na pasta `data/` na raiz do projeto (modo dev) ou junto ao executável (modo prod). **Nunca** fora da pasta do projeto.
+Todos os dados ficam na pasta `data/` na raiz do projeto (modo dev) ou junto ao executável (modo prod).
 
 ```text
 data/

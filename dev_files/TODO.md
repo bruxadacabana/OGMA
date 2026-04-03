@@ -1,6 +1,6 @@
 # OGMA — TODO
 
-> Atualizado: 2026-04-01
+> Atualizado: 2026-04-03
 
 ---
 
@@ -299,6 +299,6 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 
 ## Melhorias Futuras
 
-- [ ] Dashboard e página inicial de projeto: melhorar layout, widgets personalizáveis por projeto, resumo de progresso, atividades recentes, acesso rápido às páginas mais relevantes
+- [x] Dashboard e página inicial de projeto: melhorar layout, widgets personalizáveis por projeto, resumo de progresso, atividades recentes, acesso rápido às páginas mais relevantes — `ProjectLocalDashboard` com coluna de stats por tipo + grid de widgets customizável (add/remove, localStorage); toolbar com dropdown de vistas substituindo abas horizontais
 
 ---
