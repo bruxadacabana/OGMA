@@ -229,6 +229,7 @@ A BD fica local (leituras offline) e sincroniza com Turso Cloud ao escrever/arra
 
 - [x] Ícone do app (temporário) — ver secção "Ícone da aplicação" acima
 - [ ] Decoração cósmica completa, animações, ícone final definitivo
+- [ ] Necessário criar uma forma de organizar as páginas de um projeto do tipo acadêmico autodidata de maneira que seja possível acrescentar as disciplinas (páginas) e organizá-las de forma progressiva sem usar trimestres, já que não é fixo (autodidata). Talvez usar fase ou ciclo.
 
 ---
 
